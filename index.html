@@ -2,30 +2,245 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>My Cesium Project</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cesium – Fly to coordinates</title>
 
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
 
+    <!-- Optional: uncomment and add your key to enable Google Places search -->
+    <!-- <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_API_KEY&libraries=places" async defer></script> -->
+
     <style>
-        html, body, #cesiumContainer {
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body {
             width: 100%;
             height: 100%;
             margin: 0;
             padding: 0;
             overflow: hidden;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        #cesiumContainer {
+            width: 100%;
+            height: 100%;
+        }
+
+        .search-box {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 1000;
+            width: min(320px, calc(100vw - 24px));
+        }
+        .search-box label {
+            display: block;
+            font-size: 11px;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 4px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+        .search-box input {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 14px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+        }
+        .search-box input::placeholder { color: rgba(255,255,255,0.5); }
+        .search-box input:focus {
+            outline: none;
+            border-color: #4a9eff;
+            box-shadow: 0 0 0 2px rgba(74,158,255,0.3);
+        }
+
+        .coords-weather {
+            position: absolute;
+            top: 100px;
+            left: 12px;
+            z-index: 1000;
+            width: min(320px, calc(100vw - 24px));
+            background: rgba(0,0,0,0.85);
+            border-radius: 8px;
+            padding: 12px;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+        .coords-weather h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .coords-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .coords-row input {
+            flex: 1;
+            padding: 8px 10px;
+            font-size: 13px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        .coords-row input::placeholder { color: rgba(255,255,255,0.4); }
+        .coords-row input:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+        .coords-weather button {
+            width: 100%;
+            padding: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            background: #4a9eff;
+            color: #fff;
+            cursor: pointer;
+        }
+        .coords-weather button:hover { background: #3a8eef; }
+        .coords-weather button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .weather-result {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .weather-result .row { display: flex; justify-content: space-between; gap: 8px; }
+        .weather-result .label { color: rgba(255,255,255,0.7); }
+        .weather-result .rain { color: #7dd3fc; font-weight: 600; }
+        .weather-result .error { color: #f87171; }
+        .weather-result .loading { color: rgba(255,255,255,0.6); }
+
+        .toolbar {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 1000;
+            display: flex;
+            gap: 8px;
+        }
+        .toolbar button {
+            padding: 8px 12px;
+            font-size: 12px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            cursor: pointer;
+        }
+        .toolbar button:hover {
+            background: rgba(0,0,0,0.8);
+            border-color: rgba(255,255,255,0.5);
+        }
+
+        .api-hint {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            z-index: 1000;
+            max-width: min(420px, calc(100vw - 24px));
+            background: rgba(0,0,0,0.85);
+            color: #e0e0e0;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: ui-monospace, monospace;
+            line-height: 1.5;
+            transition: opacity 0.2s, transform 0.2s;
+        }
+        .api-hint--collapsed {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(4px);
+        }
+        .api-hint h3 {
+            margin: 0 0 6px 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .api-hint code { color: #7dd3fc; }
+        .api-hint-toggle {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            z-index: 1001;
+            padding: 6px 10px;
+            font-size: 11px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(0,0,0,0.7);
+            color: rgba(255,255,255,0.9);
+            cursor: pointer;
+        }
+        .api-hint-toggle:hover { background: rgba(0,0,0,0.9); }
+
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.5);
+            transition: opacity 0.4s ease;
+        }
+        .loading-overlay--hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .loading-overlay span {
+            color: #fff;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
     <div id="cesiumContainer"></div>
 
-    <script>
-        Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwYmNmNzc3OS1jY2QxLTRjMGItYjc0ZS0wMzVjYzAwYTIzZTkiLCJpZCI6MzMxMDU3LCJpYXQiOjE3NzIwMDI2MDJ9.E6luxgKIk-2hTJkLFcOJj07TYoIMyMv_zltTeFdmPvg";
+    <div id="loadingOverlay" class="loading-overlay" aria-live="polite">
+        <span>Loading globe…</span>
+    </div>
 
-        const viewer = new Cesium.Viewer('cesiumContainer', {
-            terrain: Cesium.Terrain.fromWorldTerrain()
-        });
-    </script>
+    <div class="search-box">
+        <label for="placeSearch">Search place</label>
+        <input type="text" id="placeSearch" placeholder="e.g. Eiffel Tower, Tokyo…" autocomplete="off" />
+    </div>
+
+    <div class="coords-weather">
+        <h3>Coordinates &amp; weather</h3>
+        <div class="coords-row">
+            <input type="text" id="inputLat" placeholder="Latitude (e.g. 40.71)" inputmode="decimal" />
+            <input type="text" id="inputLon" placeholder="Longitude (e.g. -74.01)" inputmode="decimal" />
+        </div>
+        <button type="button" id="goWeatherBtn">Go &amp; get weather</button>
+        <div id="weatherResult" class="weather-result" aria-live="polite"></div>
+    </div>
+
+    <div class="toolbar">
+        <button type="button" id="copyUrlBtn">Copy view URL</button>
+    </div>
+
+    <button type="button" class="api-hint-toggle" id="apiHintToggle" aria-expanded="true" aria-controls="apiHint">Hide API help</button>
+    <div class="api-hint" id="apiHint" role="region" aria-label="API usage">
+        <h3>Send coordinates to Cesium</h3>
+        <p><strong>URL:</strong> <code>?lat=40.7128&lon=-74.0060</code> or <code>&height=2000</code></p>
+        <p><strong>JS (same window):</strong> <code>cesiumFlyTo(lat, lon)</code> or <code>cesiumFlyTo(lat, lon, height, addMarker)</code></p>
+        <p><strong>postMessage (iframe/parent):</strong> <code>{ type: 'cesiumFlyTo', lat, lon, height?, addMarker? }</code></p>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
