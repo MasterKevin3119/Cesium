@@ -19,6 +19,72 @@
   /** Last fetched hourly data for time slider: { lat, lon, time[], precipitation[] } */
   let lastHourlyData = null;
 
+  /** (K) for flood visual based on rain intensity */
+  const floodBounds = {
+    west: 101.65,
+    south: 3.10,
+    east: 101.66,
+    north: 3.11
+  };
+
+  function simulateFlood(value) {
+    const level = evaluateFloodRisk(value);
+    updateFloodVisualization(level);
+  }
+  let floodEntity = null;
+
+  function evaluateFloodRisk(rainIntensity) {
+    if (rainIntensity < 20) {
+        return "none";
+    } else if (rainIntensity < 50) {
+        return "moderate";
+    } else {
+        return "severe";
+    }
+  }
+
+  function updateFloodVisualization(level) {
+
+    if (level === "none") {
+        if (floodEntity) {
+            viewer.entities.remove(floodEntity);
+            floodEntity = null;
+        }
+        return;
+    }
+
+    let height = 0;
+
+    if (level === "moderate") {
+        height = 5;
+    } else if (level === "severe") {
+        height = 15;
+    }
+
+    if (!floodEntity) {
+        floodEntity = viewer.entities.add({
+            rectangle: {
+                coordinates: Cesium.Rectangle.fromDegrees(
+                    floodBounds.west,
+                    floodBounds.south,
+                    floodBounds.east,
+                    floodBounds.north
+                ),
+                material: Cesium.Color.BLUE.withAlpha(0.5),
+                height: height
+            }
+        });
+    } else {
+        floodEntity.rectangle.height = height;
+    }
+}
+
+const rainIntensity = data.hourly.rain[0];  // example
+const floodLevel = evaluateFloodRisk(rainIntensity);
+updateFloodVisualization(floodLevel);
+
+/**Ends here */
+
   function makeRainParticleImage() {
     try {
       const canvas = document.createElement("canvas");
