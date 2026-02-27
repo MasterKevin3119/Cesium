@@ -239,6 +239,10 @@
         <p><strong>JS (same window):</strong> <code>cesiumFlyTo(lat, lon)</code> or <code>cesiumFlyTo(lat, lon, height, addMarker)</code></p>
         <p><strong>postMessage (iframe/parent):</strong> <code>{ type: 'cesiumFlyTo', lat, lon, height?, addMarker? }</code></p>
     </div>
+    
+    <button onclick="simulateFlood(10)">No Flood</button>
+    <button onclick="simulateFlood(30)">Moderate Flood</button>
+    <button onclick="simulateFlood(60)">Severe Flood</button>
 
     <script src="js/config.js"></script>
     <script src="js/app.js"></script>
