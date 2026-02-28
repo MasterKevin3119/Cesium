@@ -19,6 +19,240 @@
   /** Last fetched hourly data for time slider: { lat, lon, time[], precipitation[] } */
   let lastHourlyData = null;
 
+  // --- Flood simulation (test-only, does not depend on any API) ----------------
+  // Center coordinate for the flood test area (kept minimal and explicit)
+  const FLOOD_CENTER = {
+    latitude: 3.362314160759136,
+    longitude: 101.3447474675057,
+  };
+  const FLOOD_OFFSET_DEG = 0.003; // +/- offset for the total flood area (5x5 grid)
+
+  // Helper: compute rectangle degrees [west, south, east, north] around center
+  function computeFloodBounds() {
+    const west = FLOOD_CENTER.longitude - FLOOD_OFFSET_DEG;
+    const east = FLOOD_CENTER.longitude + FLOOD_OFFSET_DEG;
+    const south = FLOOD_CENTER.latitude - FLOOD_OFFSET_DEG;
+    const north = FLOOD_CENTER.latitude + FLOOD_OFFSET_DEG;
+    return { west: west, south: south, east: east, north: north };
+  }
+
+  // Global flood entity reference (null when no flood shown)
+  let floodEntity = null;
+  // Flood grid zones (will be generated; default to 6x6 → 36 zones)
+  let floodZones = [];
+
+  /**
+   * Initialize floodZones array dividing the total bounding box into 5x5 cells.
+   * Each zone: { id, bounds: { west, south, east, north }, entity: null }
+   */
+  function initFloodZones() {
+    // Reset array
+    floodZones = [];
+
+    // Compute expanded bounding box: start from the configured half-offset, then
+    // expand outward by one previous 5x5 cell width on each side.
+    const baseHalf = FLOOD_OFFSET_DEG; // previous half-width (0.003)
+    const previousCellWidth = (2 * baseHalf) / 5.0;
+    const expandedHalf = baseHalf + previousCellWidth;
+
+    const totalWest = FLOOD_CENTER.longitude - expandedHalf;
+    const totalEast = FLOOD_CENTER.longitude + expandedHalf;
+    const totalSouth = FLOOD_CENTER.latitude - expandedHalf;
+    const totalNorth = FLOOD_CENTER.latitude + expandedHalf;
+
+    const rows = 6, cols = 6;
+    const cellWidth = (totalEast - totalWest) / cols;
+    const cellHeight = (totalNorth - totalSouth) / rows;
+
+    let id = 1;
+    // Row ordering: row 0 -> northernmost. IDs go left→right, top→bottom.
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const west = totalWest + col * cellWidth;
+        const east = west + cellWidth;
+        const south = totalNorth - (row + 1) * cellHeight;
+        const north = south + cellHeight;
+        floodZones.push({ id: id, bounds: { west: west, south: south, east: east, north: north }, entity: null });
+        id++;
+      }
+    }
+  }
+
+  /**
+   * Draws the zone grid as transparent white outlines (no fill).
+   * Replaces any previous zone entities to avoid duplicates.
+   */
+  function renderZoneGrid() {
+    if (!viewer) return;
+    for (let i = 0; i < floodZones.length; i++) {
+      const z = floodZones[i];
+      // Remove existing entity if present
+      if (z.entity) {
+        try { viewer.entities.remove(z.entity); } catch (e) { /* ignore */ }
+        z.entity = null;
+      }
+      const rect = Cesium.Rectangle.fromDegrees(z.bounds.west, z.bounds.south, z.bounds.east, z.bounds.north);
+      // Create elevated rectangle with faint fill and visible yellow outline
+      z.entity = viewer.entities.add({
+        name: 'Flood zone ' + z.id,
+        rectangle: {
+          coordinates: rect,
+          material: Cesium.Color.WHITE.withAlpha(0.05),
+          fill: true,
+          outline: true,
+          outlineColor: Cesium.Color.YELLOW,
+          outlineWidth: 3,
+          height: 150,
+        },
+      });
+    }
+    try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+  }
+
+  /**
+   * Apply flood surface to given zone IDs with severity string.
+   * zoneIds: array of numeric IDs (1-25). severity: "moderate"|"severe"|"none".
+   */
+  function floodZonesByIds(zoneIds, severity) {
+    if (!Array.isArray(zoneIds) || !viewer) return;
+    const opacityMap = { moderate: 0.4, severe: 0.6 };
+    const opacity = opacityMap[severity] != null ? opacityMap[severity] : 0.4;
+    zoneIds.forEach(function (zid) {
+      const z = floodZones.find(function (zz) { return zz.id === Number(zid); });
+      if (!z) return;
+      // If severity is 'none', remove any flood entity for this zone
+      if (severity === 'none') {
+        if (z.entity) {
+          try { viewer.entities.remove(z.entity); } catch (e) { /* ignore */ }
+          z.entity = null;
+        }
+        return;
+      }
+      // Remove existing entity (outline or previous flood overlay)
+      try { if (z.entity) { viewer.entities.remove(z.entity); z.entity = null; } } catch (e) { /* ignore */ }
+      const rect = Cesium.Rectangle.fromDegrees(z.bounds.west, z.bounds.south, z.bounds.east, z.bounds.north);
+      // Create elevated rectangle as flood overlay (150m height, not extruded)
+      z.entity = viewer.entities.add({
+        name: 'Flood zone surface ' + z.id,
+        rectangle: {
+          coordinates: rect,
+          material: Cesium.Color.BLUE.withAlpha(opacity),
+          fill: true,
+          outline: true,
+          outlineColor: Cesium.Color.YELLOW,
+          outlineWidth: 3,
+          height: 150,
+        },
+      });
+    });
+    try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+  }
+
+  /**
+   * Evaluate flood risk level from a synthetic rain intensity value.
+   * Returns one of: "none", "moderate", "severe".
+   */
+  function evaluateFloodRisk(rainIntensity) {
+    const v = Number(rainIntensity) || 0;
+    if (v < 20) return "none";
+    if (v >= 20 && v < 50) return "moderate";
+    return "severe";
+  }
+
+  /**
+   * Update flood visualization according to level string.
+   * - "none": remove entity
+   * - "moderate": 5m
+   * - "severe": 15m
+   * Reuses existing entity when present; never creates duplicates.
+   */
+  function updateFloodVisualization(level) {
+    console.log("updateFloodVisualization entered; level:", level);
+    if (!viewer) {
+      console.warn("updateFloodVisualization: viewer not initialized");
+      return;
+    }
+
+    if (level === "none") {
+      if (floodEntity) {
+        console.log("updateFloodVisualization: removing flood entity");
+        try { viewer.entities.remove(floodEntity); } catch (e) { /* ignore */ }
+        floodEntity = null;
+      } else {
+        console.log("updateFloodVisualization: no flood entity to remove");
+      }
+      return;
+    }
+
+    // Map severity to a flat water opacity (do not create an extruded volume)
+    let opacity = 0.4; // default / moderate
+    if (level === "moderate") opacity = 0.4;
+    if (level === "severe") opacity = 0.6;
+
+    const b = computeFloodBounds();
+
+    // Build a flat polygon from the bounding box corners and clamp it to the terrain
+    const coords = [
+      b.west, b.south,
+      b.east, b.south,
+      b.east, b.north,
+      b.west, b.north,
+    ];
+
+    if (!floodEntity) {
+      console.log("updateFloodVisualization: creating flat flood surface with opacity", opacity);
+      floodEntity = viewer.entities.add({
+        name: "Flood test",
+        polygon: {
+          hierarchy: Cesium.Cartesian3.fromDegreesArray(coords),
+          material: Cesium.Color.BLUE.withAlpha(opacity),
+          // Clamp to ground so the surface follows terrain rather than float
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        },
+      });
+      try { viewer.zoomTo(floodEntity); } catch (e) { /* ignore */ }
+      viewer.scene.requestRender();
+    } else {
+      console.log("updateFloodVisualization: updating existing flood surface opacity", opacity);
+      try {
+        if (floodEntity.polygon) {
+          floodEntity.polygon.material = Cesium.Color.BLUE.withAlpha(opacity);
+        } else if (floodEntity.rectangle) {
+          // If entity was previously a rectangle, replace it with a polygon
+          try { viewer.entities.remove(floodEntity); } catch (e) { /* ignore */ }
+          floodEntity = viewer.entities.add({
+            name: "Flood test",
+            polygon: {
+              hierarchy: Cesium.Cartesian3.fromDegreesArray(coords),
+              material: Cesium.Color.BLUE.withAlpha(opacity),
+              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            },
+          });
+        }
+        viewer.scene.requestRender();
+      } catch (e) {
+        console.error("Failed to update flood surface:", e);
+      }
+    }
+  }
+
+  /**
+   * High-level helper to simulate a flood value (synthetic input).
+   * Calls evaluateFloodRisk and then updateFloodVisualization.
+   */
+  function simulateFlood(value) {
+    console.log("simulateFlood called with value:", value);
+    const level = evaluateFloodRisk(value);
+    console.log("evaluateFloodRisk ->", level);
+
+    // Update the flood surface according to evaluated level (no extruded debug box)
+    updateFloodVisualization(level);
+  }
+
+  // Expose simulate function to global for button onclicks / console
+  window.simulateFlood = simulateFlood;
+  // ---------------------------------------------------------------------------
+
   function makeRainParticleImage() {
     try {
       const canvas = document.createElement("canvas");
@@ -599,6 +833,16 @@
     viewer = new Cesium.Viewer("cesiumContainer", viewerOptions);
 
     viewer.scene.globe.depthTestAgainstTerrain = true;
+
+    // Initialize and render the flood 5x5 zone grid (outline-only)
+    try {
+      initFloodZones();
+      renderZoneGrid();
+      // Expose utility to window for external calls if needed
+      window.floodZonesByIds = floodZonesByIds;
+    } catch (e) {
+      console.warn('Flood zone init failed:', e);
+    }
 
     viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 

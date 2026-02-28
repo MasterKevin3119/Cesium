@@ -230,6 +230,10 @@
 
     <div class="toolbar">
         <button type="button" id="copyUrlBtn">Copy view URL</button>
+        <!-- Flood simulation test buttons (no API required) -->
+        <button type="button" id="noFloodBtn" onclick="simulateFlood(10)">No Flood</button>
+        <button type="button" id="moderateFloodBtn" onclick="simulateFlood(30)">Moderate Flood</button>
+        <button type="button" id="severeFloodBtn" onclick="simulateFlood(60)">Severe Flood</button>
     </div>
 
     <button type="button" class="api-hint-toggle" id="apiHintToggle" aria-expanded="true" aria-controls="apiHint">Hide API help</button>
@@ -240,10 +244,6 @@
         <p><strong>postMessage (iframe/parent):</strong> <code>{ type: 'cesiumFlyTo', lat, lon, height?, addMarker? }</code></p>
     </div>
     
-    <button onclick="simulateFlood(10)">No Flood</button>
-    <button onclick="simulateFlood(30)">Moderate Flood</button>
-    <button onclick="simulateFlood(60)">Severe Flood</button>
-
     <script src="js/config.js"></script>
     <script src="js/app.js"></script>
 </body>
