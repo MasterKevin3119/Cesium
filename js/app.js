@@ -25,7 +25,11 @@
     latitude: 3.362314160759136,
     longitude: 101.3447474675057,
   };
-  const FLOOD_OFFSET_DEG = 0.003; // +/- offset for the total flood area (5x5 grid)
+  const FLOOD_OFFSET_DEG = 0.003; // +/- offset for the total flood area (expanded)
+  // Grid configuration (make dynamic for future scaling)
+  let GRID_ROWS = 32;
+  let GRID_COLS = 32;
+  const GRID_BASE_HEIGHT = 75; // meters elevation for all grid boxes (reduced by 50%)
 
   // Helper: compute rectangle degrees [west, south, east, north] around center
   function computeFloodBounds() {
@@ -38,7 +42,7 @@
 
   // Global flood entity reference (null when no flood shown)
   let floodEntity = null;
-  // Flood grid zones (will be generated; default to 6x6 → 36 zones)
+  // Flood grid zones (will be generated; default to 32x32 → 1024 zones)
   let floodZones = [];
 
   /**
@@ -60,7 +64,7 @@
     const totalSouth = FLOOD_CENTER.latitude - expandedHalf;
     const totalNorth = FLOOD_CENTER.latitude + expandedHalf;
 
-    const rows = 6, cols = 6;
+    const rows = GRID_ROWS, cols = GRID_COLS;
     const cellWidth = (totalEast - totalWest) / cols;
     const cellHeight = (totalNorth - totalSouth) / rows;
 
@@ -72,7 +76,7 @@
         const east = west + cellWidth;
         const south = totalNorth - (row + 1) * cellHeight;
         const north = south + cellHeight;
-        floodZones.push({ id: id, bounds: { west: west, south: south, east: east, north: north }, entity: null });
+        floodZones.push({ id: id, bounds: { west: west, south: south, east: east, north: north }, outlineEntity: null, floodEntity: null, currentFloodDelta: 0 });
         id++;
       }
     }
@@ -86,14 +90,14 @@
     if (!viewer) return;
     for (let i = 0; i < floodZones.length; i++) {
       const z = floodZones[i];
-      // Remove existing entity if present
-      if (z.entity) {
-        try { viewer.entities.remove(z.entity); } catch (e) { /* ignore */ }
-        z.entity = null;
+      // Remove existing outline entity if present
+      if (z.outlineEntity) {
+        try { viewer.entities.remove(z.outlineEntity); } catch (e) { /* ignore */ }
+        z.outlineEntity = null;
       }
       const rect = Cesium.Rectangle.fromDegrees(z.bounds.west, z.bounds.south, z.bounds.east, z.bounds.north);
       // Create elevated rectangle with faint fill and visible yellow outline
-      z.entity = viewer.entities.add({
+      z.outlineEntity = viewer.entities.add({
         name: 'Flood zone ' + z.id,
         rectangle: {
           coordinates: rect,
@@ -102,9 +106,11 @@
           outline: true,
           outlineColor: Cesium.Color.YELLOW,
           outlineWidth: 3,
-          height: 150,
+          height: GRID_BASE_HEIGHT,
         },
       });
+      // Apply admin selection visuals if any
+      try { if (window.gridManager) window.gridManager.updateZoneVisual(z); } catch (e) { /* ignore */ }
     }
     try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
   }
@@ -113,39 +119,89 @@
    * Apply flood surface to given zone IDs with severity string.
    * zoneIds: array of numeric IDs (1-25). severity: "moderate"|"severe"|"none".
    */
-  function floodZonesByIds(zoneIds, severity) {
-    if (!Array.isArray(zoneIds) || !viewer) return;
-    const opacityMap = { moderate: 0.4, severe: 0.6 };
-    const opacity = opacityMap[severity] != null ? opacityMap[severity] : 0.4;
-    zoneIds.forEach(function (zid) {
-      const z = floodZones.find(function (zz) { return zz.id === Number(zid); });
-      if (!z) return;
-      // If severity is 'none', remove any flood entity for this zone
-      if (severity === 'none') {
-        if (z.entity) {
-          try { viewer.entities.remove(z.entity); } catch (e) { /* ignore */ }
-          z.entity = null;
-        }
-        return;
-      }
-      // Remove existing entity (outline or previous flood overlay)
-      try { if (z.entity) { viewer.entities.remove(z.entity); z.entity = null; } } catch (e) { /* ignore */ }
+  // Animate a zone's flood surface to target delta (meters above GRID_BASE_HEIGHT)
+  function animateZoneFlood(z, targetDelta, durationMs) {
+    if (!z) return;
+    durationMs = typeof durationMs === 'number' ? durationMs : 800;
+    const targetHeight = GRID_BASE_HEIGHT + (Number(targetDelta) || 0);
+    // Ensure floodEntity exists
+    if (!z.floodEntity) {
       const rect = Cesium.Rectangle.fromDegrees(z.bounds.west, z.bounds.south, z.bounds.east, z.bounds.north);
-      // Create elevated rectangle as flood overlay (150m height, not extruded)
-      z.entity = viewer.entities.add({
-        name: 'Flood zone surface ' + z.id,
+      z.floodEntity = viewer.entities.add({
+        name: 'Flood overlay ' + z.id,
         rectangle: {
           coordinates: rect,
-          material: Cesium.Color.BLUE.withAlpha(opacity),
+          material: Cesium.Color.BLUE.withAlpha(0.5),
           fill: true,
-          outline: true,
-          outlineColor: Cesium.Color.YELLOW,
-          outlineWidth: 3,
-          height: 150,
+          outline: false,
+          height: GRID_BASE_HEIGHT + (z.currentFloodDelta || 0),
         },
       });
+    }
+
+    const startHeight = (z.floodEntity.rectangle && z.floodEntity.rectangle.height) || (GRID_BASE_HEIGHT + (z.currentFloodDelta || 0));
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min(1, (now - start) / durationMs);
+      const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // easeInOut
+      const current = startHeight + (targetHeight - startHeight) * ease;
+      try {
+        if (z.floodEntity && z.floodEntity.rectangle) z.floodEntity.rectangle.height = current;
+        viewer.scene.requestRender();
+      } catch (e) { /* ignore */ }
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        // Finalize
+        z.currentFloodDelta = targetHeight - GRID_BASE_HEIGHT;
+        // If target delta is 0, remove floodEntity
+        if (!z.currentFloodDelta) {
+          try { viewer.entities.remove(z.floodEntity); } catch (e) { /* ignore */ }
+          z.floodEntity = null;
+        }
+      }
+    }
+    requestAnimationFrame(step);
+  }
+  // expose for other modules
+  try { window.animateZoneFlood = animateZoneFlood; } catch (e) { /* ignore */ }
+
+  /**
+   * Raise/clear flood on specified zone IDs.
+   * zoneIds: array of numbers or comma-separated string
+   * level: one of '0.5', '1', or 'none' (also accepts numeric meters)
+   */
+  function floodZonesByIds(zoneIds, level) {
+    if (!viewer) return;
+    // Normalize zoneIds to array of numbers
+    let ids = Array.isArray(zoneIds) ? zoneIds.map(Number) : String(zoneIds).split(/\s*,\s*/).map(Number);
+    ids = ids.filter(function (n) { return !isNaN(n); });
+
+    // If admin mode is enabled and configuration exists for this level, use configured zones instead
+    try {
+      if (window.adminMode && window.adminMode.isEnabled && window.adminMode.isEnabled()) {
+        const cfg = window.floodConfig && window.floodConfig.getZones(level);
+        if (Array.isArray(cfg) && cfg.length) ids = cfg.slice();
+      }
+    } catch (e) { /* ignore */ }
+
+    if (!ids.length) return;
+    const duration = 700;
+    ids.forEach(function (zid) {
+      const z = floodZones.find(function (zz) { return zz.id === Number(zid); });
+      if (!z) return;
+      if (level === 'none') {
+        animateZoneFlood(z, 0, duration);
+        return;
+      }
+      // Accept '0.5' or '1' or numeric meters
+      let meters = null;
+      if (level === '0.5' || level === '0.5m' || level === 0.5) meters = 0.5;
+      else if (level === '1' || level === '1m' || level === 1) meters = 1.0;
+      else if (!isNaN(Number(level))) meters = Number(level);
+      if (meters == null) meters = 0.5;
+      animateZoneFlood(z, meters, duration);
     });
-    try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
   }
 
   /**
@@ -335,6 +391,58 @@
     const height = params.get("height");
     if (lat != null && lon != null) {
       flyToCoordinates(parseFloat(lon), parseFloat(lat), height != null ? parseFloat(height) : undefined, true);
+    }
+  }
+
+  // Initialize flood UI controls inside the coords/weather panel
+  function initFloodControls() {
+    const input = document.getElementById('inputZoneIds');
+    const btn05 = document.getElementById('btnFlood05');
+    const btn1 = document.getElementById('btnFlood1');
+    const btnClear = document.getElementById('btnClearFlood');
+    const btnToggle = document.getElementById('btnToggleGrid');
+    let gridVisible = true;
+    if (btn05) btn05.addEventListener('click', function () {
+      try { if (window.floodState) window.floodState.trigger('0.5'); } catch (e) { /* ignore */ }
+    });
+    if (btn1) btn1.addEventListener('click', function () {
+      try { if (window.floodState) window.floodState.trigger('1'); } catch (e) { /* ignore */ }
+    });
+    if (btnClear) btnClear.addEventListener('click', function () {
+      try { if (window.floodState) window.floodState.clearAll(); } catch (e) { /* ignore */ }
+    });
+    if (btnToggle) btnToggle.addEventListener('click', function () {
+      gridVisible = !gridVisible;
+      if (!gridVisible) {
+        // remove outlines
+        floodZones.forEach(function (z) {
+          if (z.outlineEntity) {
+            try { viewer.entities.remove(z.outlineEntity); } catch (e) { /* ignore */ }
+            z.outlineEntity = null;
+          }
+        });
+        try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+      } else {
+        renderZoneGrid();
+      }
+    });
+
+    // Minimize behavior
+    const minBtn = document.getElementById('coordsMinimizeBtn');
+    const panel = document.getElementById('coordsWeatherPanel');
+    if (minBtn && panel) {
+      minBtn.addEventListener('click', function () {
+        const collapsed = panel.classList.toggle('coords-weather--collapsed');
+        if (collapsed) panel.classList.remove('coords-weather--open'); else panel.classList.add('coords-weather--open');
+      });
+    }
+
+    // Wire admin button to prompt (adminMode handles the password UI)
+    const adminBtn = document.getElementById('adminModeBtn');
+    if (adminBtn) {
+      adminBtn.addEventListener('click', function () {
+        try { if (window.adminMode) window.adminMode.init(viewer); } catch (e) { /* ignore */ }
+      });
     }
   }
 
@@ -834,12 +942,20 @@
 
     viewer.scene.globe.depthTestAgainstTerrain = true;
 
-    // Initialize and render the flood 5x5 zone grid (outline-only)
+    // Initialize and render the flood zone grid (outline-only)
     try {
+      // Ensure floodConfig is available
+      try { if (window.floodConfig && typeof window.floodConfig.load === 'function') window.floodConfig.load(); } catch (e) { /* ignore */ }
       initFloodZones();
+      // let gridManager manage visuals
+      try { if (window.gridManager && typeof window.gridManager.init === 'function') window.gridManager.init(viewer); } catch (e) { /* ignore */ }
       renderZoneGrid();
+      // initialize floodState
+      try { if (window.floodState && typeof window.floodState.init === 'function') window.floodState.init(viewer); } catch (e) { /* ignore */ }
       // Expose utility to window for external calls if needed
       window.floodZonesByIds = floodZonesByIds;
+      // Init adminMode after viewer and gridManager are ready
+      try { if (window.adminMode && typeof window.adminMode.init === 'function') window.adminMode.init(viewer); } catch (e) { /* ignore */ }
     } catch (e) {
       console.warn('Flood zone init failed:', e);
     }
@@ -849,6 +965,8 @@
     readUrlParams();
     initCoordsWeather();
     initTimeSlider();
+    // Flood controls in the coords/weather panel
+    try { initFloodControls(); } catch (e) { /* ignore */ }
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("lat") == null || urlParams.get("lon") == null) {
       const lat = typeof CONFIG !== "undefined" && CONFIG.defaultLat != null ? CONFIG.defaultLat : 3.3633483;

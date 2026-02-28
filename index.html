@@ -58,21 +58,34 @@
 
         .coords-weather {
             position: absolute;
-            top: 100px;
             left: 12px;
+            bottom: 12px;
             z-index: 1000;
-            width: min(320px, calc(100vw - 24px));
-            background: rgba(0,0,0,0.85);
-            border-radius: 8px;
-            padding: 12px;
+            width: min(420px, calc(100vw - 24px));
+            background: rgba(0,0,0,0.9);
+            border-radius: 10px;
             color: #e0e0e0;
             font-size: 13px;
+            max-height: 70vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: translateY(0);
+            transition: transform 280ms ease, opacity 220ms ease;
         }
-        .coords-weather h3 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: #fff;
+        .coords-weather__header {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            padding:10px 12px;
+            border-bottom:1px solid rgba(255,255,255,0.04);
+        }
+        .coords-weather__content {
+            padding:12px;
+            overflow:auto;
+        }
+        .coords-weather--collapsed {
+            transform: translateY(calc(100% - 56px));
         }
         .coords-row {
             display: flex;
@@ -218,22 +231,54 @@
         <input type="text" id="placeSearch" placeholder="e.g. Eiffel Tower, Tokyo…" autocomplete="off" />
     </div>
 
-    <div class="coords-weather">
-        <h3>Coordinates &amp; weather</h3>
-        <div class="coords-row">
-            <input type="text" id="inputLat" placeholder="Latitude (e.g. 40.71)" inputmode="decimal" />
-            <input type="text" id="inputLon" placeholder="Longitude (e.g. -74.01)" inputmode="decimal" />
+    <div class="coords-weather coords-weather--open" id="coordsWeatherPanel" aria-hidden="false">
+        <div class="coords-weather__header">
+            <div style="font-weight:600;">Coordinates &amp; Weather</div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button id="adminModeBtn" title="Admin mode" style="padding:6px 8px; font-size:12px;">Admin</button>
+                <button id="coordsMinimizeBtn" aria-label="Minimize panel" title="Minimize" style="padding:6px 8px; font-size:12px;">_</button>
+            </div>
         </div>
-        <button type="button" id="goWeatherBtn">Go &amp; get weather</button>
-        <div id="weatherResult" class="weather-result" aria-live="polite"></div>
+        <div class="coords-weather__content">
+            <div class="coords-row">
+                <input type="text" id="inputLat" placeholder="Latitude (e.g. 40.71)" inputmode="decimal" />
+                <input type="text" id="inputLon" placeholder="Longitude (e.g. -74.01)" inputmode="decimal" />
+            </div>
+            <button type="button" id="goWeatherBtn">Go &amp; get weather</button>
+            <div id="weatherResult" class="weather-result" aria-live="polite"></div>
+
+            <div id="floodControls" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
+                <h3 style="margin:0 0 8px 0; font-size:13px; color:#fff;">Flood Simulation</h3>
+                <div style="margin-bottom:8px; font-size:12px; color:rgba(255,255,255,0.85);">Select zone IDs (comma-separated):</div>
+                <div class="coords-row">
+                    <input type="text" id="inputZoneIds" placeholder="e.g. 1,2,3" />
+                </div>
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button type="button" id="btnFlood05">0.5 m Flood</button>
+                    <button type="button" id="btnFlood1">1 m Flood</button>
+                    <button type="button" id="btnClearFlood">Clear Flood</button>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                    <button type="button" id="btnToggleGrid">Toggle Grid</button>
+                </div>
+
+                <div id="adminControls" style="margin-top:12px; display:none; border-top:1px dashed rgba(255,255,255,0.06); padding-top:8px;">
+                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Admin edit mode:</div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="0.5" checked> 0.5 m</label>
+                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="1"> 1 m</label>
+                        <button id="btnAdminClearTemp" style="margin-left:auto;">Clear Temp</button>
+                        <button id="btnAdminSave" style="">Save</button>
+                        <button id="btnExitAdmin" style="">Exit Admin</button>
+                    </div>
+                    <div style="font-size:12px; margin-top:8px; color:rgba(255,255,255,0.8);">Click grid boxes to toggle selection for the chosen level. Use <strong>Save</strong> to persist selections.</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="toolbar">
         <button type="button" id="copyUrlBtn">Copy view URL</button>
-        <!-- Flood simulation test buttons (no API required) -->
-        <button type="button" id="noFloodBtn" onclick="simulateFlood(10)">No Flood</button>
-        <button type="button" id="moderateFloodBtn" onclick="simulateFlood(30)">Moderate Flood</button>
-        <button type="button" id="severeFloodBtn" onclick="simulateFlood(60)">Severe Flood</button>
     </div>
 
     <button type="button" class="api-hint-toggle" id="apiHintToggle" aria-expanded="true" aria-controls="apiHint">Hide API help</button>
@@ -245,6 +290,10 @@
     </div>
     
     <script src="js/config.js"></script>
+    <script src="js/floodConfig.js"></script>
+    <script src="js/gridManager.js"></script>
+    <script src="js/floodState.js"></script>
+    <script src="js/adminMode.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
