@@ -5,6 +5,7 @@
   let viewerRef = null;
   let clickHandler = null;
   let enabled = false;
+  let buttonListenerAttached = false;
 
   function isEnabled() {
     return enabled;
@@ -19,15 +20,12 @@
   function setEnabled(val) {
     enabled = !!val;
     try { localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0'); } catch (e) { /* ignore */ }
-    // show/hide adminControls section
     const adminPanel = document.getElementById('adminControls');
     if (adminPanel) adminPanel.style.display = enabled ? 'block' : 'none';
-    // update admin button look
     const btn = document.getElementById('adminModeBtn');
     if (btn) btn.style.background = enabled ? '#ffcc00' : '';
-    // disable or enable manual zone input when in admin mode
-    const zoneInput = document.getElementById('inputZoneIds');
-    if (zoneInput) zoneInput.disabled = !!enabled;
+    // Refresh grid colors when switching mode (admin vs user view)
+    try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
   }
 
   function loadEnabled() {
@@ -43,12 +41,15 @@
     setEnabled(enabled);
 
     const btn = document.getElementById('adminModeBtn');
-    if (btn) btn.addEventListener('click', function () {
-      if (enabled) { setEnabled(false); detachClick(); return; }
-      if (!promptPassword()) { alert('Incorrect password'); return; }
-      setEnabled(true);
-      attachClick();
-    });
+    if (btn && !buttonListenerAttached) {
+      buttonListenerAttached = true;
+      btn.addEventListener('click', function () {
+        if (enabled) { setEnabled(false); detachClick(); return; }
+        if (!promptPassword()) { alert('Incorrect password'); return; }
+        setEnabled(true);
+        attachClick();
+      });
+    }
 
     const exitBtn = document.getElementById('btnExitAdmin');
     if (exitBtn) exitBtn.addEventListener('click', function () { setEnabled(false); detachClick(); });
@@ -60,11 +61,13 @@
       try { if (window.gridManager) window.gridManager.clearTempSelection(); } catch (e) { /* ignore */ }
     });
     if (saveBtn) saveBtn.addEventListener('click', function () {
-      // determine edit level from radio
       const radios = document.getElementsByName('adminEditLevel');
       let level = '0.5';
       for (let i = 0; i < radios.length; i++) if (radios[i].checked) { level = radios[i].value; break; }
-      try { if (window.gridManager) window.gridManager.saveSelection(level); alert('Saved selection for ' + level + ' m'); } catch (e) { alert('Save failed'); }
+      try {
+        if (window.gridManager) window.gridManager.saveSelection(level);
+        alert('Saved selection for ' + level + ' m');
+      } catch (e) { alert('Save failed'); }
     });
 
     if (enabled) attachClick();

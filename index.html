@@ -87,6 +87,19 @@
         .coords-weather--collapsed {
             transform: translateY(calc(100% - 56px));
         }
+        .weather-data-table-section {
+            margin-top: 12px;
+            transition: max-height 220ms ease, opacity 180ms ease;
+        }
+        .weather-data-table-section--collapsed {
+            max-height: 0 !important;
+            overflow: hidden;
+            opacity: 0;
+            margin-top: 0;
+            margin-bottom: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
         .coords-row {
             display: flex;
             gap: 8px;
@@ -236,7 +249,7 @@
             <div style="font-weight:600;">Coordinates &amp; Weather</div>
             <div style="display:flex; gap:8px; align-items:center;">
                 <button id="adminModeBtn" title="Admin mode" style="padding:6px 8px; font-size:12px;">Admin</button>
-                <button id="coordsMinimizeBtn" aria-label="Minimize panel" title="Minimize" style="padding:6px 8px; font-size:12px;">_</button>
+                <button id="coordsMinimizeBtn" aria-label="Minimize data table" title="Minimize data table" style="padding:6px 8px; font-size:12px;">−</button>
             </div>
         </div>
         <div class="coords-weather__content">
@@ -249,29 +262,31 @@
 
             <div id="floodControls" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
                 <h3 style="margin:0 0 8px 0; font-size:13px; color:#fff;">Flood Simulation</h3>
-                <div style="margin-bottom:8px; font-size:12px; color:rgba(255,255,255,0.85);">Select zone IDs (comma-separated):</div>
-                <div class="coords-row">
-                    <input type="text" id="inputZoneIds" placeholder="e.g. 1,2,3" />
-                </div>
-                <div style="display:flex; gap:8px; margin-top:8px;">
-                    <button type="button" id="btnFlood05">0.5 m Flood</button>
-                    <button type="button" id="btnFlood1">1 m Flood</button>
-                    <button type="button" id="btnClearFlood">Clear Flood</button>
-                </div>
-                <div style="display:flex; gap:8px; margin-top:10px;">
-                    <button type="button" id="btnToggleGrid">Toggle Grid</button>
+                <!-- Normal user mode: view 0.5 m or 1 m flood areas defined by admin -->
+                <div id="userFloodView" style="margin-bottom:12px;">
+                    <div style="margin-bottom:6px; font-size:12px; color:rgba(255,255,255,0.85);">View flood areas (defined by admin):</div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button type="button" id="btnFlood05">Show 0.5 m</button>
+                        <button type="button" id="btnFlood1">Show 1 m</button>
+                        <button type="button" id="btnClearFlood">Clear</button>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button type="button" id="btnToggleGrid">Toggle Grid</button>
+                    </div>
                 </div>
 
+                <!-- Admin mode: define which grid cells are 0.5 m or 1 m flood zones -->
                 <div id="adminControls" style="margin-top:12px; display:none; border-top:1px dashed rgba(255,255,255,0.06); padding-top:8px;">
-                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Admin edit mode:</div>
-                    <div style="display:flex; gap:8px; align-items:center;">
+                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Admin: define flood zones (different shades on grid)</div>
+                    <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Light blue = 0.5 m · Dark blue = 1 m · Amber = pending</div>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                         <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="0.5" checked> 0.5 m</label>
                         <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="1"> 1 m</label>
-                        <button id="btnAdminClearTemp" style="margin-left:auto;">Clear Temp</button>
-                        <button id="btnAdminSave" style="">Save</button>
-                        <button id="btnExitAdmin" style="">Exit Admin</button>
+                        <button id="btnAdminClearTemp">Clear Temp</button>
+                        <button id="btnAdminSave">Save</button>
+                        <button id="btnExitAdmin">Exit Admin</button>
                     </div>
-                    <div style="font-size:12px; margin-top:8px; color:rgba(255,255,255,0.8);">Click grid boxes to toggle selection for the chosen level. Use <strong>Save</strong> to persist selections.</div>
+                    <div style="font-size:12px; margin-top:8px; color:rgba(255,255,255,0.8);">Click grid cells to toggle selection for the chosen level, then <strong>Save</strong>.</div>
                 </div>
             </div>
         </div>
@@ -281,8 +296,8 @@
         <button type="button" id="copyUrlBtn">Copy view URL</button>
     </div>
 
-    <button type="button" class="api-hint-toggle" id="apiHintToggle" aria-expanded="true" aria-controls="apiHint">Hide API help</button>
-    <div class="api-hint" id="apiHint" role="region" aria-label="API usage">
+    <button type="button" class="api-hint-toggle" id="apiHintToggle" aria-expanded="false" aria-controls="apiHint">Show API help</button>
+    <div class="api-hint api-hint--collapsed" id="apiHint" role="region" aria-label="API usage">
         <h3>Send coordinates to Cesium</h3>
         <p><strong>URL:</strong> <code>?lat=40.7128&lon=-74.0060</code> or <code>&height=2000</code></p>
         <p><strong>JS (same window):</strong> <code>cesiumFlyTo(lat, lon)</code> or <code>cesiumFlyTo(lat, lon, height, addMarker)</code></p>

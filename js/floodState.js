@@ -7,17 +7,15 @@
 
   function trigger(level) {
     if (!viewer) return;
-    // level: '0.5' | '1' | 'none'
     if (level === 'none') {
       clearAll();
       return;
     }
     const meters = (level === '1') ? 1.0 : 0.5;
-    // Use saved configured zones
     const zones = (window.floodConfig && window.floodConfig.getZones(level)) || [];
-    if (!zones || !zones.length) return;
-    // Update current flood level in grid visuals
+    // Always update grid visuals so 0.5 m / 1 m zones show correct overlay color
     try { window.gridManager && window.gridManager.setCurrentFloodLevel(level); } catch (e) { /* ignore */ }
+    if (!zones || !zones.length) return;
     zones.forEach(function (zid) {
       const z = (window.floodZones || []).find(function (zz) { return zz.id === Number(zid); });
       if (!z) return;

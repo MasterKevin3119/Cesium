@@ -18,6 +18,8 @@
   let precipitationLayer = null;
   /** Last fetched hourly data for time slider: { lat, lon, time[], precipitation[] } */
   let lastHourlyData = null;
+  /** Whether the weather data table (Time/Rain/Temp/etc.) is minimized */
+  let weatherTableCollapsed = false;
 
   // --- Flood simulation (test-only, does not depend on any API) ----------------
   // Center coordinate for the flood test area (kept minimal and explicit)
@@ -396,7 +398,6 @@
 
   // Initialize flood UI controls inside the coords/weather panel
   function initFloodControls() {
-    const input = document.getElementById('inputZoneIds');
     const btn05 = document.getElementById('btnFlood05');
     const btn1 = document.getElementById('btnFlood1');
     const btnClear = document.getElementById('btnClearFlood');
@@ -427,23 +428,19 @@
       }
     });
 
-    // Minimize behavior
+    // Minimize behavior: collapse only the data table (Time/Rain/Temp/Condition/Humidity/Cloud)
     const minBtn = document.getElementById('coordsMinimizeBtn');
-    const panel = document.getElementById('coordsWeatherPanel');
-    if (minBtn && panel) {
+    if (minBtn) {
       minBtn.addEventListener('click', function () {
-        const collapsed = panel.classList.toggle('coords-weather--collapsed');
-        if (collapsed) panel.classList.remove('coords-weather--open'); else panel.classList.add('coords-weather--open');
+        const section = document.getElementById('weatherDataTableSection');
+        if (section) {
+          section.classList.toggle('weather-data-table-section--collapsed');
+          weatherTableCollapsed = section.classList.contains('weather-data-table-section--collapsed');
+        }
       });
     }
 
-    // Wire admin button to prompt (adminMode handles the password UI)
-    const adminBtn = document.getElementById('adminModeBtn');
-    if (adminBtn) {
-      adminBtn.addEventListener('click', function () {
-        try { if (window.adminMode) window.adminMode.init(viewer); } catch (e) { /* ignore */ }
-      });
-    }
+    // Admin button is wired in adminMode.init() (called once at startup)
   }
 
   const WEATHER_API = "https://api.open-meteo.com/v1/forecast";
@@ -616,7 +613,7 @@
       const firstPrecip = precips[0] != null ? precips[0] : 0;
       const firstCode = codes[0] != null ? codes[0] : 0;
       showTimeSlider(h.time.length, h.time[0], getRainIntensityFromCondition(firstCode, firstPrecip));
-      html += '<p class="hourly-title">Every hour (next 48h)</p>';
+      html += '<div id="weatherDataTableSection" class="weather-data-table-section"><p class="hourly-title">Every hour (next 48h)</p>';
       html += '<div class="hourly-scroll"><table class="hourly-table"><thead><tr><th>Time</th><th>Rain</th><th>Temp</th><th>Condition</th><th>Humidity</th><th>Cloud</th></tr></thead><tbody>';
       const temps = h.temperature_2m || [];
       const humids = h.relative_humidity_2m || [];
@@ -632,11 +629,15 @@
         const rainClass = precips[i] > 0 ? " rain" : "";
         html += "<tr><td>" + escapeHtml(time) + "</td><td class=\"rain-cell" + rainClass + "\">" + escapeHtml(String(rain)) + "</td><td>" + escapeHtml(String(temp)) + "</td><td>" + escapeHtml(desc) + "</td><td>" + escapeHtml(String(hum)) + "</td><td>" + escapeHtml(String(cl)) + "</td></tr>";
       }
-      html += "</tbody></table></div>";
+      html += "</tbody></table></div></div>";
     }
 
     el.innerHTML = html;
     el.classList.remove("weather-error");
+    if (weatherTableCollapsed) {
+      const section = el.querySelector("#weatherDataTableSection");
+      if (section) section.classList.add("weather-data-table-section--collapsed");
+    }
 
     let precipMm = 0;
     let weatherCode = null;
@@ -944,10 +945,9 @@
 
     // Initialize and render the flood zone grid (outline-only)
     try {
-      // Ensure floodConfig is available
       try { if (window.floodConfig && typeof window.floodConfig.load === 'function') window.floodConfig.load(); } catch (e) { /* ignore */ }
       initFloodZones();
-      // let gridManager manage visuals
+      window.floodZones = floodZones;
       try { if (window.gridManager && typeof window.gridManager.init === 'function') window.gridManager.init(viewer); } catch (e) { /* ignore */ }
       renderZoneGrid();
       // initialize floodState

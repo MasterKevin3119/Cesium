@@ -10,7 +10,10 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') state = parsed;
+      if (parsed && typeof parsed === 'object') {
+        state['0.5'] = Array.isArray(parsed['0.5']) ? parsed['0.5'].map(Number).filter(function (n) { return !isNaN(n); }) : [];
+        state['1'] = Array.isArray(parsed['1']) ? parsed['1'].map(Number).filter(function (n) { return !isNaN(n); }) : [];
+      }
     } catch (e) { /* ignore */ }
   }
 

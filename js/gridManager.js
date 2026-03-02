@@ -3,7 +3,8 @@
 
   let viewer = null;
   let tempSelection = []; // ids
-  let currentFloodLevel = 'none';
+  let showLevel05 = false;
+  let showLevel1 = false;
 
   function init(v) {
     viewer = v;
@@ -33,13 +34,12 @@
   function getTempSelection() { return tempSelection.slice(); }
 
   function saveSelection(level) {
-    // overwrite saved zones for level with tempSelection
     try {
       if (window.floodConfig && typeof window.floodConfig.setZones === 'function') {
         window.floodConfig.setZones(level, tempSelection);
       }
     } catch (e) { /* ignore */ }
-    // keep tempSelection as-is but update visuals (saved highlights apply)
+    tempSelection = [];
     updateAllVisuals();
   }
 
@@ -49,43 +49,68 @@
     try { return (window.floodConfig && window.floodConfig.getZones(level)) || []; } catch (e) { return []; }
   }
 
+  function isZoneSavedForLevel(zoneId, level) {
+    const list = getSavedZones(level);
+    const id = Number(zoneId);
+    for (let i = 0; i < list.length; i++) { if (Number(list[i]) === id) return true; }
+    return false;
+  }
+
   function setCurrentFloodLevel(level) {
-    currentFloodLevel = level || 'none';
+    if (level === 'none') {
+      showLevel05 = false;
+      showLevel1 = false;
+    } else if (level === '0.5') {
+      showLevel05 = true;
+    } else if (level === '1') {
+      showLevel1 = true;
+    }
     updateAllVisuals();
   }
 
   function updateAllVisuals() {
+    try { if (window.floodConfig && typeof window.floodConfig.load === 'function') window.floodConfig.load(); } catch (e) { /* ignore */ }
     const zones = window.floodZones || [];
     for (let i = 0; i < zones.length; i++) updateZoneVisual(zones[i]);
+    if (viewer && viewer.scene) try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
   }
+
+  // Entity.rectangle.material must be a MaterialProperty (e.g. ColorMaterialProperty), not a raw Color
+  function materialProp(color) {
+    return new Cesium.ColorMaterialProperty(color);
+  }
+  // Pale light blue – less saturated, lighter (0.5 m)
+  const COLOR_05 = new Cesium.Color(0.88, 0.95, 1.0, 0.55);
+  const COLOR_1  = new Cesium.Color(0.01, 0.41, 0.63, 0.65);   // dark blue – 1 m
+  const COLOR_TEMP = new Cesium.Color(0.96, 0.62, 0.04, 0.35); // amber – pending (admin)
 
   function updateZoneVisual(z) {
     if (!z || !z.outlineEntity) return;
     try {
-      const saved1 = getSavedZones('1').indexOf(z.id) !== -1;
-      const saved05 = getSavedZones('0.5').indexOf(z.id) !== -1;
+      const saved1 = isZoneSavedForLevel(z.id, '1');
+      const saved05 = isZoneSavedForLevel(z.id, '0.5');
       const temp = isTempSelected(z.id);
-      // Admin mode visuals
       const adminEnabled = window.adminMode && window.adminMode.isEnabled && window.adminMode.isEnabled();
+
       if (adminEnabled) {
         if (temp) {
-          z.outlineEntity.rectangle.material = Cesium.Color.CYAN.withAlpha(0.18); // selected but not saved
+          z.outlineEntity.rectangle.material = materialProp(COLOR_TEMP);
         } else if (saved1) {
-          z.outlineEntity.rectangle.material = Cesium.Color.RED.withAlpha(0.12);
+          z.outlineEntity.rectangle.material = materialProp(COLOR_1);
         } else if (saved05) {
-          z.outlineEntity.rectangle.material = Cesium.Color.YELLOW.withAlpha(0.12);
+          z.outlineEntity.rectangle.material = materialProp(COLOR_05);
         } else {
-          z.outlineEntity.rectangle.material = Cesium.Color.WHITE.withAlpha(0.05);
+          z.outlineEntity.rectangle.material = materialProp(Cesium.Color.WHITE.withAlpha(0.05));
         }
         return;
       }
-      // Normal user visuals depend on currentFloodLevel
-      if (currentFloodLevel === '1') {
-        if (saved1) z.outlineEntity.rectangle.material = Cesium.Color.RED.withAlpha(0.12); else z.outlineEntity.rectangle.material = Cesium.Color.WHITE.withAlpha(0.03);
-      } else if (currentFloodLevel === '0.5') {
-        if (saved05) z.outlineEntity.rectangle.material = Cesium.Color.YELLOW.withAlpha(0.12); else z.outlineEntity.rectangle.material = Cesium.Color.WHITE.withAlpha(0.03);
+      var baseMaterial = materialProp(Cesium.Color.WHITE.withAlpha(0.05));
+      if (saved05 && (showLevel05 || showLevel1)) {
+        z.outlineEntity.rectangle.material = materialProp(COLOR_05);
+      } else if (saved1 && showLevel1) {
+        z.outlineEntity.rectangle.material = materialProp(COLOR_1);
       } else {
-        z.outlineEntity.rectangle.material = Cesium.Color.WHITE.withAlpha(0.05);
+        z.outlineEntity.rectangle.material = baseMaterial;
       }
     } catch (e) { /* ignore */ }
   }
