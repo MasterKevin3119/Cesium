@@ -142,6 +142,34 @@
         .coords-weather__content > *:last-child {
             margin-bottom: 0;
         }
+        /* compact/ultra-minimized state hides content */
+        .coords-weather--compact .coords-weather__content {
+            display: none !important;
+        }
+        .coords-weather--compact {
+            width: auto;
+            max-height: none;
+        }
+        .coords-weather__header {
+            cursor: move; /* indicates draggable */
+        }
+        /* ensure a bit of space between title and button group even when compact */
+        .coords-weather__header > div:first-child {
+            margin-right: 4px; /* minimal spacing to avoid cramped look */
+        }
+        /* chart container max-height to prevent runaway expansion */
+        .chart-card {
+            margin-bottom: 24px;
+            max-height: 320px;
+            overflow: hidden;
+        }
+        .agg-toggle input {
+            vertical-align: middle;
+        }
+        .chart-card canvas {
+            width: 100%;
+            height: 300px;
+        }
         .weather-result {
             margin-top: 12px;
             padding-top: 12px;
@@ -276,13 +304,6 @@
             color: #fff;
             cursor: pointer;
         }
-        .chart-card {
-            margin-bottom: 24px;
-        }
-        .chart-card canvas {
-            width: 100%;
-            height: 300px;
-        }
     </style>
 </head>
 <body>
@@ -302,7 +323,7 @@
             <div style="font-weight:600;">Master Control</div>
             <div style="display:flex; gap:8px; align-items:center;">
                 <button id="adminModeBtn" title="Admin mode" style="padding:6px 8px; font-size:12px;">Admin</button>
-                <button id="coordsMinimizeBtn" aria-label="Minimize data table" title="Minimize data table" style="padding:6px 8px; font-size:12px;">−</button>
+                <button id="coordsMinimizeBtn" aria-label="Expand panel" title="Expand panel" style="padding:6px 8px; font-size:12px;">+</button>
             </div>
         </div>
         <div class="coords-weather__content">
@@ -364,6 +385,15 @@
         <div class="weather-graphs-content">
             <button id="weatherGraphsCloseBtn" class="modal-close" aria-label="Close graphs">×</button>
             <h2 style="margin-top:0;">Weather Data</h2>
+            <!-- aggregation toggle -->
+            <div class="agg-toggle" style="margin-bottom:12px;">
+                <label style="font-size:13px; margin-right:12px; cursor:pointer;">
+                    <input type="radio" name="aggMode" value="hour" checked style="margin-right:4px;">Per Hour
+                </label>
+                <label style="font-size:13px; cursor:pointer;">
+                    <input type="radio" name="aggMode" value="day" style="margin-right:4px;">Per Day
+                </label>
+            </div>
             <div class="chart-card">
                 <canvas id="rainfallChart"></canvas>
             </div>

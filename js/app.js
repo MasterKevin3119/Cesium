@@ -428,17 +428,7 @@
       }
     });
 
-    // Minimize behavior: collapse only the data table (Time/Rain/Temp/Condition/Humidity/Cloud)
-    const minBtn = document.getElementById('coordsMinimizeBtn');
-    if (minBtn) {
-      minBtn.addEventListener('click', function () {
-        const section = document.getElementById('weatherDataTableSection');
-        if (section) {
-          section.classList.toggle('weather-data-table-section--collapsed');
-          weatherTableCollapsed = section.classList.contains('weather-data-table-section--collapsed');
-        }
-      });
-    }
+    // old minimize behavior removed – panel now handles collapse/expand separately
 
     // Admin button is wired in adminMode.init() (called once at startup)
   }
@@ -548,6 +538,7 @@
   function showWeatherLoading() {
     const el = document.getElementById("weatherResult");
     if (!el) return;
+    el.style.display = "";
     el.innerHTML = '<span class="loading">Loading weather…</span>';
     el.classList.remove("weather-error");
   }
@@ -555,6 +546,7 @@
   function showWeatherError(msg) {
     const el = document.getElementById("weatherResult");
     if (!el) return;
+    el.style.display = "";
     el.innerHTML = '<span class="error">' + escapeHtml(msg) + "</span>";
     el.classList.add("weather-error");
   }
@@ -635,6 +627,7 @@ try { window.formatHourlyTime = formatHourlyTime; } catch (e) { /* ignore */ }
       html += "</tbody></table></div></div>";
     }
 
+    el.style.display = "";
     el.innerHTML = html;
     el.classList.remove("weather-error");
     if (weatherTableCollapsed) {
@@ -724,12 +717,89 @@ try { window.formatHourlyTime = formatHourlyTime; } catch (e) { /* ignore */ }
     slider.addEventListener("change", onTimeSliderChange);
   }
 
+  // simple drag helper (panel must have position:absolute)
+  function makeElementDraggable(el, handle) {
+    if (!el || !handle) return;
+    let dragging = false;
+    let offsetX = 0, offsetY = 0;
+    handle.addEventListener('mousedown', startDrag);
+    handle.addEventListener('touchstart', startDrag, {passive:false});
+
+    function startDrag(e) {
+      e.preventDefault();
+      dragging = true;
+      const rect = el.getBoundingClientRect();
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+      el.style.left = rect.left + 'px';
+      el.style.top = rect.top + 'px';
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      offsetX = clientX - rect.left;
+      offsetY = clientY - rect.top;
+      document.addEventListener('mousemove', onDrag);
+      document.addEventListener('touchmove', onDrag, {passive:false});
+      document.addEventListener('mouseup', endDrag);
+      document.addEventListener('touchend', endDrag);
+    }
+    function onDrag(e) {
+      if (!dragging) return;
+      e.preventDefault();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      let x = clientX - offsetX;
+      let y = clientY - offsetY;
+      // clamp within viewport
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      x = Math.max(0, Math.min(window.innerWidth - w, x));
+      y = Math.max(0, Math.min(window.innerHeight - h, y));
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+    }
+    function endDrag() {
+      dragging = false;
+      document.removeEventListener('mousemove', onDrag);
+      document.removeEventListener('touchmove', onDrag);
+      document.removeEventListener('mouseup', endDrag);
+      document.removeEventListener('touchend', endDrag);
+    }
+  }
+
   function initCoordsWeather() {
+    const panel = document.getElementById("coordsWeatherPanel");
+    const toggleBtn = document.getElementById("coordsMinimizeBtn");
     const btn = document.getElementById("goWeatherBtn");
     const inputLat = document.getElementById("inputLat");
     const inputLon = document.getElementById("inputLon");
     const viewGraphsBtn = document.getElementById("viewWeatherGraphsBtn");
     if (!btn || !inputLat || !inputLon) return;
+
+    // initial compact state
+    if (panel) {
+      panel.classList.add('coords-weather--compact');
+      // make draggable
+      makeElementDraggable(panel, panel.querySelector('.coords-weather__header'));
+    }
+    if (toggleBtn) {
+      toggleBtn.textContent = '+';
+      toggleBtn.title = 'Expand panel';
+      toggleBtn.addEventListener('click', function () {
+        const compact = panel.classList.toggle('coords-weather--compact');
+        if (compact) {
+          toggleBtn.textContent = '+';
+          toggleBtn.title = 'Expand panel';
+        } else {
+          toggleBtn.textContent = '−';
+          toggleBtn.title = 'Collapse panel';
+        }
+      });
+    }
+
+    // hide weather output until user triggers
+    const weatherEl = document.getElementById("weatherResult");
+    if (weatherEl) weatherEl.style.display = 'none';
+
     if (viewGraphsBtn) {
       viewGraphsBtn.addEventListener("click", function () {
         if (window.weatherGraphs && typeof window.weatherGraphs.showModal === "function") {
@@ -991,7 +1061,7 @@ try { window.formatHourlyTime = formatHourlyTime; } catch (e) { /* ignore */ }
       const inputLon = document.getElementById("inputLon");
       if (inputLat) inputLat.value = lat;
       if (inputLon) inputLon.value = lon;
-      fetchWeatherForCoordinates(lat, lon);
+      // weather will be fetched only when user clicks Go & Get Weather
     }
     initPlacesSearch();
     initCopyUrlButton();
