@@ -578,6 +578,8 @@
     const hour = (h < 10 ? "0" : "") + h + ":00";
     return day + " " + hour;
   }
+// expose formatting for other modules (weatherGraphs)
+try { window.formatHourlyTime = formatHourlyTime; } catch (e) { /* ignore */ }
 
   function showWeatherData(lat, lon, data) {
     const el = document.getElementById("weatherResult");
@@ -609,13 +611,14 @@
     if (h && h.time && h.time.length) {
       const precips = h.precipitation || h.rain || [];
       const codes = h.weather_code || [];
-      lastHourlyData = { lat: lat, lon: lon, time: h.time, precipitation: precips, weatherCode: codes };
+      const temps = h.temperature_2m || [];
+      lastHourlyData = { lat: lat, lon: lon, time: h.time, precipitation: precips, weatherCode: codes, temperature: temps };
+      try { window.lastHourlyData = lastHourlyData; } catch (e) { /* ignore */ }
       const firstPrecip = precips[0] != null ? precips[0] : 0;
       const firstCode = codes[0] != null ? codes[0] : 0;
       showTimeSlider(h.time.length, h.time[0], getRainIntensityFromCondition(firstCode, firstPrecip));
       html += '<div id="weatherDataTableSection" class="weather-data-table-section"><p class="hourly-title">Every hour (next 48h)</p>';
       html += '<div class="hourly-scroll"><table class="hourly-table"><thead><tr><th>Time</th><th>Rain</th><th>Temp</th><th>Condition</th><th>Humidity</th><th>Cloud</th></tr></thead><tbody>';
-      const temps = h.temperature_2m || [];
       const humids = h.relative_humidity_2m || [];
       const clouds = h.cloud_cover || [];
       const hoursToShow = Math.min(48, h.time.length);
@@ -637,6 +640,10 @@
     if (weatherTableCollapsed) {
       const section = el.querySelector("#weatherDataTableSection");
       if (section) section.classList.add("weather-data-table-section--collapsed");
+    }
+    // notify graphs module if available
+    if (window.weatherGraphs && typeof window.weatherGraphs.updateData === "function") {
+      window.weatherGraphs.updateData(lastHourlyData);
     }
 
     let precipMm = 0;
@@ -721,7 +728,15 @@
     const btn = document.getElementById("goWeatherBtn");
     const inputLat = document.getElementById("inputLat");
     const inputLon = document.getElementById("inputLon");
+    const viewGraphsBtn = document.getElementById("viewWeatherGraphsBtn");
     if (!btn || !inputLat || !inputLon) return;
+    if (viewGraphsBtn) {
+      viewGraphsBtn.addEventListener("click", function () {
+        if (window.weatherGraphs && typeof window.weatherGraphs.showModal === "function") {
+          window.weatherGraphs.showModal();
+        }
+      });
+    }
 
     const params = new URLSearchParams(window.location.search);
     if (params.get("lat") != null) inputLat.value = params.get("lat");
