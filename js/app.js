@@ -662,29 +662,23 @@
     const rangeSelect = document.getElementById("graphRangeSelect");
     const rangeHours = rangeSelect ? Math.max(1, parseInt(rangeSelect.value, 10) || 24) : graphTimeRangeHours;
     let times = d.time || [];
-    let temps = d.temperature_2m || [];
     let precips = d.precipitation || [];
     const total = times.length;
     const n = Math.min(total, rangeHours);
     times = times.slice(0, n);
-    temps = temps.slice(0, n);
     precips = precips.slice(0, n);
     if (n === 0) return;
     const w = canvas.width;
     const h = canvas.height;
     const ctx = canvas.getContext("2d");
-    const padding = { top: 20, right: 20, bottom: 28, left: 36 };
+    const padding = { top: 16, right: 20, bottom: 32, left: 32 };
     const chartW = w - padding.left - padding.right;
     const chartH = h - padding.top - padding.bottom;
     ctx.clearRect(0, 0, w, h);
-    const validTemps = temps.filter(function (v) { return v != null && !isNaN(v); });
-    const tempMin = (validTemps.length ? Math.min.apply(null, validTemps) : 0) - 2;
-    const tempMax = (validTemps.length ? Math.max.apply(null, validTemps) : 20) + 2;
-    const tempRange = (tempMax - tempMin) || 1;
-    const precipMax = Math.max(1, Math.max.apply(null, (precips || []).filter(function (v) { return v != null && !isNaN(v); })));
+    const validPrecips = (precips || []).filter(function (v) { return v != null && !isNaN(v); });
+    const precipMax = Math.max(1, (validPrecips.length ? Math.max.apply(null, validPrecips) : 1));
     function x(i) { return padding.left + (i / Math.max(1, n - 1)) * chartW; }
-    function yTemp(t) { return padding.top + chartH - ((t - tempMin) / tempRange) * chartH; }
-    function yPrecip(p) { return padding.top + chartH - ((p || 0) / precipMax) * chartH * 0.4; }
+    function yRain(p) { return padding.top + chartH - ((p || 0) / precipMax) * chartH; }
     ctx.strokeStyle = "rgba(255,255,255,0.2)";
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -692,38 +686,36 @@
     ctx.lineTo(padding.left, padding.top + chartH);
     ctx.lineTo(padding.left + chartW, padding.top + chartH);
     ctx.stroke();
-    ctx.fillStyle = "rgba(125,211,252,0.25)";
+    ctx.fillStyle = "rgba(125,211,252,0.4)";
     ctx.beginPath();
     ctx.moveTo(x(0), padding.top + chartH);
     for (let i = 0; i < n; i++) {
       const p = precips[i] != null ? precips[i] : 0;
-      ctx.lineTo(x(i), yPrecip(p));
+      ctx.lineTo(x(i), yRain(p));
     }
     ctx.lineTo(x(n - 1), padding.top + chartH);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = "rgba(125,211,252,0.9)";
+    ctx.strokeStyle = "rgba(125,211,252,0.95)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     let started = false;
     for (let i = 0; i < n; i++) {
-      const t = temps[i];
-      if (t == null || isNaN(t)) continue;
-      if (!started) { ctx.moveTo(x(i), yTemp(t)); started = true; } else ctx.lineTo(x(i), yTemp(t));
+      const p = precips[i] != null ? precips[i] : 0;
+      if (!started) { ctx.moveTo(x(i), yRain(p)); started = true; } else ctx.lineTo(x(i), yRain(p));
     }
     ctx.stroke();
     ctx.fillStyle = "#e0e0e0";
     ctx.font = "11px system-ui,sans-serif";
     ctx.textAlign = "center";
     for (let i = 0; i < n; i += Math.max(1, Math.floor(n / 8))) {
-      const lbl = formatHourlyTime(times[i]).replace(" ", "\n");
-      const parts = lbl.split("\n");
-      ctx.fillText(parts[0], x(i), padding.top + chartH + 12);
-      if (parts[1]) ctx.fillText(parts[1], x(i), padding.top + chartH + 24);
+      const d = new Date(times[i]);
+      const hour = d.getHours();
+      const timeLabel = (hour < 10 ? "0" : "") + hour + ":00";
+      ctx.fillText(timeLabel, x(i), padding.top + chartH + 14);
     }
     ctx.textAlign = "left";
-    ctx.fillText("°C", padding.left - 28, padding.top + 14);
-    ctx.fillText("mm", padding.left - 22, padding.top + chartH - 4);
+    ctx.fillText("mm", padding.left - 22, padding.top + chartH - 2);
   }
 
   function showWeatherData(lat, lon, data) {
