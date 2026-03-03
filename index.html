@@ -84,22 +84,9 @@
             padding:12px;
             overflow:auto;
         }
-        .coords-weather-panel-expand {
-            position: absolute;
-            left: 12px;
-            bottom: 12px;
-            z-index: 1000;
-            padding: 10px 14px;
-            font-size: 13px;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            background: rgba(0,0,0,0.9);
-            color: #e0e0e0;
-            cursor: pointer;
-            display: none;
+        .coords-weather--collapsed {
+            transform: translateY(calc(100% - 56px));
         }
-        .coords-weather-panel-expand:hover { background: rgba(0,0,0,0.95); color: #fff; }
         .weather-data-table-section {
             margin-top: 12px;
             transition: max-height 220ms ease, opacity 180ms ease;
@@ -148,6 +135,41 @@
             background: #555;
             cursor: not-allowed;
         }
+        /* spacing improvements within master control */
+        .coords-weather__content > * {
+            margin-bottom: 12px;
+        }
+        .coords-weather__content > *:last-child {
+            margin-bottom: 0;
+        }
+        /* compact/ultra-minimized state hides content */
+        .coords-weather--compact .coords-weather__content {
+            display: none !important;
+        }
+        .coords-weather--compact {
+            width: auto;
+            max-height: none;
+        }
+        .coords-weather__header {
+            cursor: move; /* indicates draggable */
+        }
+        /* ensure a bit of space between title and button group even when compact */
+        .coords-weather__header > div:first-child {
+            margin-right: 4px; /* minimal spacing to avoid cramped look */
+        }
+        /* chart container max-height to prevent runaway expansion */
+        .chart-card {
+            margin-bottom: 24px;
+            max-height: 320px;
+            overflow: hidden;
+        }
+        .agg-toggle input {
+            vertical-align: middle;
+        }
+        .chart-card canvas {
+            width: 100%;
+            height: 300px;
+        }
         .weather-result {
             margin-top: 12px;
             padding-top: 12px;
@@ -160,32 +182,6 @@
         .weather-result .rain { color: #7dd3fc; font-weight: 600; }
         .weather-result .error { color: #f87171; }
         .weather-result .loading { color: rgba(255,255,255,0.6); }
-        .weather-table-toggle-wrap { margin: 10px 0 6px 0; }
-        .weather-table-toggle-btn {
-            padding: 6px 10px;
-            font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 6px;
-            background: rgba(255,255,255,0.1);
-            color: #e0e0e0;
-            cursor: pointer;
-        }
-        .weather-table-toggle-btn:hover { background: rgba(255,255,255,0.18); }
-        .hourly-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
-        .hourly-tab {
-            padding: 6px 12px;
-            font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.25);
-            border-radius: 6px;
-            background: rgba(255,255,255,0.08);
-            color: rgba(255,255,255,0.85);
-            cursor: pointer;
-        }
-        .hourly-tab:hover { background: rgba(255,255,255,0.14); }
-        .hourly-tab--active { background: rgba(74,158,255,0.4); border-color: rgba(255,255,255,0.4); color: #fff; }
-        .hourly-panel { display: none; }
-        .hourly-panel--active { display: block; }
-        .hourly-graph-canvas { display: block; max-width: 100%; height: auto; background: rgba(0,0,0,0.2); border-radius: 6px; }
 
         .toolbar {
             position: absolute;
@@ -269,6 +265,45 @@
             color: #fff;
             font-size: 14px;
         }
+        /* Weather graphs modal styles */
+        .weather-graphs-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .weather-graphs-modal.open {
+            display: flex;
+        }
+        .weather-graphs-content {
+            position: relative;
+            background: #1a1a1a;
+            border-radius: 10px;
+            padding: 20px;
+            max-width: 90vw;
+            max-height: 90vh;
+            width: 600px;
+            overflow-y: auto;
+            color: #fff;
+        }
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #fff;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -285,10 +320,10 @@
 
     <div class="coords-weather coords-weather--open" id="coordsWeatherPanel" aria-hidden="false">
         <div class="coords-weather__header">
-            <div style="font-weight:600;">Coordinates &amp; Weather</div>
+            <div style="font-weight:600;">Master Control</div>
             <div style="display:flex; gap:8px; align-items:center;">
                 <button id="adminModeBtn" title="Admin mode" style="padding:6px 8px; font-size:12px;">Admin</button>
-                <button id="panelMinimizeBtn" aria-label="Minimize panel" title="Minimize panel" style="padding:6px 8px; font-size:12px;">−</button>
+                <button id="coordsMinimizeBtn" aria-label="Expand panel" title="Expand panel" style="padding:6px 8px; font-size:12px;">+</button>
             </div>
         </div>
         <div class="coords-weather__content">
@@ -297,7 +332,9 @@
                 <input type="text" id="inputLon" placeholder="Longitude (e.g. -74.01)" inputmode="decimal" />
             </div>
             <button type="button" id="goWeatherBtn">Go &amp; get weather</button>
+            <!-- graph button appears below weather result -->
             <div id="weatherResult" class="weather-result" aria-live="polite"></div>
+            <button type="button" id="viewWeatherGraphsBtn" style="margin-top:8px;">View Weather Graphs</button>
 
             <div id="floodControls" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
                 <h3 style="margin:0 0 8px 0; font-size:13px; color:#fff;">Flood Simulation</h3>
@@ -331,8 +368,6 @@
         </div>
     </div>
 
-    <button type="button" id="panelExpandBtn" class="coords-weather-panel-expand" title="Show Coordinates &amp; Weather">Coordinates &amp; Weather ▱</button>
-
     <div class="toolbar">
         <button type="button" id="copyUrlBtn">Copy view URL</button>
     </div>
@@ -345,8 +380,32 @@
         <p><strong>postMessage (iframe/parent):</strong> <code>{ type: 'cesiumFlyTo', lat, lon, height?, addMarker? }</code></p>
     </div>
     
+    <!-- Weather graphs modal (hidden by default) -->
+    <div id="weatherGraphsModal" class="weather-graphs-modal" aria-hidden="true">
+        <div class="weather-graphs-content">
+            <button id="weatherGraphsCloseBtn" class="modal-close" aria-label="Close graphs">×</button>
+            <h2 style="margin-top:0;">Weather Data</h2>
+            <!-- aggregation toggle -->
+            <div class="agg-toggle" style="margin-bottom:12px;">
+                <label style="font-size:13px; margin-right:12px; cursor:pointer;">
+                    <input type="radio" name="aggMode" value="hour" checked style="margin-right:4px;">Per Hour
+                </label>
+                <label style="font-size:13px; cursor:pointer;">
+                    <input type="radio" name="aggMode" value="day" style="margin-right:4px;">Per Day
+                </label>
+            </div>
+            <div class="chart-card">
+                <canvas id="rainfallChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <canvas id="temperatureChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/weatherGraphs.js"></script>
     <script src="js/config.js"></script>
-    <script src="js/floodConfig.js"></script>
     <script src="js/gridManager.js"></script>
     <script src="js/floodState.js"></script>
     <script src="js/adminMode.js"></script>
