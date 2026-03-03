@@ -719,6 +719,56 @@
     ctx.fillText("mm", padding.left - 22, padding.top + chartH - 2);
   }
 
+  function initGraphHover() {
+    const canvas = document.getElementById("hourlyGraphCanvas");
+    const tooltip = document.getElementById("hourlyGraphTooltip");
+    if (!canvas || !tooltip || !lastRenderedHourlyData) return;
+    const padding = { left: 32, right: 20 };
+    const chartW = 380 - padding.left - padding.right;
+
+    function getDataIndex(clientX) {
+      const rect = canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const rangeSelect = document.getElementById("graphRangeSelect");
+      const rangeHours = rangeSelect ? Math.max(1, parseInt(rangeSelect.value, 10) || 24) : 24;
+      const n = Math.min(lastRenderedHourlyData.time.length, rangeHours);
+      if (n <= 0) return -1;
+      if (x < padding.left || x > padding.left + chartW) return -1;
+      const t = (x - padding.left) / chartW;
+      let i = Math.round(t * (n - 1));
+      if (i < 0) i = 0;
+      if (i >= n) i = n - 1;
+      return i;
+    }
+
+    canvas.addEventListener("mousemove", function (e) {
+      const i = getDataIndex(e.clientX);
+      if (i < 0) {
+        tooltip.style.display = "none";
+        tooltip.setAttribute("aria-hidden", "true");
+        return;
+      }
+      const rangeSelect = document.getElementById("graphRangeSelect");
+      const rangeHours = rangeSelect ? Math.max(1, parseInt(rangeSelect.value, 10) || 24) : 24;
+      const times = (lastRenderedHourlyData.time || []).slice(0, rangeHours);
+      const precips = (lastRenderedHourlyData.precipitation || []).slice(0, rangeHours);
+      const timeStr = formatHourlyTime(times[i]);
+      const precip = precips[i] != null ? precips[i] : 0;
+      tooltip.textContent = timeStr + " · " + (precip.toFixed(1)) + " mm";
+      tooltip.style.display = "block";
+      tooltip.setAttribute("aria-hidden", "false");
+      const rect = canvas.getBoundingClientRect();
+      const left = e.clientX - rect.left + 12;
+      const top = e.clientY - rect.top + 12;
+      tooltip.style.left = left + "px";
+      tooltip.style.top = top + "px";
+    });
+    canvas.addEventListener("mouseleave", function () {
+      tooltip.style.display = "none";
+      tooltip.setAttribute("aria-hidden", "true");
+    });
+  }
+
   function showWeatherData(lat, lon, data) {
     const el = document.getElementById("weatherResult");
     if (!el) return;
@@ -785,7 +835,8 @@
       html += '<div class="graph-range-wrap"><label class="graph-range-label">Time:</label><select id="graphRangeSelect" class="graph-range-select" aria-label="Graph time range">';
       html += '<option value="12">12 hours</option><option value="24" selected>24 hours (Today)</option><option value="72">3 days</option><option value="168">1 week</option>';
       html += '</select></div>';
-      html += '<canvas id="hourlyGraphCanvas" class="hourly-graph-canvas" width="380" height="240"></canvas></div>';
+      html += '<div class="graph-canvas-wrap"><canvas id="hourlyGraphCanvas" class="hourly-graph-canvas" width="380" height="240"></canvas>';
+      html += '<div id="hourlyGraphTooltip" class="graph-tooltip" aria-hidden="true"></div></div></div>';
       html += "</div>";
     }
 
@@ -795,6 +846,7 @@
       const section = el.querySelector("#weatherDataTableSection");
       if (section) section.classList.add("weather-data-table-section--collapsed");
     }
+    if (lastRenderedHourlyData) initGraphHover();
 
     let precipMm = 0;
     let weatherCode = null;
