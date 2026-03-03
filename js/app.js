@@ -671,7 +671,7 @@
     const w = canvas.width;
     const h = canvas.height;
     const ctx = canvas.getContext("2d");
-    const padding = { top: 16, right: 20, bottom: 32, left: 32 };
+    const padding = { top: 16, right: 20, bottom: 44, left: 32 };
     const chartW = w - padding.left - padding.right;
     const chartH = h - padding.top - padding.bottom;
     ctx.clearRect(0, 0, w, h);
@@ -709,11 +709,12 @@
     ctx.font = "11px system-ui,sans-serif";
     ctx.textAlign = "center";
     for (let i = 0; i < n; i += Math.max(1, Math.floor(n / 8))) {
-      const d = new Date(times[i]);
-      const hour = d.getHours();
-      const timeLabel = (hour < 10 ? "0" : "") + hour + ":00";
-      ctx.fillText(timeLabel, x(i), padding.top + chartH + 14);
+      const lbl = formatHourlyTime(times[i]).replace(" ", "\n");
+      const parts = lbl.split("\n");
+      ctx.fillText(parts[0], x(i), padding.top + chartH + 12);
+      if (parts[1]) ctx.fillText(parts[1], x(i), padding.top + chartH + 24);
     }
+    ctx.fillText("Time", padding.left + chartW / 2, padding.top + chartH + 36);
     ctx.textAlign = "left";
     ctx.fillText("mm", padding.left - 22, padding.top + chartH - 2);
   }
@@ -781,10 +782,10 @@
       }
       html += "</tbody></table></div></div>";
       html += '<div id="hourlyGraphPanel" class="hourly-panel">';
-      html += '<div class="graph-range-wrap"><label class="graph-range-label">X-axis:</label><select id="graphRangeSelect" class="graph-range-select" aria-label="Graph time range">';
+      html += '<div class="graph-range-wrap"><label class="graph-range-label">Time:</label><select id="graphRangeSelect" class="graph-range-select" aria-label="Graph time range">';
       html += '<option value="12">12 hours</option><option value="24" selected>24 hours (Today)</option><option value="72">3 days</option><option value="168">1 week</option>';
       html += '</select></div>';
-      html += '<canvas id="hourlyGraphCanvas" class="hourly-graph-canvas" width="380" height="220"></canvas></div>';
+      html += '<canvas id="hourlyGraphCanvas" class="hourly-graph-canvas" width="380" height="240"></canvas></div>';
       html += "</div>";
     }
 
