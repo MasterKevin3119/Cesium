@@ -20,6 +20,8 @@
   let lastHourlyData = null;
   /** Whether the weather data table (Time/Rain/Temp/etc.) is minimized */
   let weatherTableCollapsed = false;
+  /** Last rendered hourly data for graph: { time[], temperature_2m[], precipitation[], ... } */
+  let lastRenderedHourlyData = null;
 
   // --- Flood simulation (test-only, does not depend on any API) ----------------
   // Center coordinate for the flood test area (kept minimal and explicit)
@@ -428,7 +430,54 @@
       }
     });
 
-    // old minimize behavior removed – panel now handles collapse/expand separately
+    // Minimize data table + Table/Graph tab (delegation)
+    const weatherResultEl = document.getElementById('weatherResult');
+    if (weatherResultEl) {
+      weatherResultEl.addEventListener('click', function (e) {
+        var target = e.target;
+        if (target.id === 'weatherTableToggleBtn' || (target.closest && target.closest('#weatherTableToggleBtn'))) {
+          var btn = target.id === 'weatherTableToggleBtn' ? target : target.closest('#weatherTableToggleBtn');
+          var section = document.getElementById('weatherDataTableSection');
+          if (section && btn) {
+            section.classList.toggle('weather-data-table-section--collapsed');
+            weatherTableCollapsed = section.classList.contains('weather-data-table-section--collapsed');
+            btn.textContent = weatherTableCollapsed ? '▴ Table' : '▾ Table';
+          }
+          return;
+        }
+        var tab = target.classList && target.classList.contains('hourly-tab') ? target : (target.closest && target.closest('.hourly-tab'));
+        if (tab && tab.dataset && tab.dataset.tab) {
+          var tabName = tab.dataset.tab;
+          var container = tab.closest('#weatherDataTableSection');
+          if (!container) return;
+          var tabs = container.querySelectorAll('.hourly-tab');
+          var tablePanel = document.getElementById('hourlyTablePanel');
+          var graphPanel = document.getElementById('hourlyGraphPanel');
+          var canvas = document.getElementById('hourlyGraphCanvas');
+          for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('hourly-tab--active', tabs[i] === tab);
+          if (tablePanel) tablePanel.classList.toggle('hourly-panel--active', tabName === 'table');
+          if (graphPanel) graphPanel.classList.toggle('hourly-panel--active', tabName === 'graph');
+          if (tabName === 'graph' && canvas) drawHourlyChart(canvas);
+        }
+      });
+    }
+
+    // Hide/show entire Coordinates & Weather panel
+    const panelMinBtn = document.getElementById('panelMinimizeBtn');
+    const coordsPanel = document.getElementById('coordsWeatherPanel');
+    const panelExpandBtn = document.getElementById('panelExpandBtn');
+    if (panelMinBtn && coordsPanel && panelExpandBtn) {
+      panelMinBtn.addEventListener('click', function () {
+        coordsPanel.style.display = 'none';
+        coordsPanel.setAttribute('aria-hidden', 'true');
+        panelExpandBtn.style.display = 'block';
+      });
+      panelExpandBtn.addEventListener('click', function () {
+        coordsPanel.style.display = '';
+        coordsPanel.setAttribute('aria-hidden', 'false');
+        panelExpandBtn.style.display = 'none';
+      });
+    }
 
     // Admin button is wired in adminMode.init() (called once at startup)
   }
@@ -538,7 +587,6 @@
   function showWeatherLoading() {
     const el = document.getElementById("weatherResult");
     if (!el) return;
-    el.style.display = "";
     el.innerHTML = '<span class="loading">Loading weather…</span>';
     el.classList.remove("weather-error");
   }
@@ -546,7 +594,6 @@
   function showWeatherError(msg) {
     const el = document.getElementById("weatherResult");
     if (!el) return;
-    el.style.display = "";
     el.innerHTML = '<span class="error">' + escapeHtml(msg) + "</span>";
     el.classList.add("weather-error");
   }
@@ -570,8 +617,70 @@
     const hour = (h < 10 ? "0" : "") + h + ":00";
     return day + " " + hour;
   }
-// expose formatting for other modules (weatherGraphs)
-try { window.formatHourlyTime = formatHourlyTime; } catch (e) { /* ignore */ }
+
+  function drawHourlyChart(canvas) {
+    if (!canvas || !lastRenderedHourlyData) return;
+    const d = lastRenderedHourlyData;
+    const times = d.time || [];
+    const temps = d.temperature_2m || [];
+    const precips = d.precipitation || [];
+    const n = times.length;
+    if (n === 0) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    const ctx = canvas.getContext("2d");
+    const padding = { top: 20, right: 20, bottom: 28, left: 36 };
+    const chartW = w - padding.left - padding.right;
+    const chartH = h - padding.top - padding.bottom;
+    ctx.clearRect(0, 0, w, h);
+    const validTemps = temps.filter(function (v) { return v != null && !isNaN(v); });
+    const tempMin = (validTemps.length ? Math.min.apply(null, validTemps) : 0) - 2;
+    const tempMax = (validTemps.length ? Math.max.apply(null, validTemps) : 20) + 2;
+    const tempRange = (tempMax - tempMin) || 1;
+    const precipMax = Math.max(1, Math.max.apply(null, (precips || []).filter(function (v) { return v != null && !isNaN(v); })));
+    function x(i) { return padding.left + (i / Math.max(1, n - 1)) * chartW; }
+    function yTemp(t) { return padding.top + chartH - ((t - tempMin) / tempRange) * chartH; }
+    function yPrecip(p) { return padding.top + chartH - ((p || 0) / precipMax) * chartH * 0.4; }
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top);
+    ctx.lineTo(padding.left, padding.top + chartH);
+    ctx.lineTo(padding.left + chartW, padding.top + chartH);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(125,211,252,0.25)";
+    ctx.beginPath();
+    ctx.moveTo(x(0), padding.top + chartH);
+    for (let i = 0; i < n; i++) {
+      const p = precips[i] != null ? precips[i] : 0;
+      ctx.lineTo(x(i), yPrecip(p));
+    }
+    ctx.lineTo(x(n - 1), padding.top + chartH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(125,211,252,0.9)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < n; i++) {
+      const t = temps[i];
+      if (t == null || isNaN(t)) continue;
+      if (!started) { ctx.moveTo(x(i), yTemp(t)); started = true; } else ctx.lineTo(x(i), yTemp(t));
+    }
+    ctx.stroke();
+    ctx.fillStyle = "#e0e0e0";
+    ctx.font = "11px system-ui,sans-serif";
+    ctx.textAlign = "center";
+    for (let i = 0; i < n; i += Math.max(1, Math.floor(n / 8))) {
+      const lbl = formatHourlyTime(times[i]).replace(" ", "\n");
+      const parts = lbl.split("\n");
+      ctx.fillText(parts[0], x(i), padding.top + chartH + 12);
+      if (parts[1]) ctx.fillText(parts[1], x(i), padding.top + chartH + 24);
+    }
+    ctx.textAlign = "left";
+    ctx.fillText("°C", padding.left - 28, padding.top + 14);
+    ctx.fillText("mm", padding.left - 22, padding.top + chartH - 4);
+  }
 
   function showWeatherData(lat, lon, data) {
     const el = document.getElementById("weatherResult");
@@ -603,17 +712,26 @@ try { window.formatHourlyTime = formatHourlyTime; } catch (e) { /* ignore */ }
     if (h && h.time && h.time.length) {
       const precips = h.precipitation || h.rain || [];
       const codes = h.weather_code || [];
-      const temps = h.temperature_2m || [];
-      lastHourlyData = { lat: lat, lon: lon, time: h.time, precipitation: precips, weatherCode: codes, temperature: temps };
-      try { window.lastHourlyData = lastHourlyData; } catch (e) { /* ignore */ }
+      lastHourlyData = { lat: lat, lon: lon, time: h.time, precipitation: precips, weatherCode: codes };
       const firstPrecip = precips[0] != null ? precips[0] : 0;
       const firstCode = codes[0] != null ? codes[0] : 0;
       showTimeSlider(h.time.length, h.time[0], getRainIntensityFromCondition(firstCode, firstPrecip));
-      html += '<div id="weatherDataTableSection" class="weather-data-table-section"><p class="hourly-title">Every hour (next 48h)</p>';
-      html += '<div class="hourly-scroll"><table class="hourly-table"><thead><tr><th>Time</th><th>Rain</th><th>Temp</th><th>Condition</th><th>Humidity</th><th>Cloud</th></tr></thead><tbody>';
+      const temps = h.temperature_2m || [];
       const humids = h.relative_humidity_2m || [];
       const clouds = h.cloud_cover || [];
       const hoursToShow = Math.min(48, h.time.length);
+      lastRenderedHourlyData = {
+        time: h.time.slice(0, hoursToShow),
+        temperature_2m: temps.slice(0, hoursToShow),
+        precipitation: (h.precipitation || h.rain || []).slice(0, hoursToShow),
+        relative_humidity_2m: humids.slice(0, hoursToShow),
+        cloud_cover: clouds.slice(0, hoursToShow),
+      };
+      html += '<p class="weather-table-toggle-wrap"><button type="button" id="weatherTableToggleBtn" class="weather-table-toggle-btn" aria-label="Minimize data table" title="Minimize data table">' + (weatherTableCollapsed ? '▴ Table' : '▾ Table') + '</button></p>';
+      html += '<div id="weatherDataTableSection" class="weather-data-table-section">';
+      html += '<p class="hourly-title">Every hour (next 48h)</p>';
+      html += '<div class="hourly-tabs"><button type="button" class="hourly-tab hourly-tab--active" data-tab="table">Table</button><button type="button" class="hourly-tab" data-tab="graph">Graph</button></div>';
+      html += '<div id="hourlyTablePanel" class="hourly-panel hourly-panel--active"><div class="hourly-scroll"><table class="hourly-table"><thead><tr><th>Time</th><th>Rain</th><th>Temp</th><th>Condition</th><th>Humidity</th><th>Cloud</th></tr></thead><tbody>';
       for (let i = 0; i < hoursToShow; i++) {
         const time = formatHourlyTime(h.time[i]);
         const temp = temps[i] != null ? temps[i] + "°" : "—";
@@ -625,18 +743,15 @@ try { window.formatHourlyTime = formatHourlyTime; } catch (e) { /* ignore */ }
         html += "<tr><td>" + escapeHtml(time) + "</td><td class=\"rain-cell" + rainClass + "\">" + escapeHtml(String(rain)) + "</td><td>" + escapeHtml(String(temp)) + "</td><td>" + escapeHtml(desc) + "</td><td>" + escapeHtml(String(hum)) + "</td><td>" + escapeHtml(String(cl)) + "</td></tr>";
       }
       html += "</tbody></table></div></div>";
+      html += '<div id="hourlyGraphPanel" class="hourly-panel"><canvas id="hourlyGraphCanvas" class="hourly-graph-canvas" width="380" height="220"></canvas></div>';
+      html += "</div>";
     }
 
-    el.style.display = "";
     el.innerHTML = html;
     el.classList.remove("weather-error");
     if (weatherTableCollapsed) {
       const section = el.querySelector("#weatherDataTableSection");
       if (section) section.classList.add("weather-data-table-section--collapsed");
-    }
-    // notify graphs module if available
-    if (window.weatherGraphs && typeof window.weatherGraphs.updateData === "function") {
-      window.weatherGraphs.updateData(lastHourlyData);
     }
 
     let precipMm = 0;
@@ -650,6 +765,7 @@ try { window.formatHourlyTime = formatHourlyTime; } catch (e) { /* ignore */ }
     }
     if (!h || !h.time || !h.time.length) {
       lastHourlyData = null;
+      lastRenderedHourlyData = null;
       hideTimeSlider();
     }
     const effectivePrecip = getRainIntensityFromCondition(weatherCode, precipMm);
@@ -717,96 +833,11 @@ try { window.formatHourlyTime = formatHourlyTime; } catch (e) { /* ignore */ }
     slider.addEventListener("change", onTimeSliderChange);
   }
 
-  // simple drag helper (panel must have position:absolute)
-  function makeElementDraggable(el, handle) {
-    if (!el || !handle) return;
-    let dragging = false;
-    let offsetX = 0, offsetY = 0;
-    handle.addEventListener('mousedown', startDrag);
-    handle.addEventListener('touchstart', startDrag, {passive:false});
-
-    function startDrag(e) {
-      e.preventDefault();
-      dragging = true;
-      const rect = el.getBoundingClientRect();
-      el.style.right = 'auto';
-      el.style.bottom = 'auto';
-      el.style.left = rect.left + 'px';
-      el.style.top = rect.top + 'px';
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      offsetX = clientX - rect.left;
-      offsetY = clientY - rect.top;
-      document.addEventListener('mousemove', onDrag);
-      document.addEventListener('touchmove', onDrag, {passive:false});
-      document.addEventListener('mouseup', endDrag);
-      document.addEventListener('touchend', endDrag);
-    }
-    function onDrag(e) {
-      if (!dragging) return;
-      e.preventDefault();
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      let x = clientX - offsetX;
-      let y = clientY - offsetY;
-      // clamp within viewport
-      const w = el.offsetWidth;
-      const h = el.offsetHeight;
-      x = Math.max(0, Math.min(window.innerWidth - w, x));
-      y = Math.max(0, Math.min(window.innerHeight - h, y));
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
-    }
-    function endDrag() {
-      dragging = false;
-      document.removeEventListener('mousemove', onDrag);
-      document.removeEventListener('touchmove', onDrag);
-      document.removeEventListener('mouseup', endDrag);
-      document.removeEventListener('touchend', endDrag);
-    }
-  }
-
   function initCoordsWeather() {
-    const panel = document.getElementById("coordsWeatherPanel");
-    const toggleBtn = document.getElementById("coordsMinimizeBtn");
     const btn = document.getElementById("goWeatherBtn");
     const inputLat = document.getElementById("inputLat");
     const inputLon = document.getElementById("inputLon");
-    const viewGraphsBtn = document.getElementById("viewWeatherGraphsBtn");
     if (!btn || !inputLat || !inputLon) return;
-
-    // initial compact state
-    if (panel) {
-      panel.classList.add('coords-weather--compact');
-      // make draggable
-      makeElementDraggable(panel, panel.querySelector('.coords-weather__header'));
-    }
-    if (toggleBtn) {
-      toggleBtn.textContent = '+';
-      toggleBtn.title = 'Expand panel';
-      toggleBtn.addEventListener('click', function () {
-        const compact = panel.classList.toggle('coords-weather--compact');
-        if (compact) {
-          toggleBtn.textContent = '+';
-          toggleBtn.title = 'Expand panel';
-        } else {
-          toggleBtn.textContent = '−';
-          toggleBtn.title = 'Collapse panel';
-        }
-      });
-    }
-
-    // hide weather output until user triggers
-    const weatherEl = document.getElementById("weatherResult");
-    if (weatherEl) weatherEl.style.display = 'none';
-
-    if (viewGraphsBtn) {
-      viewGraphsBtn.addEventListener("click", function () {
-        if (window.weatherGraphs && typeof window.weatherGraphs.showModal === "function") {
-          window.weatherGraphs.showModal();
-        }
-      });
-    }
 
     const params = new URLSearchParams(window.location.search);
     if (params.get("lat") != null) inputLat.value = params.get("lat");
@@ -1061,7 +1092,7 @@ try { window.formatHourlyTime = formatHourlyTime; } catch (e) { /* ignore */ }
       const inputLon = document.getElementById("inputLon");
       if (inputLat) inputLat.value = lat;
       if (inputLon) inputLon.value = lon;
-      // weather will be fetched only when user clicks Go & Get Weather
+      fetchWeatherForCoordinates(lat, lon);
     }
     initPlacesSearch();
     initCopyUrlButton();
