@@ -79,10 +79,14 @@
   function materialProp(color) {
     return new Cesium.ColorMaterialProperty(color);
   }
-  // True blues – no purple (0.5 m = light, 1 m = dark)
-  const COLOR_05 = new Cesium.Color(0.7, 0.9, 1.0, 0.55);    // light sky blue
-  const COLOR_1  = new Cesium.Color(0.0, 0.25, 0.7, 0.65);   // dark blue
-  const COLOR_TEMP = new Cesium.Color(0.96, 0.62, 0.04, 0.35); // amber – pending (admin)
+  // Admin-defined colors: 0.5 m and 1 m. User mode (Show 0.5 m / Show 1 m) uses these same materials.
+  const COLOR_05 = new Cesium.Color(0.7, 0.9, 1.0, 0.55);
+  const COLOR_1  = new Cesium.Color(0.0, 0.25, 0.7, 0.65);
+  const COLOR_TEMP = new Cesium.Color(0.96, 0.62, 0.04, 0.35);
+  const MATERIAL_05 = materialProp(COLOR_05);
+  const MATERIAL_1  = materialProp(COLOR_1);
+  const MATERIAL_TEMP = materialProp(COLOR_TEMP);
+  const MATERIAL_BASE = materialProp(Cesium.Color.WHITE.withAlpha(0.05));
 
   function updateZoneVisual(z) {
     if (!z || !z.outlineEntity) return;
@@ -94,23 +98,23 @@
 
       if (adminEnabled) {
         if (temp) {
-          z.outlineEntity.rectangle.material = materialProp(COLOR_TEMP);
+          z.outlineEntity.rectangle.material = MATERIAL_TEMP;
         } else if (saved1) {
-          z.outlineEntity.rectangle.material = materialProp(COLOR_1);
+          z.outlineEntity.rectangle.material = MATERIAL_1;
         } else if (saved05) {
-          z.outlineEntity.rectangle.material = materialProp(COLOR_05);
+          z.outlineEntity.rectangle.material = MATERIAL_05;
         } else {
-          z.outlineEntity.rectangle.material = materialProp(Cesium.Color.WHITE.withAlpha(0.05));
+          z.outlineEntity.rectangle.material = MATERIAL_BASE;
         }
         return;
       }
-      var baseMaterial = materialProp(Cesium.Color.WHITE.withAlpha(0.05));
+      // User mode: use same MATERIAL_05 and MATERIAL_1 as admin
       if (saved05 && (showLevel05 || showLevel1)) {
-        z.outlineEntity.rectangle.material = materialProp(COLOR_05);
+        z.outlineEntity.rectangle.material = MATERIAL_05;
       } else if (saved1 && showLevel1) {
-        z.outlineEntity.rectangle.material = materialProp(COLOR_1);
+        z.outlineEntity.rectangle.material = MATERIAL_1;
       } else {
-        z.outlineEntity.rectangle.material = baseMaterial;
+        z.outlineEntity.rectangle.material = MATERIAL_BASE;
       }
     } catch (e) { /* ignore */ }
   }

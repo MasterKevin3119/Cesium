@@ -22,6 +22,8 @@
   let weatherTableCollapsed = false;
   /** Last rendered hourly data for graph: { time[], temperature_2m[], precipitation[], ... } */
   let lastRenderedHourlyData = null;
+  /** Graph x-axis range in hours: 12, 24, 72 (3d), 168 (7d) */
+  let graphTimeRangeHours = 24;
 
   // --- Flood simulation (test-only, does not depend on any API) ----------------
   // Center coordinate for the flood test area (kept minimal and explicit)
@@ -458,6 +460,13 @@
           if (tablePanel) tablePanel.classList.toggle('hourly-panel--active', tabName === 'table');
           if (graphPanel) graphPanel.classList.toggle('hourly-panel--active', tabName === 'graph');
           if (tabName === 'graph' && canvas) drawHourlyChart(canvas);
+          return;
+        }
+      });
+      weatherResultEl.addEventListener('change', function (e) {
+        if (e.target && e.target.id === 'graphRangeSelect') {
+          var can = document.getElementById('hourlyGraphCanvas');
+          if (can) drawHourlyChart(can);
         }
       });
     }
@@ -650,10 +659,16 @@
   function drawHourlyChart(canvas) {
     if (!canvas || !lastRenderedHourlyData) return;
     const d = lastRenderedHourlyData;
-    const times = d.time || [];
-    const temps = d.temperature_2m || [];
-    const precips = d.precipitation || [];
-    const n = times.length;
+    const rangeSelect = document.getElementById("graphRangeSelect");
+    const rangeHours = rangeSelect ? Math.max(1, parseInt(rangeSelect.value, 10) || 24) : graphTimeRangeHours;
+    let times = d.time || [];
+    let temps = d.temperature_2m || [];
+    let precips = d.precipitation || [];
+    const total = times.length;
+    const n = Math.min(total, rangeHours);
+    times = times.slice(0, n);
+    temps = temps.slice(0, n);
+    precips = precips.slice(0, n);
     if (n === 0) return;
     const w = canvas.width;
     const h = canvas.height;
@@ -749,12 +764,13 @@
       const humids = h.relative_humidity_2m || [];
       const clouds = h.cloud_cover || [];
       const hoursToShow = Math.min(48, h.time.length);
+      const hoursForGraph = Math.min(168, h.time.length);
       lastRenderedHourlyData = {
-        time: h.time.slice(0, hoursToShow),
-        temperature_2m: temps.slice(0, hoursToShow),
-        precipitation: (h.precipitation || h.rain || []).slice(0, hoursToShow),
-        relative_humidity_2m: humids.slice(0, hoursToShow),
-        cloud_cover: clouds.slice(0, hoursToShow),
+        time: h.time.slice(0, hoursForGraph),
+        temperature_2m: temps.slice(0, hoursForGraph),
+        precipitation: (h.precipitation || h.rain || []).slice(0, hoursForGraph),
+        relative_humidity_2m: humids.slice(0, hoursForGraph),
+        cloud_cover: clouds.slice(0, hoursForGraph),
       };
       html += '<p class="weather-table-toggle-wrap"><button type="button" id="weatherTableToggleBtn" class="weather-table-toggle-btn" aria-label="Minimize data table" title="Minimize data table">' + (weatherTableCollapsed ? '▴ Table' : '▾ Table') + '</button></p>';
       html += '<div id="weatherDataTableSection" class="weather-data-table-section">';
@@ -772,7 +788,11 @@
         html += "<tr><td>" + escapeHtml(time) + "</td><td class=\"rain-cell" + rainClass + "\">" + escapeHtml(String(rain)) + "</td><td>" + escapeHtml(String(temp)) + "</td><td>" + escapeHtml(desc) + "</td><td>" + escapeHtml(String(hum)) + "</td><td>" + escapeHtml(String(cl)) + "</td></tr>";
       }
       html += "</tbody></table></div></div>";
-      html += '<div id="hourlyGraphPanel" class="hourly-panel"><canvas id="hourlyGraphCanvas" class="hourly-graph-canvas" width="380" height="220"></canvas></div>';
+      html += '<div id="hourlyGraphPanel" class="hourly-panel">';
+      html += '<div class="graph-range-wrap"><label class="graph-range-label">X-axis:</label><select id="graphRangeSelect" class="graph-range-select" aria-label="Graph time range">';
+      html += '<option value="12">12 hours</option><option value="24" selected>24 hours (Today)</option><option value="72">3 days</option><option value="168">1 week</option>';
+      html += '</select></div>';
+      html += '<canvas id="hourlyGraphCanvas" class="hourly-graph-canvas" width="380" height="220"></canvas></div>';
       html += "</div>";
     }
 
@@ -840,6 +860,7 @@
       "&longitude=" + encodeURIComponent(lon) +
       "&current=precipitation,rain,weather_code,temperature_2m,relative_humidity_2m,cloud_cover" +
       "&hourly=temperature_2m,precipitation,rain,weather_code,relative_humidity_2m,cloud_cover" +
+      "&forecast_days=7" +
       "&timezone=auto";
     showWeatherLoading();
     fetch(url)
