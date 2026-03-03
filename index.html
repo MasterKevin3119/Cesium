@@ -79,6 +79,8 @@
             align-items:center;
             padding:10px 12px;
             border-bottom:1px solid rgba(255,255,255,0.04);
+            cursor: move;
+            user-select: none;
         }
         .coords-weather__content {
             padding:12px;
@@ -285,7 +287,7 @@
 
     <div class="coords-weather coords-weather--open" id="coordsWeatherPanel" aria-hidden="false">
         <div class="coords-weather__header">
-            <div style="font-weight:600;">Coordinates &amp; Weather</div>
+            <div style="font-weight:600;">Master Control</div>
             <div style="display:flex; gap:8px; align-items:center;">
                 <button id="adminModeBtn" title="Admin mode" style="padding:6px 8px; font-size:12px;">Admin</button>
                 <button id="panelMinimizeBtn" aria-label="Minimize panel" title="Minimize panel" style="padding:6px 8px; font-size:12px;">−</button>
@@ -331,7 +333,7 @@
         </div>
     </div>
 
-    <button type="button" id="panelExpandBtn" class="coords-weather-panel-expand" title="Show Coordinates &amp; Weather">Coordinates &amp; Weather ▱</button>
+    <button type="button" id="panelExpandBtn" class="coords-weather-panel-expand" title="Show Master Control">Master Control ▱</button>
 
     <div class="toolbar">
         <button type="button" id="copyUrlBtn">Copy view URL</button>

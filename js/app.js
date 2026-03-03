@@ -462,7 +462,7 @@
       });
     }
 
-    // Hide/show entire Coordinates & Weather panel
+    // Hide/show entire Master Control panel
     const panelMinBtn = document.getElementById('panelMinimizeBtn');
     const coordsPanel = document.getElementById('coordsWeatherPanel');
     const panelExpandBtn = document.getElementById('panelExpandBtn');
@@ -477,6 +477,35 @@
         coordsPanel.setAttribute('aria-hidden', 'false');
         panelExpandBtn.style.display = 'none';
       });
+    }
+
+    // Draggable Master Control panel (drag by header)
+    if (coordsPanel) {
+      const header = coordsPanel.querySelector('.coords-weather__header');
+      if (header) {
+        header.addEventListener('mousedown', function (e) {
+          if (e.target.closest && e.target.closest('button')) return;
+          e.preventDefault();
+          const rect = coordsPanel.getBoundingClientRect();
+          const startX = e.clientX - rect.left;
+          const startY = e.clientY - rect.top;
+          coordsPanel.style.bottom = 'auto';
+          coordsPanel.style.left = rect.left + 'px';
+          coordsPanel.style.top = rect.top + 'px';
+          function onMove(e2) {
+            const left = e2.clientX - startX;
+            const top = e2.clientY - startY;
+            coordsPanel.style.left = Math.max(0, left) + 'px';
+            coordsPanel.style.top = Math.max(0, top) + 'px';
+          }
+          function onUp() {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+          }
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+      }
     }
 
     // Admin button is wired in adminMode.init() (called once at startup)
