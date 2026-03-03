@@ -84,22 +84,9 @@
             padding:12px;
             overflow:auto;
         }
-        .coords-weather-panel-expand {
-            position: absolute;
-            left: 12px;
-            bottom: 12px;
-            z-index: 1000;
-            padding: 10px 14px;
-            font-size: 13px;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            background: rgba(0,0,0,0.9);
-            color: #e0e0e0;
-            cursor: pointer;
-            display: none;
+        .coords-weather--collapsed {
+            transform: translateY(calc(100% - 56px));
         }
-        .coords-weather-panel-expand:hover { background: rgba(0,0,0,0.95); color: #fff; }
         .weather-data-table-section {
             margin-top: 12px;
             transition: max-height 220ms ease, opacity 180ms ease;
@@ -195,32 +182,6 @@
         .weather-result .rain { color: #7dd3fc; font-weight: 600; }
         .weather-result .error { color: #f87171; }
         .weather-result .loading { color: rgba(255,255,255,0.6); }
-        .weather-table-toggle-wrap { margin: 10px 0 6px 0; }
-        .weather-table-toggle-btn {
-            padding: 6px 10px;
-            font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 6px;
-            background: rgba(255,255,255,0.1);
-            color: #e0e0e0;
-            cursor: pointer;
-        }
-        .weather-table-toggle-btn:hover { background: rgba(255,255,255,0.18); }
-        .hourly-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
-        .hourly-tab {
-            padding: 6px 12px;
-            font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.25);
-            border-radius: 6px;
-            background: rgba(255,255,255,0.08);
-            color: rgba(255,255,255,0.85);
-            cursor: pointer;
-        }
-        .hourly-tab:hover { background: rgba(255,255,255,0.14); }
-        .hourly-tab--active { background: rgba(74,158,255,0.4); border-color: rgba(255,255,255,0.4); color: #fff; }
-        .hourly-panel { display: none; }
-        .hourly-panel--active { display: block; }
-        .hourly-graph-canvas { display: block; max-width: 100%; height: auto; background: rgba(0,0,0,0.2); border-radius: 6px; }
 
         .toolbar {
             position: absolute;
@@ -362,7 +323,7 @@
             <div style="font-weight:600;">Master Control</div>
             <div style="display:flex; gap:8px; align-items:center;">
                 <button id="adminModeBtn" title="Admin mode" style="padding:6px 8px; font-size:12px;">Admin</button>
-                <button id="panelMinimizeBtn" aria-label="Minimize panel" title="Minimize panel" style="padding:6px 8px; font-size:12px;">−</button>
+                <button id="coordsMinimizeBtn" aria-label="Expand panel" title="Expand panel" style="padding:6px 8px; font-size:12px;">+</button>
             </div>
         </div>
         <div class="coords-weather__content">
@@ -406,8 +367,6 @@
             </div>
         </div>
     </div>
-
-    <button type="button" id="panelExpandBtn" class="coords-weather-panel-expand" title="Show Coordinates &amp; Weather">Coordinates &amp; Weather ▱</button>
 
     <div class="toolbar">
         <button type="button" id="copyUrlBtn">Copy view URL</button>
