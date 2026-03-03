@@ -79,9 +79,9 @@
   function materialProp(color) {
     return new Cesium.ColorMaterialProperty(color);
   }
-  // Pale light blue – less saturated, lighter (0.5 m)
-  const COLOR_05 = new Cesium.Color(0.88, 0.95, 1.0, 0.55);
-  const COLOR_1  = new Cesium.Color(0.01, 0.41, 0.63, 0.65);   // dark blue – 1 m
+  // True blues – no purple (0.5 m = light, 1 m = dark)
+  const COLOR_05 = new Cesium.Color(0.7, 0.9, 1.0, 0.55);    // light sky blue
+  const COLOR_1  = new Cesium.Color(0.0, 0.25, 0.7, 0.65);   // dark blue
   const COLOR_TEMP = new Cesium.Color(0.96, 0.62, 0.04, 0.35); // amber – pending (admin)
 
   function updateZoneVisual(z) {
