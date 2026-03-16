@@ -172,10 +172,20 @@
   // expose for other modules
   try { window.animateZoneFlood = animateZoneFlood; } catch (e) { /* ignore */ }
 
+  function findZoneContainingPoint(lat, lon) {
+    if (!floodZones || !floodZones.length) return null;
+    for (let i = 0; i < floodZones.length; i++) {
+      const z = floodZones[i];
+      const b = z.bounds;
+      if (lat >= b.south && lat <= b.north && lon >= b.west && lon <= b.east) return z;
+    }
+    return null;
+  }
+
   /**
    * Raise/clear flood on specified zone IDs.
    * zoneIds: array of numbers or comma-separated string
-   * level: one of '0.5', '1', or 'none' (also accepts numeric meters)
+   * level: one of '60', '100', or 'none' (60/100 mm/hr; animation uses 0.5m/1m)
    */
   function floodZonesByIds(zoneIds, level) {
     if (!viewer) return;
@@ -200,9 +210,11 @@
         animateZoneFlood(z, 0, duration);
         return;
       }
-      // Accept '0.5' or '1' or numeric meters
+      // Accept '60' or '100' (mm/hr) or numeric meters for animation height
       let meters = null;
-      if (level === '0.5' || level === '0.5m' || level === 0.5) meters = 0.5;
+      if (level === '60') meters = 0.5;
+      else if (level === '100') meters = 1.0;
+      else if (level === '0.5' || level === '0.5m' || level === 0.5) meters = 0.5;
       else if (level === '1' || level === '1m' || level === 1) meters = 1.0;
       else if (!isNaN(Number(level))) meters = Number(level);
       if (meters == null) meters = 0.5;
@@ -402,15 +414,15 @@
 
   // Initialize flood UI controls inside the coords/weather panel
   function initFloodControls() {
-    const btn05 = document.getElementById('btnFlood05');
-    const btn1 = document.getElementById('btnFlood1');
+    const btn05m = document.getElementById('btnFlood05m');
+    const btn1m = document.getElementById('btnFlood1m');
     const btnClear = document.getElementById('btnClearFlood');
     const btnToggle = document.getElementById('btnToggleGrid');
     let gridVisible = true;
-    if (btn05) btn05.addEventListener('click', function () {
+    if (btn05m) btn05m.addEventListener('click', function () {
       try { if (window.floodState) window.floodState.trigger('0.5'); } catch (e) { /* ignore */ }
     });
-    if (btn1) btn1.addEventListener('click', function () {
+    if (btn1m) btn1m.addEventListener('click', function () {
       try { if (window.floodState) window.floodState.trigger('1'); } catch (e) { /* ignore */ }
     });
     if (btnClear) btnClear.addEventListener('click', function () {
@@ -850,6 +862,10 @@
       html += '<div class="graph-canvas-wrap"><canvas id="hourlyGraphCanvas" class="hourly-graph-canvas" width="380" height="240"></canvas>';
       html += '<div id="hourlyGraphTooltip" class="graph-tooltip" aria-hidden="true"></div></div></div>';
       html += "</div>";
+
+      // Use rain for the first hour so 60/100 mm/hr zones show only when that hour's rain hits threshold
+      var precipForHour = (precips[0] != null && !isNaN(precips[0])) ? precips[0] : 0;
+      try { if (window.gridManager && window.gridManager.setRainVisibility) window.gridManager.setRainVisibility(precipForHour); } catch (e) { /* ignore */ }
     }
 
     el.innerHTML = html;
@@ -883,17 +899,22 @@
     const slider = document.getElementById("timeSlider");
     const label = document.getElementById("timeSliderLabel");
     if (!wrap || !slider || !label) return;
-    const max = Math.max(0, Math.min(47, hourCount - 1));
+    // Today only: first 24 hours (indices 0–23)
+    const max = Math.max(0, Math.min(23, hourCount - 1));
     slider.min = 0;
     slider.max = max;
     slider.value = 0;
     label.textContent = formatHourlyTime(firstTimeIso);
     wrap.style.display = "block";
+    wrap.setAttribute("aria-hidden", "false");
   }
 
   function hideTimeSlider() {
     const wrap = document.getElementById("timeSliderWrap");
-    if (wrap) wrap.style.display = "none";
+    if (wrap) {
+      wrap.style.display = "none";
+      wrap.setAttribute("aria-hidden", "true");
+    }
   }
 
   function onTimeSliderChange() {
@@ -909,6 +930,8 @@
     const effectivePrecip = getRainIntensityFromCondition(code, precip);
     label.textContent = index < times.length ? formatHourlyTime(times[index]) : "—";
     updateRainEffect(lastHourlyData.lon, lastHourlyData.lat, effectivePrecip);
+    // Update 60/100 mm/hr grid visibility for this hour: show zones only when this hour's rain >= 60 or >= 100
+    try { if (window.gridManager && window.gridManager.setRainVisibility) window.gridManager.setRainVisibility(precip); } catch (e) { /* ignore */ }
   }
 
   function fetchWeatherForCoordinates(lat, lon) {

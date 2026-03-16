@@ -62,11 +62,12 @@
     });
     if (saveBtn) saveBtn.addEventListener('click', function () {
       const radios = document.getElementsByName('adminEditLevel');
-      let level = '0.5';
+      let level = '60';
       for (let i = 0; i < radios.length; i++) if (radios[i].checked) { level = radios[i].value; break; }
       try {
         if (window.gridManager) window.gridManager.saveSelection(level);
-        alert('Saved selection for ' + level + ' m');
+        var label = level === '0.5' ? '0.5 m' : level === '1' ? '1 m' : level + ' mm/hr';
+        alert('Saved selection for ' + label);
       } catch (e) { alert('Save failed'); }
     });
 

@@ -11,9 +11,9 @@
       clearAll();
       return;
     }
-    const meters = (level === '1') ? 1.0 : 0.5;
+    const meters = (level === '100' || level === '1') ? 1.0 : 0.5;
     const zones = (window.floodConfig && window.floodConfig.getZones(level)) || [];
-    // Always update grid visuals so 0.5 m / 1 m zones show correct overlay color
+    // Always update grid visuals so 60 mm/hr / 100 mm/hr zones show correct overlay color
     try { window.gridManager && window.gridManager.setCurrentFloodLevel(level); } catch (e) { /* ignore */ }
     if (!zones || !zones.length) return;
     zones.forEach(function (zid) {

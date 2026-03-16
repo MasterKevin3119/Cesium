@@ -296,6 +296,17 @@
             color: #fff;
             font-size: 14px;
         }
+
+        #timeSliderWrap {
+            display: none;
+            margin-top: 10px;
+            padding: 8px 0;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        #timeSliderWrap.visible { display: block; }
+        .time-slider-label { font-size: 12px; color: rgba(255,255,255,0.85); margin-bottom: 6px; }
+        #timeSlider { width: 100%; max-width: 240px; margin-right: 10px; vertical-align: middle; }
+        #timeSliderLabel { font-size: 12px; color: rgba(255,255,255,0.95); font-weight: 500; }
     </style>
 </head>
 <body>
@@ -325,15 +336,22 @@
             </div>
             <button type="button" id="goWeatherBtn">Go &amp; get weather</button>
             <div id="weatherResult" class="weather-result" aria-live="polite"></div>
+            <div id="timeSliderWrap" class="time-slider-wrap" aria-hidden="true">
+                <div class="time-slider-label">Rain by hour (today)</div>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <input type="range" id="timeSlider" min="0" max="23" value="0" step="1" aria-label="Select hour for rain" />
+                    <span id="timeSliderLabel">—</span>
+                </div>
+            </div>
 
             <div id="floodControls" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
                 <h3 style="margin:0 0 8px 0; font-size:13px; color:#fff;">Flood Simulation</h3>
-                <!-- Normal user mode: view 0.5 m or 1 m flood areas defined by admin -->
+                <!-- User: 0.5 m / 1 m by button; 60/100 mm/hr auto-show from rain data -->
                 <div id="userFloodView" style="margin-bottom:12px;">
-                    <div style="margin-bottom:6px; font-size:12px; color:rgba(255,255,255,0.85);">View flood areas (defined by admin):</div>
+                    <div style="margin-bottom:6px; font-size:12px; color:rgba(255,255,255,0.85);">View flood areas (60/100 mm/hr show automatically when rain data hits those levels):</div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        <button type="button" id="btnFlood05">Show 0.5 m</button>
-                        <button type="button" id="btnFlood1">Show 1 m</button>
+                        <button type="button" id="btnFlood05m">Show 0.5 m</button>
+                        <button type="button" id="btnFlood1m">Show 1 m</button>
                         <button type="button" id="btnClearFlood">Clear</button>
                     </div>
                     <div style="display:flex; gap:8px; margin-top:8px;">
@@ -343,10 +361,12 @@
 
                 <!-- Admin mode: define which grid cells are 0.5 m or 1 m flood zones -->
                 <div id="adminControls" style="margin-top:12px; display:none; border-top:1px dashed rgba(255,255,255,0.06); padding-top:8px;">
-                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Admin: define flood zones (different shades on grid)</div>
-                    <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Light blue = 0.5 m · Dark blue = 1 m · Amber = pending</div>
+                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Admin: define zones (one level per cell)</div>
+                    <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Light blue = 60 mm/hr · Dark blue = 100 mm/hr · Light green = 0.5 m · Dark green = 1 m · Amber = pending</div>
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="0.5" checked> 0.5 m</label>
+                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="60" checked> 60 mm/hr</label>
+                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="100"> 100 mm/hr</label>
+                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="0.5"> 0.5 m</label>
                         <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="1"> 1 m</label>
                         <button id="btnAdminClearTemp">Clear Temp</button>
                         <button id="btnAdminSave">Save</button>
