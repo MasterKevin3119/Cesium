@@ -185,7 +185,7 @@
   /**
    * Raise/clear flood on specified zone IDs.
    * zoneIds: array of numbers or comma-separated string
-   * level: one of '60', '100', or 'none' (60/100 mm/hr; animation uses 0.5m/1m)
+   * level: '30'/'60'/'100' = rain tiers (0.1/0.5/1 mm); animation depth 0.1/0.5/1 m
    */
   function floodZonesByIds(zoneIds, level) {
     if (!viewer) return;
@@ -210,9 +210,10 @@
         animateZoneFlood(z, 0, duration);
         return;
       }
-      // Accept '60' or '100' (mm/hr) or numeric meters for animation height
+      // Rain tiers map to flood animation height (m): 0.1 / 0.5 / 1
       let meters = null;
-      if (level === '60') meters = 0.5;
+      if (level === '30') meters = 0.1;
+      else if (level === '60') meters = 0.5;
       else if (level === '100') meters = 1.0;
       else if (level === '0.5' || level === '0.5m' || level === 0.5) meters = 0.5;
       else if (level === '1' || level === '1m' || level === 1) meters = 1.0;
@@ -863,9 +864,11 @@
       html += '<div id="hourlyGraphTooltip" class="graph-tooltip" aria-hidden="true"></div></div></div>';
       html += "</div>";
 
-      // Use rain for the first hour so 60/100 mm/hr zones show only when that hour's rain hits threshold
+      // First hour precip (mm): show rain zones when ≥0.1 / ≥0.5 / ≥1 mm
       var precipForHour = (precips[0] != null && !isNaN(precips[0])) ? precips[0] : 0;
       try { if (window.gridManager && window.gridManager.setRainVisibility) window.gridManager.setRainVisibility(precipForHour); } catch (e) { /* ignore */ }
+      var lr = document.getElementById('legendCurrentRain');
+      if (lr) lr.textContent = (precipForHour != null && !isNaN(precipForHour)) ? Number(precipForHour).toFixed(2) + ' mm' : '—';
     }
 
     el.innerHTML = html;
@@ -930,8 +933,10 @@
     const effectivePrecip = getRainIntensityFromCondition(code, precip);
     label.textContent = index < times.length ? formatHourlyTime(times[index]) : "—";
     updateRainEffect(lastHourlyData.lon, lastHourlyData.lat, effectivePrecip);
-    // Update 60/100 mm/hr grid visibility for this hour: show zones only when this hour's rain >= 60 or >= 100
+    // Rain zone visibility for selected hour (0.1 / 0.5 / 1 mm thresholds)
     try { if (window.gridManager && window.gridManager.setRainVisibility) window.gridManager.setRainVisibility(precip); } catch (e) { /* ignore */ }
+    var lr = document.getElementById('legendCurrentRain');
+    if (lr) lr.textContent = (precip != null && !isNaN(precip)) ? Number(precip).toFixed(2) + ' mm' : '—';
   }
 
   function fetchWeatherForCoordinates(lat, lon) {

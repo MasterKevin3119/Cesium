@@ -62,11 +62,11 @@
     });
     if (saveBtn) saveBtn.addEventListener('click', function () {
       const radios = document.getElementsByName('adminEditLevel');
-      let level = '60';
+      let level = '30';
       for (let i = 0; i < radios.length; i++) if (radios[i].checked) { level = radios[i].value; break; }
       try {
         if (window.gridManager) window.gridManager.saveSelection(level);
-        var label = level === '0.5' ? '0.5 m' : level === '1' ? '1 m' : level + ' mm/hr';
+        var label = level === '0.5' ? '0.5 m' : level === '1' ? '1 m' : level === '30' ? '0.1 mm' : level === '60' ? '0.5 mm' : level === '100' ? '1 mm' : level;
         alert('Saved selection for ' + label);
       } catch (e) { alert('Save failed'); }
     });

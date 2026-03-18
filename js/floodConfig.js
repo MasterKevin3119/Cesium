@@ -1,10 +1,10 @@
 (function () {
   'use strict';
   const STORAGE_KEY = 'floodConfig_v2';
-  const LEVELS = ['60', '100', '0.5', '1'];
+  const LEVELS = ['30', '60', '100', '0.5', '1'];
 
-  // internal state: 60 mm/hr, 100 mm/hr, 0.5 m, 1 m (all admin-defined, no auto-init)
-  let state = { '60': [], '100': [], '0.5': [], '1': [] };
+  // Rain tiers 30/60/100 = 0.1 / 0.5 / 1 mm thresholds; plus 0.5 m / 1 m depth zones
+  let state = { '30': [], '60': [], '100': [], '0.5': [], '1': [] };
 
   function load() {
     try {
@@ -24,7 +24,7 @@
   }
 
   function clear() {
-    state = { '60': [], '100': [], '0.5': [], '1': [] };
+    state = { '30': [], '60': [], '100': [], '0.5': [], '1': [] };
     save();
   }
 

@@ -3,6 +3,7 @@
 
   let viewer = null;
   let tempSelection = []; // ids
+  let showLevel30 = false;
   let showLevel60 = false;
   let showLevel100 = false;
   let showLevel05 = false;
@@ -60,10 +61,13 @@
 
   function setCurrentFloodLevel(level) {
     if (level === 'none') {
+      showLevel30 = false;
       showLevel60 = false;
       showLevel100 = false;
       showLevel05 = false;
       showLevel1 = false;
+    } else if (level === '30') {
+      showLevel30 = true;
     } else if (level === '60') {
       showLevel60 = true;
     } else if (level === '100') {
@@ -74,14 +78,31 @@
       showLevel1 = true;
     }
     updateAllVisuals();
+    syncZoneColorLegend();
   }
 
-  /** Set 60/100 mm/hr visibility from hourly rain (mm). Admin-defined zones show when rain hits threshold. */
-  function setRainVisibility(maxPrecipMmPerHour) {
-    const v = Number(maxPrecipMmPerHour);
-    showLevel60 = v >= 60;
-    showLevel100 = v >= 100;
+  /** Rain tiers: hourly precip ≥0.1 / ≥0.5 / ≥1 mm (admin keys 30/60/100). */
+  function setRainVisibility(hourlyPrecipMm) {
+    const v = Number(hourlyPrecipMm);
+    showLevel30 = v >= 0.1;
+    showLevel60 = v >= 0.5;
+    showLevel100 = v >= 1;
     updateAllVisuals();
+    syncZoneColorLegend();
+  }
+
+  function syncZoneColorLegend() {
+    try {
+      function setRow(id, on) {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('zone-color-legend__row--active', !!on);
+      }
+      setRow('legendRowRain01', showLevel30);
+      setRow('legendRowRain05', showLevel60);
+      setRow('legendRowRain1', showLevel100);
+      setRow('legendRowDepth05', showLevel05);
+      setRow('legendRowDepth1', showLevel1);
+    } catch (e) { /* ignore */ }
   }
 
   function updateAllVisuals() {
@@ -95,12 +116,14 @@
   function materialProp(color) {
     return new Cesium.ColorMaterialProperty(color);
   }
-  // Admin-defined colors: 60/100 mm/hr (blue), 0.5/1 m (green). User mode uses same materials.
+  // Rain zones: 0.1 / 0.5 / 1 mm thresholds (blue shades); flood depth: 0.5 m / 1 m (green).
+  const COLOR_30 = new Cesium.Color(0.88, 0.96, 1.0, 0.5);
   const COLOR_60 = new Cesium.Color(0.7, 0.9, 1.0, 0.55);
   const COLOR_100 = new Cesium.Color(0.0, 0.25, 0.7, 0.65);
   const COLOR_05 = new Cesium.Color(0.5, 0.95, 0.6, 0.55);
   const COLOR_1 = new Cesium.Color(0.0, 0.6, 0.25, 0.65);
   const COLOR_TEMP = new Cesium.Color(0.96, 0.62, 0.04, 0.35);
+  const MATERIAL_30 = materialProp(COLOR_30);
   const MATERIAL_60 = materialProp(COLOR_60);
   const MATERIAL_100 = materialProp(COLOR_100);
   const MATERIAL_05 = materialProp(COLOR_05);
@@ -113,6 +136,7 @@
     try {
       const saved100 = isZoneSavedForLevel(z.id, '100');
       const saved60 = isZoneSavedForLevel(z.id, '60');
+      const saved30 = isZoneSavedForLevel(z.id, '30');
       const saved05 = isZoneSavedForLevel(z.id, '0.5');
       const saved1 = isZoneSavedForLevel(z.id, '1');
       const temp = isTempSelected(z.id);
@@ -125,6 +149,8 @@
           z.outlineEntity.rectangle.material = MATERIAL_100;
         } else if (saved60) {
           z.outlineEntity.rectangle.material = MATERIAL_60;
+        } else if (saved30) {
+          z.outlineEntity.rectangle.material = MATERIAL_30;
         } else if (saved1) {
           z.outlineEntity.rectangle.material = MATERIAL_1;
         } else if (saved05) {
@@ -134,11 +160,13 @@
         }
         return;
       }
-      // User mode: show only if that level's button is on (or auto rain for 60/100)
-      if (saved60 && showLevel60) {
-        z.outlineEntity.rectangle.material = MATERIAL_60;
-      } else if (saved100 && showLevel100) {
+      // User mode: auto rain for 0.1/0.5/1 mm; buttons for 0.5 m / 1 m
+      if (saved100 && showLevel100) {
         z.outlineEntity.rectangle.material = MATERIAL_100;
+      } else if (saved60 && showLevel60) {
+        z.outlineEntity.rectangle.material = MATERIAL_60;
+      } else if (saved30 && showLevel30) {
+        z.outlineEntity.rectangle.material = MATERIAL_30;
       } else if (saved05 && showLevel05) {
         z.outlineEntity.rectangle.material = MATERIAL_05;
       } else if (saved1 && showLevel1) {

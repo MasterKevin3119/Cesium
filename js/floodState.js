@@ -11,9 +11,12 @@
       clearAll();
       return;
     }
-    const meters = (level === '100' || level === '1') ? 1.0 : 0.5;
+    var meters = 0.5;
+    if (level === '30') meters = 0.1;
+    else if (level === '60' || level === '0.5') meters = 0.5;
+    else if (level === '100' || level === '1') meters = 1.0;
     const zones = (window.floodConfig && window.floodConfig.getZones(level)) || [];
-    // Always update grid visuals so 60 mm/hr / 100 mm/hr zones show correct overlay color
+    // Rain tiers 0.1/0.5/1 mm vs flood depth 0.5 m/1 m
     try { window.gridManager && window.gridManager.setCurrentFloodLevel(level); } catch (e) { /* ignore */ }
     if (!zones || !zones.length) return;
     zones.forEach(function (zid) {
