@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cesium – Meteo</title>
+
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+
+    <!-- Optional: uncomment and add your key to enable Google Places search -->
+    <!-- <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_API_KEY&libraries=places" async defer></script> -->
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        #cesiumContainer {
+            width: 100%;
+            height: 100%;
+        }
+
+        .search-box {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 1000;
+            width: min(320px, calc(100vw - 24px));
+        }
+        .search-box label {
+            display: block;
+            font-size: 11px;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 4px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+        .search-box input {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 14px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+        }
+        .search-box input::placeholder { color: rgba(255,255,255,0.5); }
+        .search-box input:focus {
+            outline: none;
+            border-color: #4a9eff;
+            box-shadow: 0 0 0 2px rgba(74,158,255,0.3);
+        }
+
+        .coords-weather {
+            position: absolute;
+            left: 12px;
+            bottom: 12px;
+            z-index: 1000;
+            width: min(420px, calc(100vw - 24px));
+            background: rgba(0,0,0,0.9);
+            border-radius: 10px;
+            color: #e0e0e0;
+            font-size: 13px;
+            max-height: 70vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: translateY(0);
+            transition: transform 280ms ease, opacity 220ms ease;
+        }
+        .coords-weather__header {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            padding:10px 12px;
+            border-bottom:1px solid rgba(255,255,255,0.04);
+            cursor: move;
+            user-select: none;
+        }
+        .coords-weather__content {
+            padding:12px;
+            overflow:auto;
+        }
+        .coords-weather-panel-expand {
+            position: absolute;
+            left: 12px;
+            bottom: 12px;
+            z-index: 1000;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.9);
+            color: #e0e0e0;
+            cursor: pointer;
+            display: none;
+        }
+        .coords-weather-panel-expand:hover { background: rgba(0,0,0,0.95); color: #fff; }
+        .weather-data-table-section {
+            margin-top: 12px;
+            transition: max-height 220ms ease, opacity 180ms ease;
+        }
+        .weather-data-table-section--collapsed {
+            max-height: 0 !important;
+            overflow: hidden;
+            opacity: 0;
+            margin-top: 0;
+            margin-bottom: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        .coords-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .coords-row input {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 13px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        .coords-row input::placeholder { color: rgba(255,255,255,0.4); }
+        .coords-row input:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+        .coords-weather button {
+            width: 100%;
+            padding: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            background: #4a9eff;
+            color: #fff;
+            cursor: pointer;
+        }
+        .coords-weather button:hover { background: #3a8eef; }
+        .coords-weather button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .weather-result {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .weather-result .row { display: flex; justify-content: space-between; gap: 8px; }
+        .weather-result .label { color: rgba(255,255,255,0.7); }
+        .weather-result .rain { color: #7dd3fc; font-weight: 600; }
+        .weather-result .error { color: #f87171; }
+        .weather-result .loading { color: rgba(255,255,255,0.6); }
+        .weather-table-toggle-wrap { margin: 10px 0 6px 0; }
+        .weather-table-toggle-btn {
+            padding: 6px 10px;
+            font-size: 12px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            color: #e0e0e0;
+            cursor: pointer;
+        }
+        .weather-table-toggle-btn:hover { background: rgba(255,255,255,0.18); }
+        .hourly-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+        .hourly-tab {
+            padding: 6px 12px;
+            font-size: 12px;
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.85);
+            cursor: pointer;
+        }
+        .hourly-tab:hover { background: rgba(255,255,255,0.14); }
+        .hourly-tab--active { background: rgba(74,158,255,0.4); border-color: rgba(255,255,255,0.4); color: #fff; }
+        .hourly-panel { display: none; }
+        .hourly-panel--active { display: block; }
+        .graph-range-wrap { margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .graph-range-label { font-size: 12px; color: rgba(255,255,255,0.85); }
+        .graph-range-select {
+            padding: 4px 8px;
+            font-size: 12px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(0,0,0,0.5);
+            color: #e0e0e0;
+            cursor: pointer;
+        }
+        .graph-canvas-wrap { position: relative; display: inline-block; }
+        .graph-tooltip {
+            position: absolute;
+            display: none;
+            pointer-events: none;
+            padding: 6px 10px;
+            font-size: 12px;
+            background: rgba(0,0,0,0.9);
+            color: #e0e0e0;
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 6px;
+            white-space: nowrap;
+            z-index: 10;
+        }
+        .hourly-graph-canvas { display: block; max-width: 100%; height: auto; background: rgba(0,0,0,0.2); border-radius: 6px; }
+
+        .toolbar {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 1000;
+            display: flex;
+            gap: 8px;
+        }
+        .toolbar button {
+            padding: 8px 12px;
+            font-size: 12px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            cursor: pointer;
+        }
+        .toolbar button:hover {
+            background: rgba(0,0,0,0.8);
+            border-color: rgba(255,255,255,0.5);
+        }
+
+        .api-hint {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            z-index: 1000;
+            max-width: min(420px, calc(100vw - 24px));
+            background: rgba(0,0,0,0.85);
+            color: #e0e0e0;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: ui-monospace, monospace;
+            line-height: 1.5;
+            transition: opacity 0.2s, transform 0.2s;
+        }
+        .api-hint--collapsed {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(4px);
+        }
+        .api-hint h3 {
+            margin: 0 0 6px 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .api-hint code { color: #7dd3fc; }
+        .api-hint-toggle {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            z-index: 1001;
+            padding: 6px 10px;
+            font-size: 11px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(0,0,0,0.7);
+            color: rgba(255,255,255,0.9);
+            cursor: pointer;
+        }
+        .api-hint-toggle:hover { background: rgba(0,0,0,0.9); }
+
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.5);
+            transition: opacity 0.4s ease;
+        }
+        .loading-overlay--hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .loading-overlay span {
+            color: #fff;
+            font-size: 14px;
+        }
+
+        #timeSliderWrap {
+            display: none;
+            margin-top: 10px;
+            padding: 8px 0;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        #timeSliderWrap.visible { display: block; }
+        .time-slider-label { font-size: 12px; color: rgba(255,255,255,0.85); margin-bottom: 6px; }
+        #timeSlider { width: 100%; max-width: 240px; margin-right: 10px; vertical-align: middle; }
+        #timeSliderLabel { font-size: 12px; color: rgba(255,255,255,0.95); font-weight: 500; }
+
+        .zone-color-legend {
+            margin-top: 10px;
+            padding: 8px 10px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .zone-color-legend__title {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 8px;
+            letter-spacing: 0.02em;
+        }
+        .zone-color-legend__row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.55);
+            margin-bottom: 6px;
+            line-height: 1.35;
+        }
+        .zone-color-legend__row:last-child { margin-bottom: 0; }
+        .zone-color-legend__swatch {
+            width: 22px;
+            height: 14px;
+            border-radius: 3px;
+            flex-shrink: 0;
+            border: 1px solid rgba(255,255,255,0.25);
+        }
+        .zone-color-legend__row--active {
+            color: rgba(255,255,255,0.95);
+            font-weight: 500;
+        }
+        .zone-color-legend__row--active .zone-color-legend__swatch {
+            box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.55);
+        }
+        #legendRowDepth05.zone-color-legend__row--active .zone-color-legend__swatch,
+        #legendRowDepth1.zone-color-legend__row--active .zone-color-legend__swatch {
+            box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.6);
+        }
+        .zone-color-legend__hint { font-size: 10px; color: rgba(255,255,255,0.45); margin-top: 6px; }
+        .swatch-rain01 { background: rgba(224, 245, 255, 0.75); }
+        .swatch-rain05 { background: rgba(179, 230, 255, 0.8); }
+        .swatch-rain1 { background: rgba(0, 64, 179, 0.75); }
+        .swatch-depth05 { background: rgba(128, 242, 153, 0.75); }
+        .swatch-depth1 { background: rgba(0, 153, 64, 0.8); }
+        .auth-panel { margin-bottom: 12px; padding: 10px 12px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+        .auth-panel__title { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.85); margin-bottom: 8px; }
+        .auth-panel__row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+        .auth-panel__row:last-of-type { margin-bottom: 0; }
+        .auth-panel input[type="email"], .auth-panel input[type="password"] { flex: 1; min-width: 120px; padding: 6px 8px; font-size: 12px; border: 1px solid rgba(255,255,255,0.25); border-radius: 4px; background: rgba(0,0,0,0.3); color: #fff; }
+        .auth-panel button { padding: 6px 10px; font-size: 12px; cursor: pointer; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.15); color: #fff; }
+        .auth-panel button:hover { background: rgba(255,255,255,0.25); }
+        .auth-panel__user { font-size: 11px; color: rgba(255,255,255,0.7); }
+        .auth-panel__error { font-size: 11px; color: #f87171; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <div id="cesiumContainer"></div>
+
+    <div id="loadingOverlay" class="loading-overlay" aria-live="polite">
+        <span>Loading globe…</span>
+    </div>
+
+    <div class="search-box">
+        <label for="placeSearch">Search place</label>
+        <input type="text" id="placeSearch" placeholder="e.g. Eiffel Tower, Tokyo…" autocomplete="off" />
+    </div>
+
+    <div class="coords-weather coords-weather--open" id="coordsWeatherPanel" aria-hidden="false">
+        <div class="coords-weather__header">
+            <div style="font-weight:600;">Master Control</div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <a href="index.html" style="font-size:11px; color:rgba(255,255,255,0.75); text-decoration:none; padding:6px 8px; border:1px solid rgba(255,255,255,0.2); border-radius:4px;" title="Back to intro">← Intro</a>
+                <button id="adminModeBtn" title="Admin mode" style="padding:6px 8px; font-size:12px;">Admin</button>
+                <button id="panelMinimizeBtn" aria-label="Minimize panel" title="Minimize panel" style="padding:6px 8px; font-size:12px;">−</button>
+            </div>
+        </div>
+        <div class="coords-weather__content">
+            <div id="authPanel" class="auth-panel" style="display:none;">
+                <div class="auth-panel__title">Admin login (username + 4-digit PIN; zones saved per account)</div>
+                <div id="authLoggedOut">
+                    <div class="auth-panel__row">
+                        <input type="text" id="authUsername" placeholder="Username" autocomplete="username" maxlength="32" />
+                        <input type="password" id="authPin" placeholder="PIN (4 digits)" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" />
+                    </div>
+                    <div class="auth-panel__row">
+                        <button type="button" id="authSignIn">Log in</button>
+                        <button type="button" id="authSignUp">Sign up</button>
+                    </div>
+                </div>
+                <div id="authLoggedIn" style="display:none;">
+                    <div class="auth-panel__row">
+                        <span id="authUserEmail" class="auth-panel__user"></span>
+                        <button type="button" id="authSignOut">Log out</button>
+                    </div>
+                </div>
+                <div id="authError" class="auth-panel__error" style="display:none;"></div>
+            </div>
+            <div class="coords-row">
+                <input type="text" id="inputLat" placeholder="Latitude (e.g. 40.71)" inputmode="decimal" />
+                <input type="text" id="inputLon" placeholder="Longitude (e.g. -74.01)" inputmode="decimal" />
+            </div>
+            <button type="button" id="goWeatherBtn">Go &amp; get weather</button>
+            <div id="weatherResult" class="weather-result" aria-live="polite"></div>
+            <div id="timeSliderWrap" class="time-slider-wrap" aria-hidden="true">
+                <div class="time-slider-label">Rain by hour (today)</div>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <input type="range" id="timeSlider" min="0" max="23" value="0" step="1" aria-label="Select hour for rain" />
+                    <span id="timeSliderLabel">—</span>
+                </div>
+            </div>
+
+            <div id="floodControls" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
+                <h3 style="margin:0 0 8px 0; font-size:13px; color:#fff;">Flood Simulation</h3>
+                <!-- User: 0.5 m / 1 m by button; rain zones auto-show at 0.1 / 0.5 / 1 mm for that hour -->
+                <div id="userFloodView" style="margin-bottom:12px;">
+                    <div style="margin-bottom:6px; font-size:12px; color:rgba(255,255,255,0.85);">Rain zones (0.1 / 0.5 / 1 mm) show when hourly rain reaches that amount; use time slider below after weather load.</div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button type="button" id="btnFlood05m">Show 0.5 m</button>
+                        <button type="button" id="btnFlood1m">Show 1 m</button>
+                        <button type="button" id="btnClearFlood">Clear</button>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button type="button" id="btnToggleGrid">Toggle Grid</button>
+                    </div>
+                    <div id="zoneColorLegend" class="zone-color-legend" aria-label="Zone colour key">
+                        <div class="zone-color-legend__title">Map colours (what you see)</div>
+                        <div id="legendRowRain01" class="zone-color-legend__row" data-tier="rain01">
+                            <span class="zone-color-legend__swatch swatch-rain01" aria-hidden="true"></span>
+                            <span><strong>Rain ≥ 0.1 mm</strong> — pale blue zones (this hour)</span>
+                        </div>
+                        <div id="legendRowRain05" class="zone-color-legend__row" data-tier="rain05">
+                            <span class="zone-color-legend__swatch swatch-rain05" aria-hidden="true"></span>
+                            <span><strong>Rain ≥ 0.5 mm</strong> — light blue zones (this hour)</span>
+                        </div>
+                        <div id="legendRowRain1" class="zone-color-legend__row" data-tier="rain1">
+                            <span class="zone-color-legend__swatch swatch-rain1" aria-hidden="true"></span>
+                            <span><strong>Rain ≥ 1 mm</strong> — dark blue zones (this hour)</span>
+                        </div>
+                        <div id="legendRowDepth05" class="zone-color-legend__row" data-tier="depth05">
+                            <span class="zone-color-legend__swatch swatch-depth05" aria-hidden="true"></span>
+                            <span><strong>0.5 m flood</strong> — light green (Show 0.5 m)</span>
+                        </div>
+                        <div id="legendRowDepth1" class="zone-color-legend__row" data-tier="depth1">
+                            <span class="zone-color-legend__swatch swatch-depth1" aria-hidden="true"></span>
+                            <span><strong>1 m flood</strong> — dark green (Show 1 m)</span>
+                        </div>
+                        <div id="legendRainHint" class="zone-color-legend__hint">Selected hour rain: <strong id="legendCurrentRain">—</strong>. Highlighted rows match colours visible on the map for that hour.</div>
+                    </div>
+                </div>
+
+                <!-- Admin mode: define which grid cells are 0.5 m or 1 m flood zones -->
+                <div id="adminControls" style="margin-top:12px; display:none; border-top:1px dashed rgba(255,255,255,0.06); padding-top:8px;">
+                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Admin: define zones (one level per cell)</div>
+                    <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Pale blue = 0.1 mm · Light blue = 0.5 mm · Dark blue = 1 mm · Light green = 0.5 m · Dark green = 1 m · Amber = pending</div>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="30" checked> 0.1 mm</label>
+                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="60"> 0.5 mm</label>
+                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="100"> 1 mm</label>
+                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="0.5"> 0.5 m</label>
+                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="1"> 1 m</label>
+                        <button id="btnAdminClearTemp">Clear Temp</button>
+                        <button id="btnAdminSave">Save</button>
+                        <button id="btnExitAdmin">Exit Admin</button>
+                    </div>
+                    <div style="font-size:12px; margin-top:8px; color:rgba(255,255,255,0.8);">Click grid cells to toggle selection for the chosen level, then <strong>Save</strong>.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button type="button" id="panelExpandBtn" class="coords-weather-panel-expand" title="Show Master Control">Master Control ▱</button>
+
+    <div class="toolbar">
+        <button type="button" id="copyUrlBtn">Copy view URL</button>
+    </div>
+
+    <button type="button" class="api-hint-toggle" id="apiHintToggle" aria-expanded="false" aria-controls="apiHint">Show API help</button>
+    <div class="api-hint api-hint--collapsed" id="apiHint" role="region" aria-label="API usage">
+        <h3>Send coordinates to Cesium</h3>
+        <p><strong>URL:</strong> <code>?lat=40.7128&lon=-74.0060</code> or <code>&height=2000</code></p>
+        <p><strong>JS (same window):</strong> <code>cesiumFlyTo(lat, lon)</code> or <code>cesiumFlyTo(lat, lon, height, addMarker)</code></p>
+        <p><strong>postMessage (iframe/parent):</strong> <code>{ type: 'cesiumFlyTo', lat, lon, height?, addMarker? }</code></p>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/supabaseConfig.js"></script>
+    <script src="js/supabaseAuth.js"></script>
+    <script src="js/floodConfig.js"></script>
+    <script src="js/gridManager.js"></script>
+    <script src="js/floodState.js"></script>
+    <script src="js/adminMode.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

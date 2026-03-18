@@ -1,0 +1,34 @@
+-- Per-admin zones: each authenticated user has their own zone set.
+-- Run in Supabase → SQL Editor after 001_flood_zones.sql.
+-- Requires Supabase Auth (Authentication → Providers → Email enabled).
+
+create table if not exists public.flood_zones_by_user (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  map_id text not null default 'default',
+  zones jsonb not null default '{"30":[],"60":[],"100":[],"0.5":[],"1":[]}'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, map_id)
+);
+
+create index if not exists flood_zones_by_user_updated_at
+  on public.flood_zones_by_user (updated_at desc);
+
+alter table public.flood_zones_by_user enable row level security;
+
+-- Users can only read/write their own rows
+create policy "flood_zones_by_user_select"
+  on public.flood_zones_by_user for select
+  using (auth.uid() = user_id);
+
+create policy "flood_zones_by_user_insert"
+  on public.flood_zones_by_user for insert
+  with check (auth.uid() = user_id);
+
+create policy "flood_zones_by_user_update"
+  on public.flood_zones_by_user for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "flood_zones_by_user_delete"
+  on public.flood_zones_by_user for delete
+  using (auth.uid() = user_id);

@@ -1,476 +1,195 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Cesium – Meteo</title>
-
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
-
-    <!-- Optional: uncomment and add your key to enable Google Places search -->
-    <!-- <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_API_KEY&libraries=places" async defer></script> -->
-
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Flood & weather awareness</title>
     <style>
-        *, *::before, *::after { box-sizing: border-box; }
-        html, body {
-            width: 100%;
-            height: 100%;
+        :root {
+            --bg: #0c1222;
+            --bg2: #151d32;
+            --accent: #38bdf8;
+            --accent2: #0ea5e9;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --card: rgba(30, 41, 59, 0.6);
+        }
+        * { box-sizing: border-box; }
+        body {
             margin: 0;
-            padding: 0;
-            overflow: hidden;
-            font-family: system-ui, -apple-system, sans-serif;
-        }
-        #cesiumContainer {
-            width: 100%;
-            height: 100%;
-        }
-
-        .search-box {
-            position: absolute;
-            top: 12px;
-            left: 12px;
-            z-index: 1000;
-            width: min(320px, calc(100vw - 24px));
-        }
-        .search-box label {
-            display: block;
-            font-size: 11px;
-            color: rgba(255,255,255,0.9);
-            margin-bottom: 4px;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-        }
-        .search-box input {
-            width: 100%;
-            padding: 10px 12px;
-            font-size: 14px;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 6px;
-            background: rgba(0,0,0,0.6);
-            color: #fff;
-        }
-        .search-box input::placeholder { color: rgba(255,255,255,0.5); }
-        .search-box input:focus {
-            outline: none;
-            border-color: #4a9eff;
-            box-shadow: 0 0 0 2px rgba(74,158,255,0.3);
-        }
-
-        .coords-weather {
-            position: absolute;
-            left: 12px;
-            bottom: 12px;
-            z-index: 1000;
-            width: min(420px, calc(100vw - 24px));
-            background: rgba(0,0,0,0.9);
-            border-radius: 10px;
-            color: #e0e0e0;
-            font-size: 13px;
-            max-height: 70vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            transform: translateY(0);
-            transition: transform 280ms ease, opacity 220ms ease;
-        }
-        .coords-weather__header {
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-            padding:10px 12px;
-            border-bottom:1px solid rgba(255,255,255,0.04);
-            cursor: move;
-            user-select: none;
-        }
-        .coords-weather__content {
-            padding:12px;
-            overflow:auto;
-        }
-        .coords-weather-panel-expand {
-            position: absolute;
-            left: 12px;
-            bottom: 12px;
-            z-index: 1000;
-            padding: 10px 14px;
-            font-size: 13px;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            background: rgba(0,0,0,0.9);
-            color: #e0e0e0;
-            cursor: pointer;
-            display: none;
-        }
-        .coords-weather-panel-expand:hover { background: rgba(0,0,0,0.95); color: #fff; }
-        .weather-data-table-section {
-            margin-top: 12px;
-            transition: max-height 220ms ease, opacity 180ms ease;
-        }
-        .weather-data-table-section--collapsed {
-            max-height: 0 !important;
-            overflow: hidden;
-            opacity: 0;
-            margin-top: 0;
-            margin-bottom: 0;
-            padding-top: 0;
-            padding-bottom: 0;
-        }
-        .coords-row {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-        .coords-row input {
-            flex: 1;
-            padding: 8px 12px;
-            font-size: 13px;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 6px;
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-        }
-        .coords-row input::placeholder { color: rgba(255,255,255,0.4); }
-        .coords-row input:focus {
-            outline: none;
-            border-color: #4a9eff;
-        }
-        .coords-weather button {
-            width: 100%;
-            padding: 10px;
-            font-size: 13px;
-            font-weight: 600;
-            border: none;
-            border-radius: 6px;
-            background: #4a9eff;
-            color: #fff;
-            cursor: pointer;
-        }
-        .coords-weather button:hover { background: #3a8eef; }
-        .coords-weather button:disabled {
-            background: #555;
-            cursor: not-allowed;
-        }
-        .weather-result {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid rgba(255,255,255,0.2);
-            font-size: 12px;
+            min-height: 100vh;
+            font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(14, 165, 233, 0.15), transparent),
+                linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+            color: var(--text);
             line-height: 1.6;
         }
-        .weather-result .row { display: flex; justify-content: space-between; gap: 8px; }
-        .weather-result .label { color: rgba(255,255,255,0.7); }
-        .weather-result .rain { color: #7dd3fc; font-weight: 600; }
-        .weather-result .error { color: #f87171; }
-        .weather-result .loading { color: rgba(255,255,255,0.6); }
-        .weather-table-toggle-wrap { margin: 10px 0 6px 0; }
-        .weather-table-toggle-btn {
-            padding: 6px 10px;
-            font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 6px;
-            background: rgba(255,255,255,0.1);
-            color: #e0e0e0;
-            cursor: pointer;
+        .wrap {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem 4rem;
         }
-        .weather-table-toggle-btn:hover { background: rgba(255,255,255,0.18); }
-        .hourly-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
-        .hourly-tab {
-            padding: 6px 12px;
-            font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.25);
-            border-radius: 6px;
-            background: rgba(255,255,255,0.08);
-            color: rgba(255,255,255,0.85);
-            cursor: pointer;
+        .badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--accent);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            margin-bottom: 1.25rem;
         }
-        .hourly-tab:hover { background: rgba(255,255,255,0.14); }
-        .hourly-tab--active { background: rgba(74,158,255,0.4); border-color: rgba(255,255,255,0.4); color: #fff; }
-        .hourly-panel { display: none; }
-        .hourly-panel--active { display: block; }
-        .graph-range-wrap { margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
-        .graph-range-label { font-size: 12px; color: rgba(255,255,255,0.85); }
-        .graph-range-select {
-            padding: 4px 8px;
-            font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 6px;
-            background: rgba(0,0,0,0.5);
-            color: #e0e0e0;
-            cursor: pointer;
+        h1 {
+            font-size: clamp(2rem, 5vw, 2.75rem);
+            font-weight: 700;
+            line-height: 1.15;
+            margin: 0 0 1rem;
+            letter-spacing: -0.02em;
         }
-        .graph-canvas-wrap { position: relative; display: inline-block; }
-        .graph-tooltip {
-            position: absolute;
-            display: none;
-            pointer-events: none;
-            padding: 6px 10px;
-            font-size: 12px;
-            background: rgba(0,0,0,0.9);
-            color: #e0e0e0;
-            border: 1px solid rgba(255,255,255,0.25);
-            border-radius: 6px;
-            white-space: nowrap;
-            z-index: 10;
+        .lead {
+            font-size: 1.15rem;
+            color: var(--muted);
+            margin: 0 0 2rem;
+            max-width: 38em;
         }
-        .hourly-graph-canvas { display: block; max-width: 100%; height: auto; background: rgba(0,0,0,0.2); border-radius: 6px; }
-
-        .toolbar {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            z-index: 1000;
+        .cta-row {
             display: flex;
-            gap: 8px;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 3rem;
         }
-        .toolbar button {
-            padding: 8px 12px;
-            font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 6px;
-            background: rgba(0,0,0,0.6);
-            color: #fff;
-            cursor: pointer;
-        }
-        .toolbar button:hover {
-            background: rgba(0,0,0,0.8);
-            border-color: rgba(255,255,255,0.5);
-        }
-
-        .api-hint {
-            position: absolute;
-            bottom: 12px;
-            left: 12px;
-            z-index: 1000;
-            max-width: min(420px, calc(100vw - 24px));
-            background: rgba(0,0,0,0.85);
-            color: #e0e0e0;
-            padding: 10px 12px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-family: ui-monospace, monospace;
-            line-height: 1.5;
-            transition: opacity 0.2s, transform 0.2s;
-        }
-        .api-hint--collapsed {
-            opacity: 0;
-            pointer-events: none;
-            transform: translateY(4px);
-        }
-        .api-hint h3 {
-            margin: 0 0 6px 0;
-            font-size: 12px;
-            font-weight: 600;
-            color: #fff;
-        }
-        .api-hint code { color: #7dd3fc; }
-        .api-hint-toggle {
-            position: absolute;
-            bottom: 12px;
-            left: 12px;
-            z-index: 1001;
-            padding: 6px 10px;
-            font-size: 11px;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 6px;
-            background: rgba(0,0,0,0.7);
-            color: rgba(255,255,255,0.9);
-            cursor: pointer;
-        }
-        .api-hint-toggle:hover { background: rgba(0,0,0,0.9); }
-
-        .loading-overlay {
-            position: absolute;
-            inset: 0;
-            z-index: 2000;
-            display: flex;
+        .btn {
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: rgba(0,0,0,0.5);
-            transition: opacity 0.4s ease;
-        }
-        .loading-overlay--hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-        .loading-overlay span {
-            color: #fff;
-            font-size: 14px;
-        }
-
-        #timeSliderWrap {
-            display: none;
-            margin-top: 10px;
-            padding: 8px 0;
-            border-top: 1px solid rgba(255,255,255,0.08);
-        }
-        #timeSliderWrap.visible { display: block; }
-        .time-slider-label { font-size: 12px; color: rgba(255,255,255,0.85); margin-bottom: 6px; }
-        #timeSlider { width: 100%; max-width: 240px; margin-right: 10px; vertical-align: middle; }
-        #timeSliderLabel { font-size: 12px; color: rgba(255,255,255,0.95); font-weight: 500; }
-
-        .zone-color-legend {
-            margin-top: 10px;
-            padding: 8px 10px;
-            background: rgba(0,0,0,0.25);
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.08);
-        }
-        .zone-color-legend__title {
-            font-size: 11px;
+            gap: 0.5rem;
+            padding: 0.9rem 1.75rem;
+            font-size: 1rem;
             font-weight: 600;
-            color: rgba(255,255,255,0.9);
-            margin-bottom: 8px;
-            letter-spacing: 0.02em;
+            text-decoration: none;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
         }
-        .zone-color-legend__row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 11px;
-            color: rgba(255,255,255,0.55);
-            margin-bottom: 6px;
-            line-height: 1.35;
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent2), #0284c7);
+            color: #fff;
+            box-shadow: 0 4px 24px rgba(14, 165, 233, 0.35);
         }
-        .zone-color-legend__row:last-child { margin-bottom: 0; }
-        .zone-color-legend__swatch {
-            width: 22px;
-            height: 14px;
-            border-radius: 3px;
-            flex-shrink: 0;
-            border: 1px solid rgba(255,255,255,0.25);
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(14, 165, 233, 0.45);
         }
-        .zone-color-legend__row--active {
-            color: rgba(255,255,255,0.95);
-            font-weight: 500;
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid rgba(148, 163, 184, 0.4);
         }
-        .zone-color-legend__row--active .zone-color-legend__swatch {
-            box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.55);
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
         }
-        #legendRowDepth05.zone-color-legend__row--active .zone-color-legend__swatch,
-        #legendRowDepth1.zone-color-legend__row--active .zone-color-legend__swatch {
-            box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.6);
+        section {
+            margin-bottom: 2.5rem;
         }
-        .zone-color-legend__hint { font-size: 10px; color: rgba(255,255,255,0.45); margin-top: 6px; }
-        .swatch-rain01 { background: rgba(224, 245, 255, 0.75); }
-        .swatch-rain05 { background: rgba(179, 230, 255, 0.8); }
-        .swatch-rain1 { background: rgba(0, 64, 179, 0.75); }
-        .swatch-depth05 { background: rgba(128, 242, 153, 0.75); }
-        .swatch-depth1 { background: rgba(0, 153, 64, 0.8); }
+        h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin: 0 0 0.75rem;
+        }
+        p { margin: 0 0 1rem; color: var(--muted); }
+        ul {
+            margin: 0;
+            padding-left: 1.25rem;
+            color: var(--muted);
+        }
+        li { margin-bottom: 0.5rem; }
+        .cards {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            margin-top: 1.5rem;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+        .card h3 {
+            margin: 0 0 0.5rem;
+            font-size: 0.95rem;
+            color: var(--text);
+        }
+        .card p {
+            margin: 0;
+            font-size: 0.875rem;
+        }
+        footer {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(148, 163, 184, 0.15);
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
     </style>
 </head>
 <body>
-    <div id="cesiumContainer"></div>
+    <div class="wrap">
+        <span class="badge">Education &amp; planning</span>
+        <h1>Understanding rain, floods, and your area</h1>
+        <p class="lead">
+            This site introduces ideas around rainfall, flood risk, and how weather data can be explored on a map.
+            When you’re ready, open the interactive globe to try coordinates, hourly rain, and zone-based flood visuals.
+        </p>
+        <div class="cta-row">
+            <a class="btn btn-primary" href="viewer.html">Open interactive map</a>
+            <a class="btn btn-secondary" href="viewer.html" target="_blank" rel="noopener">Open in new tab</a>
+        </div>
 
-    <div id="loadingOverlay" class="loading-overlay" aria-live="polite">
-        <span>Loading globe…</span>
-    </div>
+        <section>
+            <h2>What you’ll find on the map</h2>
+            <ul>
+                <li><strong>Weather</strong> — Current conditions and hourly rain for any latitude/longitude.</li>
+                <li><strong>Rain zones</strong> — Grid areas that light up when forecast rain crosses set thresholds (e.g. 0.1 / 0.5 / 1 mm per hour).</li>
+                <li><strong>Flood depth</strong> — Optional 0.5 m and 1 m zones for planning scenarios (admin-defined).</li>
+                <li><strong>Time slider</strong> — Step through today’s hourly rain to see how colours change over time.</li>
+            </ul>
+        </section>
 
-    <div class="search-box">
-        <label for="placeSearch">Search place</label>
-        <input type="text" id="placeSearch" placeholder="e.g. Eiffel Tower, Tokyo…" autocomplete="off" />
-    </div>
+        <section>
+            <h2>Why it matters</h2>
+            <p>
+                Heavy rain in a short time can stress drainage and raise local flood risk. Visualising forecast rain
+                on a map helps communities and planners talk about the same place and the same numbers—not to replace
+                official warnings, but to build intuition.
+            </p>
+        </section>
 
-    <div class="coords-weather coords-weather--open" id="coordsWeatherPanel" aria-hidden="false">
-        <div class="coords-weather__header">
-            <div style="font-weight:600;">Master Control</div>
-            <div style="display:flex; gap:8px; align-items:center;">
-                <button id="adminModeBtn" title="Admin mode" style="padding:6px 8px; font-size:12px;">Admin</button>
-                <button id="panelMinimizeBtn" aria-label="Minimize panel" title="Minimize panel" style="padding:6px 8px; font-size:12px;">−</button>
+        <div class="cards">
+            <div class="card">
+                <h3>For learners</h3>
+                <p>Explore how latitude and longitude pin a spot on Earth, and how “mm of rain” relates to intensity.</p>
+            </div>
+            <div class="card">
+                <h3>For demos</h3>
+                <p>Admins can draw zones and save layouts (with optional cloud login) for workshops or exercises.</p>
+            </div>
+            <div class="card">
+                <h3>Data source</h3>
+                <p>Forecast weather comes from public APIs; always check local authorities for real-time alerts.</p>
             </div>
         </div>
-        <div class="coords-weather__content">
-            <div class="coords-row">
-                <input type="text" id="inputLat" placeholder="Latitude (e.g. 40.71)" inputmode="decimal" />
-                <input type="text" id="inputLon" placeholder="Longitude (e.g. -74.01)" inputmode="decimal" />
-            </div>
-            <button type="button" id="goWeatherBtn">Go &amp; get weather</button>
-            <div id="weatherResult" class="weather-result" aria-live="polite"></div>
-            <div id="timeSliderWrap" class="time-slider-wrap" aria-hidden="true">
-                <div class="time-slider-label">Rain by hour (today)</div>
-                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <input type="range" id="timeSlider" min="0" max="23" value="0" step="1" aria-label="Select hour for rain" />
-                    <span id="timeSliderLabel">—</span>
-                </div>
-            </div>
 
-            <div id="floodControls" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
-                <h3 style="margin:0 0 8px 0; font-size:13px; color:#fff;">Flood Simulation</h3>
-                <!-- User: 0.5 m / 1 m by button; rain zones auto-show at 0.1 / 0.5 / 1 mm for that hour -->
-                <div id="userFloodView" style="margin-bottom:12px;">
-                    <div style="margin-bottom:6px; font-size:12px; color:rgba(255,255,255,0.85);">Rain zones (0.1 / 0.5 / 1 mm) show when hourly rain reaches that amount; use time slider below after weather load.</div>
-                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        <button type="button" id="btnFlood05m">Show 0.5 m</button>
-                        <button type="button" id="btnFlood1m">Show 1 m</button>
-                        <button type="button" id="btnClearFlood">Clear</button>
-                    </div>
-                    <div style="display:flex; gap:8px; margin-top:8px;">
-                        <button type="button" id="btnToggleGrid">Toggle Grid</button>
-                    </div>
-                    <div id="zoneColorLegend" class="zone-color-legend" aria-label="Zone colour key">
-                        <div class="zone-color-legend__title">Map colours (what you see)</div>
-                        <div id="legendRowRain01" class="zone-color-legend__row" data-tier="rain01">
-                            <span class="zone-color-legend__swatch swatch-rain01" aria-hidden="true"></span>
-                            <span><strong>Rain ≥ 0.1 mm</strong> — pale blue zones (this hour)</span>
-                        </div>
-                        <div id="legendRowRain05" class="zone-color-legend__row" data-tier="rain05">
-                            <span class="zone-color-legend__swatch swatch-rain05" aria-hidden="true"></span>
-                            <span><strong>Rain ≥ 0.5 mm</strong> — light blue zones (this hour)</span>
-                        </div>
-                        <div id="legendRowRain1" class="zone-color-legend__row" data-tier="rain1">
-                            <span class="zone-color-legend__swatch swatch-rain1" aria-hidden="true"></span>
-                            <span><strong>Rain ≥ 1 mm</strong> — dark blue zones (this hour)</span>
-                        </div>
-                        <div id="legendRowDepth05" class="zone-color-legend__row" data-tier="depth05">
-                            <span class="zone-color-legend__swatch swatch-depth05" aria-hidden="true"></span>
-                            <span><strong>0.5 m flood</strong> — light green (Show 0.5 m)</span>
-                        </div>
-                        <div id="legendRowDepth1" class="zone-color-legend__row" data-tier="depth1">
-                            <span class="zone-color-legend__swatch swatch-depth1" aria-hidden="true"></span>
-                            <span><strong>1 m flood</strong> — dark green (Show 1 m)</span>
-                        </div>
-                        <div id="legendRainHint" class="zone-color-legend__hint">Selected hour rain: <strong id="legendCurrentRain">—</strong>. Highlighted rows match colours visible on the map for that hour.</div>
-                    </div>
-                </div>
-
-                <!-- Admin mode: define which grid cells are 0.5 m or 1 m flood zones -->
-                <div id="adminControls" style="margin-top:12px; display:none; border-top:1px dashed rgba(255,255,255,0.06); padding-top:8px;">
-                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Admin: define zones (one level per cell)</div>
-                    <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Pale blue = 0.1 mm · Light blue = 0.5 mm · Dark blue = 1 mm · Light green = 0.5 m · Dark green = 1 m · Amber = pending</div>
-                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="30" checked> 0.1 mm</label>
-                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="60"> 0.5 mm</label>
-                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="100"> 1 mm</label>
-                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="0.5"> 0.5 m</label>
-                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="1"> 1 m</label>
-                        <button id="btnAdminClearTemp">Clear Temp</button>
-                        <button id="btnAdminSave">Save</button>
-                        <button id="btnExitAdmin">Exit Admin</button>
-                    </div>
-                    <div style="font-size:12px; margin-top:8px; color:rgba(255,255,255,0.8);">Click grid cells to toggle selection for the chosen level, then <strong>Save</strong>.</div>
-                </div>
-            </div>
-        </div>
+        <footer>
+            Start with the intro above, then use <strong>Open interactive map</strong> when you want the full Cesium experience.
+        </footer>
     </div>
-
-    <button type="button" id="panelExpandBtn" class="coords-weather-panel-expand" title="Show Master Control">Master Control ▱</button>
-
-    <div class="toolbar">
-        <button type="button" id="copyUrlBtn">Copy view URL</button>
-    </div>
-
-    <button type="button" class="api-hint-toggle" id="apiHintToggle" aria-expanded="false" aria-controls="apiHint">Show API help</button>
-    <div class="api-hint api-hint--collapsed" id="apiHint" role="region" aria-label="API usage">
-        <h3>Send coordinates to Cesium</h3>
-        <p><strong>URL:</strong> <code>?lat=40.7128&lon=-74.0060</code> or <code>&height=2000</code></p>
-        <p><strong>JS (same window):</strong> <code>cesiumFlyTo(lat, lon)</code> or <code>cesiumFlyTo(lat, lon, height, addMarker)</code></p>
-        <p><strong>postMessage (iframe/parent):</strong> <code>{ type: 'cesiumFlyTo', lat, lon, height?, addMarker? }</code></p>
-    </div>
-    
-    <script src="js/config.js"></script>
-    <script src="js/floodConfig.js"></script>
-    <script src="js/gridManager.js"></script>
-    <script src="js/floodState.js"></script>
-    <script src="js/adminMode.js"></script>
-    <script src="js/app.js"></script>
 </body>
 </html>

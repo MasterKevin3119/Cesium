@@ -413,6 +413,100 @@
     }
   }
 
+  function initAuthPanel() {
+    var panel = document.getElementById('authPanel');
+    var loggedOut = document.getElementById('authLoggedOut');
+    var loggedIn = document.getElementById('authLoggedIn');
+    var authUserEmail = document.getElementById('authUserEmail');
+    var authError = document.getElementById('authError');
+    var authUsername = document.getElementById('authUsername');
+    var authPin = document.getElementById('authPin');
+    if (!panel || !window.supabaseAuth || !window.supabaseAuth.isReady()) return;
+
+    function usernameToSupabaseEmail(raw) {
+      var s = String(raw || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      if (s.length < 2) return null;
+      return s + '@flood-app.local';
+    }
+    function pinToSupabasePassword(pin) {
+      var d = String(pin || '').replace(/\D/g, '');
+      if (d.length !== 4) return null;
+      return '00' + d;
+    }
+    panel.style.display = 'block';
+
+    function showError(msg) {
+      if (authError) { authError.textContent = msg || ''; authError.style.display = msg ? 'block' : 'none'; }
+    }
+    function updateAuthUI() {
+      var user = window.supabaseAuth.getCurrentUser();
+        if (user) {
+        if (loggedOut) loggedOut.style.display = 'none';
+        if (loggedIn) loggedIn.style.display = 'block';
+        if (authUserEmail) {
+          var em = user.email || '';
+          authUserEmail.textContent = em.indexOf('@flood-app.local') !== -1 ? em.replace(/@flood-app\.local$/, '') : (em || 'Logged in');
+        }
+        showError('');
+      } else {
+        if (loggedOut) loggedOut.style.display = 'block';
+        if (loggedIn) loggedIn.style.display = 'none';
+        if (authUserEmail) authUserEmail.textContent = '';
+      }
+    }
+    function refreshZonesAfterAuth() {
+      try {
+        if (window.floodConfig && window.floodConfig.pullFromSupabase) {
+          window.floodConfig.pullFromSupabase(function (ok) {
+            try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
+          });
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    window.supabaseAuth.getAuthForApi(function () {
+      updateAuthUI();
+      refreshZonesAfterAuth();
+    });
+    window.supabaseAuth.onAuthChange(function () {
+      window.supabaseAuth.getAuthForApi(function () {
+        updateAuthUI();
+        refreshZonesAfterAuth();
+      });
+    });
+
+    if (document.getElementById('authSignIn')) {
+      document.getElementById('authSignIn').addEventListener('click', function () {
+        var email = usernameToSupabaseEmail(authUsername && authUsername.value);
+        var password = pinToSupabasePassword(authPin && authPin.value);
+        if (!email) { showError('Username: letters, numbers, _ or - (min 2 chars)'); return; }
+        if (!password) { showError('Enter exactly 4 digits for PIN'); return; }
+        showError('');
+        window.supabaseAuth.signIn(email, password, function (err) {
+          if (err) showError(err); else updateAuthUI();
+        });
+      });
+    }
+    if (document.getElementById('authSignUp')) {
+      document.getElementById('authSignUp').addEventListener('click', function () {
+        var email = usernameToSupabaseEmail(authUsername && authUsername.value);
+        var password = pinToSupabasePassword(authPin && authPin.value);
+        if (!email) { showError('Username: letters, numbers, _ or - (min 2 chars)'); return; }
+        if (!password) { showError('Enter exactly 4 digits for PIN'); return; }
+        showError('');
+        window.supabaseAuth.signUp(email, password, function (err) {
+          if (err) showError(err); else updateAuthUI();
+        });
+      });
+    }
+    if (document.getElementById('authSignOut')) {
+      document.getElementById('authSignOut').addEventListener('click', function () {
+        showError('');
+        window.supabaseAuth.signOut();
+      });
+    }
+  }
+
   // Initialize flood UI controls inside the coords/weather panel
   function initFloodControls() {
     const btn05m = document.getElementById('btnFlood05m');
@@ -1201,6 +1295,15 @@
       window.floodZones = floodZones;
       try { if (window.gridManager && typeof window.gridManager.init === 'function') window.gridManager.init(viewer); } catch (e) { /* ignore */ }
       renderZoneGrid();
+      try {
+        if (window.floodConfig && typeof window.floodConfig.pullFromSupabase === 'function') {
+          window.floodConfig.pullFromSupabase(function (ok) {
+            if (ok) {
+              try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
+            }
+          });
+        }
+      } catch (e) { /* ignore */ }
       // initialize floodState
       try { if (window.floodState && typeof window.floodState.init === 'function') window.floodState.init(viewer); } catch (e) { /* ignore */ }
       // Expose utility to window for external calls if needed
@@ -1218,6 +1321,7 @@
     initTimeSlider();
     // Flood controls in the coords/weather panel
     try { initFloodControls(); } catch (e) { /* ignore */ }
+    try { initAuthPanel(); } catch (e) { /* ignore */ }
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("lat") == null || urlParams.get("lon") == null) {
       const lat = typeof CONFIG !== "undefined" && CONFIG.defaultLat != null ? CONFIG.defaultLat : 3.3633483;
