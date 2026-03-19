@@ -3,7 +3,11 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Flood & weather awareness</title>
+    <title>Flood Simulator</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path fill='%2338bdf8' d='M16 4c-2 4-8 10-8 16a8 8 0 0 0 16 0c0-6-6-12-8-16z'/></svg>" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
     <style>
         :root {
             --bg: #0c1222;
@@ -13,12 +17,14 @@
             --text: #e2e8f0;
             --muted: #94a3b8;
             --card: rgba(30, 41, 59, 0.6);
+            --white: #ffffff;
         }
         * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
         body {
             margin: 0;
             min-height: 100vh;
-            font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+            font-family: "Inter", system-ui, sans-serif;
             background: var(--bg);
             background-image:
                 radial-gradient(ellipse 80% 50% at 50% -20%, rgba(14, 165, 233, 0.15), transparent),
@@ -26,22 +32,202 @@
             color: var(--text);
             line-height: 1.6;
         }
+        /* Header */
+        .site-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.875rem 1.5rem;
+            background: transparent;
+            transition: background 0.35s ease, box-shadow 0.35s ease, transform 0.4s ease;
+            transform: translateY(0);
+        }
+        .site-header.scrolled {
+            background: rgba(12, 18, 34, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+        .site-header .logo {
+            font-family: "Oswald", sans-serif;
+            font-weight: 600;
+            font-size: 1.25rem;
+            letter-spacing: 0.02em;
+            color: var(--white);
+            text-decoration: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .site-header .logo:hover { color: var(--white); opacity: 0.92; transform: scale(1.02); }
+        .site-header nav {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .site-header nav a {
+            color: rgba(255, 255, 255, 0.88);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            padding: 0.5rem 0.85rem;
+            border-radius: 8px;
+            position: relative;
+            transition: color 0.2s ease, background 0.2s ease;
+        }
+        .site-header nav a:hover { color: var(--white); background: rgba(255, 255, 255, 0.08); }
+        .site-header nav a::after {
+            content: "";
+            position: absolute;
+            left: 0.85rem; right: 0.85rem; bottom: 0.35rem;
+            height: 1px;
+            background: var(--accent);
+            transform: scaleX(0);
+            transition: transform 0.25s ease;
+            border-radius: 1px;
+        }
+        .site-header nav a:hover::after { transform: scaleX(1); }
+        @media (max-width: 520px) {
+            .site-header { padding: 0.75rem 1rem; }
+            .site-header nav { gap: 0; }
+            .site-header nav a { padding: 0.4rem 0.6rem; font-size: 0.85rem; }
+            .site-header nav a::after { left: 0.6rem; right: 0.6rem; }
+        }
+        /* Hero – first page */
+        .hero {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 5rem 1.5rem 4rem;
+            background: transparent;
+            isolation: isolate;
+        }
+        .hero-wrap {
+            position: relative;
+            min-height: 100vh;
+        }
+        .hero-wrap .hero-bg-img {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+            display: block;
+            background-color: var(--bg);
+        }
+        .hero::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.5) 100%);
+            pointer-events: none;
+        }
+        .hero .hero-inner {
+            position: relative;
+            z-index: 1;
+            max-width: 36em;
+            opacity: 1;
+            visibility: visible;
+        }
+        .hero .hero-title {
+            font-family: "Oswald", sans-serif;
+            font-weight: 600;
+            font-size: clamp(2.5rem, 6vw, 3.5rem);
+            letter-spacing: 0.02em;
+            color: var(--white);
+            margin: 0 0 0.5rem;
+            line-height: 1.1;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8), 0 0 40px rgba(0,0,0,0.5);
+        }
+        .hero .hero-line {
+            width: 80px;
+            height: 2px;
+            background: var(--white);
+            margin: 0 auto 1.5rem;
+            box-shadow: 0 0 8px rgba(0,0,0,0.5);
+        }
+        .hero .hero-lead {
+            font-size: 1rem;
+            line-height: 1.65;
+            color: var(--white);
+            margin: 0 0 1.25rem;
+            opacity: 1;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8), 0 0 30px rgba(0,0,0,0.4);
+        }
+        .hero .hero-info-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 1px solid var(--white);
+            border-radius: 50%;
+            color: var(--white);
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 2.5rem;
+            text-shadow: 0 0 6px rgba(0,0,0,0.8);
+            box-shadow: 0 0 12px rgba(0,0,0,0.5);
+        }
+        .hero .btn-ghost {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.85rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--white);
+            background: transparent;
+            border: 1px solid var(--white);
+            border-radius: 999px;
+            text-decoration: none;
+            transition: background 0.2s, color 0.2s, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .hero .btn-ghost:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: var(--white);
+            transform: translateY(-2px);
+        }
+        .hero .hero-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            align-items: center;
+        }
+        .hero .btn-ghost.btn-scroll {
+            border-color: rgba(255, 255, 255, 0.6);
+            color: rgba(255, 255, 255, 0.95);
+        }
+        .hero .btn-ghost.btn-scroll:hover {
+            border-color: var(--white);
+            color: var(--white);
+        }
         .wrap {
             max-width: 720px;
             margin: 0 auto;
             padding: 3rem 1.5rem 4rem;
         }
-        .badge {
-            display: inline-block;
-            font-size: 0.75rem;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--accent);
-            border: 1px solid rgba(56, 189, 248, 0.35);
-            padding: 0.35rem 0.75rem;
-            border-radius: 999px;
-            margin-bottom: 1.25rem;
+        #content { scroll-margin-top: 4rem; }
+        .section-divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0.4;
+            margin: 2rem 0;
         }
+        .wrap > .section-divider { opacity: 0; transition: opacity 0.6s ease; }
+        .wrap.ready > .section-divider { opacity: 0.4; }
         h1 {
             font-size: clamp(2rem, 5vw, 2.75rem);
             font-weight: 700;
@@ -96,6 +282,14 @@
         }
         section {
             margin-bottom: 2.5rem;
+            scroll-margin-top: 4rem;
+            opacity: 0;
+            transform: translateY(28px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        section.animate-in {
+            opacity: 1;
+            transform: translateY(0);
         }
         h2 {
             font-size: 1.1rem;
@@ -103,13 +297,13 @@
             color: var(--accent);
             margin: 0 0 0.75rem;
         }
-        p { margin: 0 0 1rem; color: var(--muted); }
-        ul {
-            margin: 0;
-            padding-left: 1.25rem;
-            color: var(--muted);
+        h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text);
+            margin: 0 0 0.5rem;
         }
-        li { margin-bottom: 0.5rem; }
+        p { margin: 0 0 1rem; color: var(--muted); }
         .cards {
             display: grid;
             gap: 1rem;
@@ -121,6 +315,17 @@
             border: 1px solid rgba(148, 163, 184, 0.12);
             border-radius: 12px;
             padding: 1.25rem;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.45s ease, transform 0.45s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        }
+        .card.animate-in {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .card:hover {
+            border-color: rgba(56, 189, 248, 0.25);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
         }
         .card h3 {
             margin: 0 0 0.5rem;
@@ -131,6 +336,27 @@
             margin: 0;
             font-size: 0.875rem;
         }
+        .section-fig {
+            margin: 1.25rem 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        .section-fig.animate-in {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .section-fig img {
+            width: 100%;
+            height: auto;
+            display: block;
+            
+            transition: transform 0.5s ease;
+        }
+        .section-fig:hover img { transform: scale(1.02); }
         footer {
             margin-top: 3rem;
             padding-top: 2rem;
@@ -141,55 +367,164 @@
     </style>
 </head>
 <body>
-    <div class="wrap">
-        <span class="badge">Education &amp; planning</span>
-        <h1>Understanding rain, floods, and your area</h1>
-        <p class="lead">
-            This site introduces ideas around rainfall, flood risk, and how weather data can be explored on a map.
-            When you’re ready, open the interactive globe to try coordinates, hourly rain, and zone-based flood visuals.
-        </p>
-        <div class="cta-row">
-            <a class="btn btn-primary" href="viewer.html">Open interactive map</a>
-            <a class="btn btn-secondary" href="viewer.html" target="_blank" rel="noopener">Open in new tab</a>
+    <header class="site-header" id="site-header">
+        <a href="#" class="logo">Flood Simulator</a>
+        <nav>
+            <a href="#">Home</a>
+            <a href="viewer.html">Simulation</a>
+            <a href="#content">Introduction</a>
+            <a href="#study-area">Study Area</a>
+            <a href="#flood-extent">Flood & 3D</a>
+            <a href="#purpose">Purpose</a>
+            <a href="#supporting-decisions">Decisions</a>
+            <a href="#mission">Mission</a>
+        </nav>
+    </header>
+
+    <div class="hero-wrap">
+        <img id="hero-bg-img" class="hero-bg-img" src="hero-bg.png" alt="" role="presentation" loading="eager">
+        <section class="hero" aria-label="Introduction">
+        <div class="hero-inner">
+            <h1 class="hero-title">Flood Simulator</h1>
+            <div class="hero-line" aria-hidden="true"></div>
+            <p class="hero-lead">
+                Floods are complex events where every decision matters. This simulation allows you to explore how different choices can influence flood impacts, helping build awareness and support better decision-making during flood events.
+            </p>
+            <div class="hero-info-icon" aria-hidden="true">i</div>
+            <div class="hero-buttons">
+                <a class="btn-ghost" href="viewer.html">Try now!</a>
+                <a class="btn-ghost btn-scroll" href="#content">Introduction</a>
+            </div>
         </div>
-
-        <section>
-            <h2>What you’ll find on the map</h2>
-            <ul>
-                <li><strong>Weather</strong> — Current conditions and hourly rain for any latitude/longitude.</li>
-                <li><strong>Rain zones</strong> — Grid areas that light up when forecast rain crosses set thresholds (e.g. 0.1 / 0.5 / 1 mm per hour).</li>
-                <li><strong>Flood depth</strong> — Optional 0.5 m and 1 m zones for planning scenarios (admin-defined).</li>
-                <li><strong>Time slider</strong> — Step through today’s hourly rain to see how colours change over time.</li>
-            </ul>
         </section>
+    </div>
 
-        <section>
-            <h2>Why it matters</h2>
+    <div class="wrap" id="content">
+        <div class="section-divider"></div>
+
+        <section id="study-area">
+            <h2>Study Area</h2>
+            <figure class="section-fig" aria-hidden="true">
+                <img src="assets/kampung-asahan.png" alt="Study area – Kampung Asahan" loading="eager" onerror="this.style.display='none'">
+            </figure>
             <p>
-                Heavy rain in a short time can stress drainage and raise local flood risk. Visualising forecast rain
-                on a map helps communities and planners talk about the same place and the same numbers—not to replace
-                official warnings, but to build intuition.
+                This simulation is based on <strong>Kampung Asahan</strong>, which is used as a case study to represent a flood-prone community environment. The area provides a realistic setting for exploring how flooding can affect surrounding buildings, roads, and public spaces.
             </p>
         </section>
 
-        <div class="cards">
-            <div class="card">
-                <h3>For learners</h3>
-                <p>Explore how latitude and longitude pin a spot on Earth, and how “mm of rain” relates to intensity.</p>
+        <section id="flood-extent">
+            <h2>Flood Extent and Water Levels</h2>
+            <figure class="section-fig" aria-hidden="true">
+                <img src="assets/climate-central.png" alt="Flood extent and water levels" loading="eager" onerror="this.style.display='none'">
+            </figure>
+            <p>
+                To identify areas affected by different flood water levels, <strong>Climate Central</strong>–style information is used. This helps illustrate how rising water levels can impact land areas under various flood conditions.
+            </p>
+            <h3>3D Environment and Visualisation</h3>
+            <figure class="section-fig" aria-hidden="true">
+                <img src="assets/3d.png" alt="3D environment and visualisation" loading="eager" onerror="this.style.display='none'">
+            </figure>
+            <p>
+                An interactive 3D globe of the study area lets you visualise flood scenarios in an immersive way. Water levels and flood impacts are easier to observe and understand, making changes in conditions clearer.
+            </p>
+        </section>
+
+        <section id="purpose">
+            <h2>Purpose of the Simulation</h2>
+            <p>
+                This simulation is designed to help users better understand their surroundings during flood events. By exploring different flood scenarios, users can see how conditions change and how decisions influence outcomes.
+            </p>
+        </section>
+
+        <section id="supporting-decisions">
+            <h2>Supporting Better Decisions</h2>
+            <p>
+                By presenting flood scenarios visually and interactively, the simulation supports users in making more informed decisions before and during flood events.
+            </p>
+        </section>
+
+        <section id="mission">
+            <h2>Mission</h2>
+            <p style="margin-bottom: 1.5rem;">
+                The mission page guides users through the simulation's key learning objectives. Each mission focuses on a specific aspect of flood awareness, helping users understand flood conditions, recognize risks, and make safer decisions when navigating flooded environments.
+            </p>
+            <div class="cards">
+                <div class="card">
+                    <h3>Read The Water</h3>
+                    <p>Learn to recognize what <strong>0.5 m</strong> and <strong>1.0 m</strong> flood water depths look like in real environments.</p>
+                </div>
+                <div class="card">
+                    <h3>Understand Water Depth Risks</h3>
+                    <p>Compare areas with different water depths and observe how deeper water increases risk to people and movement. Understand when areas become difficult or unsafe to pass through.</p>
+                </div>
+                <div class="card">
+                    <h3>Identify Flooded Areas</h3>
+                    <p>Explore the simulation to identify locations that become flooded under different conditions. Notice how floodwater spreads and which zones are impacted first.</p>
+                </div>
+                <div class="card">
+                    <h3>Find a Safe Escape Route</h3>
+                    <p>Using the information from the simulation, identify routes that avoid deep water and flooded zones. Practice choosing safer paths to higher or less affected areas.</p>
+                </div>
             </div>
-            <div class="card">
-                <h3>For demos</h3>
-                <p>Admins can draw zones and save layouts (with optional cloud login) for workshops or exercises.</p>
-            </div>
-            <div class="card">
-                <h3>Data source</h3>
-                <p>Forecast weather comes from public APIs; always check local authorities for real-time alerts.</p>
-            </div>
-        </div>
+        </section>
+
+        <div class="section-divider"></div>
 
         <footer>
-            Start with the intro above, then use <strong>Open interactive map</strong> when you want the full Cesium experience.
+            <div class="cta-row" style="margin-bottom: 0;">
+                <a class="btn btn-primary" href="viewer.html">Try now!</a>
+            </div>
         </footer>
     </div>
+    <script>
+        (function () {
+            var hero = document.querySelector("section.hero");
+            var img = document.getElementById("hero-bg-img");
+            var path = window.location.pathname || "/";
+            var dir = path.replace(/\/[^/]*$/, "") || "/";
+            if (dir !== "/") dir = dir + "/";
+            var bgUrl = window.location.origin + dir + "hero-bg.png";
+            if (img) {
+                img.src = bgUrl;
+                img.onerror = function () { this.style.display = "none"; };
+            }
+            if (hero) {
+                hero.style.backgroundImage = "url(" + bgUrl + ")";
+                hero.style.backgroundSize = "cover";
+                hero.style.backgroundPosition = "center";
+            }
+        })();
+        (function () {
+            var header = document.getElementById("site-header");
+            if (header) {
+                function updateHeader() {
+                    header.classList.toggle("scrolled", window.scrollY > 80);
+                }
+                window.addEventListener("scroll", updateHeader, { passive: true });
+                updateHeader();
+            }
+
+            var wrap = document.getElementById("content");
+            if (!wrap) return;
+            var observer = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) return;
+                    var el = entry.target;
+                    if (el.classList.contains("section-divider")) {
+                        wrap.classList.add("ready");
+                        return;
+                    }
+                    if (el.classList.contains("card")) {
+                        var cardsInRow = el.parentElement.querySelectorAll(".card");
+                        var idx = Array.prototype.indexOf.call(cardsInRow, el);
+                        el.style.transitionDelay = (idx * 0.08) + "s";
+                    }
+                    el.classList.add("animate-in");
+                });
+            }, { rootMargin: "0px 0px -60px 0px", threshold: 0.1 });
+
+            wrap.querySelectorAll(".section-divider, section, .section-fig, .card").forEach(function (el) { observer.observe(el); });
+        })();
+    </script>
 </body>
 </html>
