@@ -99,7 +99,7 @@
         /* Hero – first page */
         .hero {
             position: relative;
-            z-index: 1;
+            z-index: 2;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -108,7 +108,9 @@
             text-align: center;
             padding: 5rem 1.5rem 4rem;
             background: transparent;
-            isolation: isolate;
+            opacity: 1;
+            transform: none;
+            margin-bottom: 0;
         }
         .hero-wrap {
             position: relative;
@@ -125,17 +127,16 @@
             display: block;
             background-color: var(--bg);
         }
-        .hero::before {
-            content: "";
+        .hero-wrap .hero-overlay {
             position: absolute;
             inset: 0;
-            z-index: 0;
+            z-index: 1;
             background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.5) 100%);
             pointer-events: none;
         }
         .hero .hero-inner {
             position: relative;
-            z-index: 1;
+            z-index: 0;
             max-width: 36em;
             opacity: 1;
             visibility: visible;
@@ -336,6 +337,116 @@
             margin: 0;
             font-size: 0.875rem;
         }
+        /* Mission mini-game / trivia cards */
+        .mission-cards {
+            display: grid;
+            gap: 1.25rem;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            margin-top: 1.5rem;
+        }
+        a.card.mission-card {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            text-decoration: none;
+            color: inherit;
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.75));
+            border: 1px solid rgba(56, 189, 248, 0.15);
+            border-radius: 14px;
+            padding: 1.35rem 1.35rem 1.15rem;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+        a.card.mission-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent2), #22d3ee, var(--accent));
+            opacity: 0.85;
+        }
+        a.card.mission-card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse 80% 60% at 100% 0%, rgba(14, 165, 233, 0.12), transparent 55%);
+            pointer-events: none;
+        }
+        a.card.mission-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(56, 189, 248, 0.45);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(56, 189, 248, 0.2);
+        }
+        a.card.mission-card:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 3px;
+        }
+        .mission-card__icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(14, 165, 233, 0.15);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            margin-bottom: 0.85rem;
+            position: relative;
+            z-index: 1;
+        }
+        .mission-card__icon svg {
+            width: 24px;
+            height: 24px;
+            fill: var(--accent);
+        }
+        .mission-card__badge {
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(56, 189, 248, 0.95);
+            margin-bottom: 0.5rem;
+            position: relative;
+            z-index: 1;
+        }
+        a.card.mission-card h3 {
+            font-family: "Oswald", sans-serif;
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--text);
+            margin: 0 0 0.5rem;
+            line-height: 1.25;
+            position: relative;
+            z-index: 1;
+        }
+        a.card.mission-card p {
+            color: var(--muted);
+            font-size: 0.85rem;
+            line-height: 1.55;
+            margin: 0 0 1rem;
+            flex: 1;
+            position: relative;
+            z-index: 1;
+        }
+        .mission-card__cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-top: auto;
+            position: relative;
+            z-index: 1;
+            transition: gap 0.2s ease, color 0.2s ease;
+        }
+        a.card.mission-card:hover .mission-card__cta {
+            gap: 0.55rem;
+            color: #7dd3fc;
+        }
         .section-fig {
             margin: 1.25rem 0;
             border-radius: 12px;
@@ -383,6 +494,7 @@
 
     <div class="hero-wrap">
         <img id="hero-bg-img" class="hero-bg-img" src="hero-bg.png" alt="" role="presentation" loading="eager">
+        <div class="hero-overlay" aria-hidden="true"></div>
         <section class="hero" aria-label="Introduction">
         <div class="hero-inner">
             <h1 class="hero-title">Flood Simulator</h1>
@@ -446,25 +558,45 @@
         <section id="mission">
             <h2>Mission</h2>
             <p style="margin-bottom: 1.5rem;">
-                The mission page guides users through the simulation's key learning objectives. Each mission focuses on a specific aspect of flood awareness, helping users understand flood conditions, recognize risks, and make safer decisions when navigating flooded environments.
+                The mission page guides users through the simulation's key learning objectives. Each mission opens a mini-game or trivia in the simulator—tap a card to start.
             </p>
-            <div class="cards">
-                <div class="card">
+            <div class="mission-cards">
+                <a class="card mission-card" href="viewer.html?mission=read-water">
+                    <span class="mission-card__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+                    </span>
+                    <span class="mission-card__badge">Mini-game</span>
                     <h3>Read The Water</h3>
-                    <p>Learn to recognize what <strong>0.5 m</strong> and <strong>1.0 m</strong> flood water depths look like in real environments.</p>
-                </div>
-                <div class="card">
+                    <p>Learn what <strong>0.5 m</strong> and <strong>1.0 m</strong> flood depths look like—quick visual challenges.</p>
+                    <span class="mission-card__cta">Start <span aria-hidden="true">→</span></span>
+                </a>
+                <a class="card mission-card" href="viewer.html?mission=depth-risks">
+                    <span class="mission-card__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 17h2v5H3v-5zm4-10h2v15H7V7zm4-5h2v20h-2V2zm4 8h2v12h-2V10zm4-4h2v16h-2V6z"/></svg>
+                    </span>
+                    <span class="mission-card__badge">Trivia</span>
                     <h3>Understand Water Depth Risks</h3>
-                    <p>Compare areas with different water depths and observe how deeper water increases risk to people and movement. Understand when areas become difficult or unsafe to pass through.</p>
-                </div>
-                <div class="card">
+                    <p>Compare depths and spot when areas become unsafe—timed quiz on risk levels.</p>
+                    <span class="mission-card__cta">Start <span aria-hidden="true">→</span></span>
+                </a>
+                <a class="card mission-card" href="viewer.html?mission=flooded-areas">
+                    <span class="mission-card__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                    </span>
+                    <span class="mission-card__badge">Mini-game</span>
                     <h3>Identify Flooded Areas</h3>
-                    <p>Explore the simulation to identify locations that become flooded under different conditions. Notice how floodwater spreads and which zones are impacted first.</p>
-                </div>
-                <div class="card">
+                    <p>See how floodwater spreads—interactive prompts on which zones flood first.</p>
+                    <span class="mission-card__cta">Start <span aria-hidden="true">→</span></span>
+                </a>
+                <a class="card mission-card" href="viewer.html?mission=escape-route">
+                    <span class="mission-card__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M14.4 6L14 4H5v17h2v-7h4.6l.4 2h7V6h-5.6z"/></svg>
+                    </span>
+                    <span class="mission-card__badge">Trivia</span>
                     <h3>Find a Safe Escape Route</h3>
-                    <p>Using the information from the simulation, identify routes that avoid deep water and flooded zones. Practice choosing safer paths to higher or less affected areas.</p>
-                </div>
+                    <p>Choose paths that avoid deep water—scenario-based questions to higher ground.</p>
+                    <span class="mission-card__cta">Start <span aria-hidden="true">→</span></span>
+                </a>
             </div>
         </section>
 
@@ -487,11 +619,6 @@
             if (img) {
                 img.src = bgUrl;
                 img.onerror = function () { this.style.display = "none"; };
-            }
-            if (hero) {
-                hero.style.backgroundImage = "url(" + bgUrl + ")";
-                hero.style.backgroundSize = "cover";
-                hero.style.backgroundPosition = "center";
             }
         })();
         (function () {

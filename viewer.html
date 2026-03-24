@@ -74,13 +74,47 @@
             transition: transform 280ms ease, opacity 220ms ease;
         }
         .coords-weather__header {
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-            padding:10px 12px;
-            border-bottom:1px solid rgba(255,255,255,0.04);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
             cursor: move;
             user-select: none;
+        }
+        .coords-weather__header-title {
+            font-weight: 600;
+            font-size: 13px;
+            color: #e0e0e0;
+            flex: 1;
+            min-width: 0;
+        }
+        .mc-panel-minimize {
+            flex-shrink: 0;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            background: #1e293b;
+            color: #38bdf8;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
+        .mc-panel-minimize:hover {
+            background: #334155;
+            border-color: #475569;
+            color: #7dd3fc;
+        }
+        .mc-panel-minimize svg {
+            width: 18px;
+            height: 18px;
+            display: block;
         }
         .coords-weather__content {
             padding:12px;
@@ -214,26 +248,34 @@
         }
         .hourly-graph-canvas { display: block; max-width: 100%; height: auto; background: rgba(0,0,0,0.2); border-radius: 6px; }
 
+        /* Centered top “header” strip — clear of Cesium’s top-right widgets */
         .toolbar {
             position: absolute;
+            left: 50%;
             top: 12px;
-            right: 12px;
-            z-index: 1000;
+            transform: translateX(-50%);
+            z-index: 1001;
             display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
             gap: 8px;
-        }
-        .toolbar button {
+            max-width: min(560px, calc(100vw - 200px));
             padding: 8px 12px;
-            font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 6px;
-            background: rgba(0,0,0,0.6);
-            color: #fff;
-            cursor: pointer;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
         }
-        .toolbar button:hover {
-            background: rgba(0,0,0,0.8);
-            border-color: rgba(255,255,255,0.5);
+        @media (max-width: 640px) {
+            .toolbar {
+                top: 72px;
+                max-width: calc(100vw - 24px);
+                left: 12px;
+                right: 12px;
+                transform: none;
+                justify-content: center;
+            }
         }
 
         .api-hint {
@@ -351,11 +393,12 @@
             box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.6);
         }
         .zone-color-legend__hint { font-size: 10px; color: rgba(255,255,255,0.45); margin-top: 6px; }
-        .swatch-rain01 { background: rgba(224, 245, 255, 0.75); }
-        .swatch-rain05 { background: rgba(179, 230, 255, 0.8); }
-        .swatch-rain1 { background: rgba(0, 64, 179, 0.75); }
-        .swatch-depth05 { background: rgba(128, 242, 153, 0.75); }
-        .swatch-depth1 { background: rgba(0, 153, 64, 0.8); }
+        /* Must match js/gridManager.js COLOR_30 / _60 / _100 / _05 / _1 (rectangle fill on map) */
+        .swatch-rain01 { background: rgba(224, 245, 255, 0.5); }
+        .swatch-rain05 { background: rgba(179, 230, 255, 0.55); }
+        .swatch-rain1 { background: rgba(0, 64, 179, 0.65); }
+        .swatch-depth05 { background: rgba(128, 242, 153, 0.55); }
+        .swatch-depth1 { background: rgba(0, 153, 64, 0.65); }
         .auth-panel { margin-bottom: 12px; padding: 10px 12px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
         .auth-panel__title { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.85); margin-bottom: 8px; }
         .auth-panel__row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
@@ -365,9 +408,382 @@
         .auth-panel button:hover { background: rgba(255,255,255,0.25); }
         .auth-panel__user { font-size: 11px; color: rgba(255,255,255,0.7); }
         .auth-panel__error { font-size: 11px; color: #f87171; margin-top: 4px; }
+        .auth-modal { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+        .auth-modal[hidden] { display: none !important; }
+        .auth-modal__backdrop { position: absolute; inset: 0; z-index: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
+        .auth-modal__dialog { position: relative; z-index: 1; width: 100%; max-width: 380px; background: #1e293b; border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 12px; box-shadow: 0 24px 48px rgba(0,0,0,0.45); padding: 18px 18px 16px; }
+        .auth-modal__close { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; padding: 0; border: none; border-radius: 8px; background: rgba(255,255,255,0.1); color: #fff; font-size: 20px; line-height: 1; cursor: pointer; }
+        .auth-modal__close:hover { background: rgba(255,255,255,0.2); }
+        .auth-modal__title { margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #f1f5f9; padding-right: 36px; }
+        .auth-modal .auth-panel { margin-bottom: 0; }
+        /* Solid, shared button look (toolbar + Master Control minimize) */
+        .mc-header-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 12px;
+            font-size: 12px;
+            line-height: 1.2;
+            font-family: inherit;
+            cursor: pointer;
+            border-radius: 6px;
+            border: 1px solid #475569;
+            background: #1e293b;
+            color: #f1f5f9;
+            text-decoration: none;
+            box-sizing: border-box;
+        }
+        button.mc-header-btn { -webkit-appearance: none; appearance: none; }
+        a.mc-header-btn:visited { color: #f1f5f9; }
+        .mc-header-btn:hover {
+            background: #334155;
+            border-color: #64748b;
+            color: #fff;
+        }
+        .mc-header-btn--accent {
+            border-color: #0ea5e9;
+            background: #0c4a6e;
+            color: #e0f2fe;
+        }
+        .mc-header-btn--accent:hover {
+            background: #075985;
+            border-color: #38bdf8;
+            color: #f0f9ff;
+        }
+
+        /* Read The Water (?mission=read-water) */
+        #readTheWaterOverlay[hidden] { display: none !important; }
+        .read-the-water {
+            position: fixed;
+            inset: 0;
+            z-index: 9990;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-start;
+            padding: clamp(12px, 4vw, 28px);
+            box-sizing: border-box;
+            background-color: #060d18;
+            background-image:
+                linear-gradient(160deg, #050f1c 0%, #0c1e36 50%, #050a12 100%),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath fill='%231e3a5f' fill-opacity='0.12' d='M0 60c20-8 40 8 60 0s40-8 60 0v60H0z'/%3E%3C/svg%3E");
+            color: #e2e8f0;
+            font-family: system-ui, -apple-system, sans-serif;
+            overflow: auto;
+        }
+        .read-the-water__header { max-width: 960px; margin: 0 auto 1rem; }
+        .read-the-water__title {
+            margin: 0 0 0.5rem;
+            font-size: clamp(1.5rem, 4vw, 2rem);
+            font-weight: 300;
+            letter-spacing: 0.02em;
+            color: #94a3b8;
+        }
+        .read-the-water__question {
+            margin: 0;
+            font-size: clamp(0.95rem, 2.2vw, 1.1rem);
+            line-height: 1.45;
+            color: #cbd5e1;
+            max-width: 42em;
+        }
+        .read-the-water__grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: clamp(10px, 2vw, 18px);
+            max-width: min(920px, 100%);
+            width: 100%;
+            margin: 0 auto;
+            align-content: center;
+        }
+        .read-the-water__choice {
+            display: block;
+            padding: 0;
+            border: 2px solid rgba(148, 163, 184, 0.35);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            background: rgba(15, 23, 42, 0.6);
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+        }
+        .read-the-water__choice:hover {
+            border-color: rgba(56, 189, 248, 0.65);
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+            transform: translateY(-2px);
+        }
+        .read-the-water__choice:focus {
+            outline: none;
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.35);
+        }
+        .read-the-water__choice img {
+            display: block;
+            width: 100%;
+            height: auto;
+            vertical-align: middle;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+        }
+        .read-the-water__modal[hidden] { display: none !important; }
+        .read-the-water__modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 9991;
+            background: rgba(2, 6, 23, 0.55);
+            backdrop-filter: blur(6px);
+        }
+        .read-the-water__modal-dialog {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9992;
+            width: min(420px, calc(100vw - 32px));
+            padding: 20px 20px 18px;
+            border-radius: 14px;
+            background: rgba(30, 41, 59, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+        }
+        .read-the-water__modal-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .read-the-water__modal-title {
+            margin: 0;
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+        .read-the-water__modal-close {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            color: #e2e8f0;
+            font-size: 1.25rem;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .read-the-water__modal-close:hover { background: rgba(255, 255, 255, 0.15); }
+        .read-the-water__modal-body {
+            margin: 0 0 16px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: #cbd5e1;
+        }
+        .read-the-water__modal-btn {
+            width: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 16px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            background: #f8fafc;
+            color: #0f172a;
+            cursor: pointer;
+        }
+        .read-the-water__modal-btn:hover { background: #fff; }
+
+        /* Identify Flooded Areas (?mission=flooded-areas) */
+        #identifyFloodOverlay[hidden] { display: none !important; }
+        .identify-flood {
+            position: fixed;
+            inset: 0;
+            z-index: 9990;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-start;
+            padding: clamp(12px, 4vw, 28px);
+            box-sizing: border-box;
+            /* Solid base so the Cesium canvas does not show through (was semi-transparent gradient). */
+            background-color: #060d18;
+            background-image:
+                linear-gradient(160deg, #050f1c 0%, #0c1e36 50%, #050a12 100%),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath fill='%231e3a5f' fill-opacity='0.12' d='M0 60c20-8 40 8 60 0s40-8 60 0v60H0z'/%3E%3C/svg%3E");
+            color: #e2e8f0;
+            font-family: system-ui, -apple-system, sans-serif;
+            overflow: auto;
+        }
+        .identify-flood__header { max-width: 1100px; margin: 0 auto 1rem; }
+        .identify-flood__title {
+            margin: 0 0 0.5rem;
+            font-size: clamp(1.5rem, 4vw, 2rem);
+            font-weight: 300;
+            letter-spacing: 0.02em;
+            color: #94a3b8;
+        }
+        .identify-flood__question {
+            margin: 0;
+            font-size: clamp(0.95rem, 2.2vw, 1.1rem);
+            line-height: 1.45;
+            color: #cbd5e1;
+            max-width: 48em;
+        }
+        .identify-flood__grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: clamp(10px, 2vw, 18px);
+            max-width: min(1100px, 100%);
+            width: 100%;
+            margin: 0 auto;
+            align-content: center;
+        }
+        @media (max-width: 700px) {
+            .identify-flood__grid {
+                grid-template-columns: 1fr;
+                max-width: 420px;
+            }
+        }
+        .identify-flood__choice {
+            display: block;
+            padding: 0;
+            border: 2px solid rgba(148, 163, 184, 0.35);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            background: rgba(15, 23, 42, 0.6);
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+        }
+        .identify-flood__choice:hover {
+            border-color: rgba(56, 189, 248, 0.65);
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+            transform: translateY(-2px);
+        }
+        .identify-flood__choice:focus {
+            outline: none;
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.35);
+        }
+        .identify-flood__choice img {
+            display: block;
+            width: 100%;
+            height: auto;
+            vertical-align: middle;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+        }
+        .identify-flood__modal[hidden] { display: none !important; }
+        .identify-flood__modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 9991;
+            background: rgba(2, 6, 23, 0.55);
+            backdrop-filter: blur(6px);
+        }
+        .identify-flood__modal-dialog {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9992;
+            width: min(440px, calc(100vw - 32px));
+            padding: 20px 20px 18px;
+            border-radius: 14px;
+            background: rgba(30, 41, 59, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+        }
+        .identify-flood__modal-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .identify-flood__modal-title {
+            margin: 0;
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+        .identify-flood__modal-close {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            color: #e2e8f0;
+            font-size: 1.25rem;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .identify-flood__modal-close:hover { background: rgba(255, 255, 255, 0.15); }
+        .identify-flood__modal-body {
+            margin: 0 0 16px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: #cbd5e1;
+        }
+        .identify-flood__modal-btn {
+            width: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 16px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            background: #f8fafc;
+            color: #0f172a;
+            cursor: pointer;
+        }
+        .identify-flood__modal-btn:hover { background: #fff; }
     </style>
 </head>
 <body>
+    <div id="readTheWaterOverlay" class="read-the-water" hidden aria-hidden="true">
+        <header class="read-the-water__header">
+            <h1 class="read-the-water__title">Read The Water</h1>
+            <p class="read-the-water__question"></p>
+        </header>
+        <div class="read-the-water__grid"></div>
+        <div class="read-the-water__modal" hidden role="dialog" aria-modal="true" aria-labelledby="readTheWaterModalTitle">
+            <div class="read-the-water__modal-backdrop" aria-hidden="true"></div>
+            <div class="read-the-water__modal-dialog">
+                <div class="read-the-water__modal-head">
+                    <h2 id="readTheWaterModalTitle" class="read-the-water__modal-title"></h2>
+                    <button type="button" class="read-the-water__modal-close" aria-label="Close">×</button>
+                </div>
+                <p class="read-the-water__modal-body"></p>
+                <button type="button" class="read-the-water__modal-btn"></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="identifyFloodOverlay" class="identify-flood" hidden aria-hidden="true">
+        <header class="identify-flood__header">
+            <h1 class="identify-flood__title">Identify Flooded Areas</h1>
+            <p class="identify-flood__question"></p>
+        </header>
+        <div class="identify-flood__grid"></div>
+        <div class="identify-flood__modal" hidden role="dialog" aria-modal="true" aria-labelledby="identifyFloodModalTitle">
+            <div class="identify-flood__modal-backdrop" aria-hidden="true"></div>
+            <div class="identify-flood__modal-dialog">
+                <div class="identify-flood__modal-head">
+                    <h2 id="identifyFloodModalTitle" class="identify-flood__modal-title"></h2>
+                    <button type="button" class="identify-flood__modal-close" aria-label="Close">×</button>
+                </div>
+                <p class="identify-flood__modal-body"></p>
+                <button type="button" class="identify-flood__modal-btn"></button>
+            </div>
+        </div>
+    </div>
+
     <div id="cesiumContainer"></div>
 
     <div id="loadingOverlay" class="loading-overlay" aria-live="polite">
@@ -379,55 +795,40 @@
         <input type="text" id="placeSearch" placeholder="e.g. Eiffel Tower, Tokyo…" autocomplete="off" />
     </div>
 
+    <div class="toolbar" role="toolbar" aria-label="Viewer actions">
+        <a href="index.html" class="mc-header-btn" title="Back to intro">← Intro</a>
+        <button type="button" id="userAuthBtn" class="mc-header-btn mc-header-btn--accent" title="Sign in or create an account">Sign in</button>
+        <button type="button" id="adminModeBtn" class="mc-header-btn" title="Admin mode">Admin</button>
+        <button type="button" id="copyUrlBtn" class="mc-header-btn">Copy view URL</button>
+    </div>
+
     <div class="coords-weather coords-weather--open" id="coordsWeatherPanel" aria-hidden="false">
         <div class="coords-weather__header">
-            <div style="font-weight:600;">Master Control</div>
-            <div style="display:flex; gap:8px; align-items:center;">
-                <a href="index.html" style="font-size:11px; color:rgba(255,255,255,0.75); text-decoration:none; padding:6px 8px; border:1px solid rgba(255,255,255,0.2); border-radius:4px;" title="Back to intro">← Intro</a>
-                <button id="adminModeBtn" title="Admin mode" style="padding:6px 8px; font-size:12px;">Admin</button>
-                <button id="panelMinimizeBtn" aria-label="Minimize panel" title="Minimize panel" style="padding:6px 8px; font-size:12px;">−</button>
-            </div>
+            <button type="button" id="panelMinimizeBtn" class="mc-panel-minimize" aria-label="Minimize panel" title="Minimize panel">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+            </button>
+            <span class="coords-weather__header-title">Master Control</span>
         </div>
         <div class="coords-weather__content">
-            <div id="authPanel" class="auth-panel" style="display:none;">
-                <div class="auth-panel__title">Admin login (username + 4-digit PIN; zones saved per account)</div>
-                <div id="authLoggedOut">
-                    <div class="auth-panel__row">
-                        <input type="text" id="authUsername" placeholder="Username" autocomplete="username" maxlength="32" />
-                        <input type="password" id="authPin" placeholder="PIN (4 digits)" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" />
-                    </div>
-                    <div class="auth-panel__row">
-                        <button type="button" id="authSignIn">Log in</button>
-                        <button type="button" id="authSignUp">Sign up</button>
-                    </div>
-                </div>
-                <div id="authLoggedIn" style="display:none;">
-                    <div class="auth-panel__row">
-                        <span id="authUserEmail" class="auth-panel__user"></span>
-                        <button type="button" id="authSignOut">Log out</button>
-                    </div>
-                </div>
-                <div id="authError" class="auth-panel__error" style="display:none;"></div>
-            </div>
             <div class="coords-row">
                 <input type="text" id="inputLat" placeholder="Latitude (e.g. 40.71)" inputmode="decimal" />
                 <input type="text" id="inputLon" placeholder="Longitude (e.g. -74.01)" inputmode="decimal" />
             </div>
             <button type="button" id="goWeatherBtn">Go &amp; get weather</button>
-            <div id="weatherResult" class="weather-result" aria-live="polite"></div>
             <div id="timeSliderWrap" class="time-slider-wrap" aria-hidden="true">
-                <div class="time-slider-label">Rain by hour (today)</div>
+                <div class="time-slider-label">Rain by hour (±12 h from now)</div>
                 <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <input type="range" id="timeSlider" min="0" max="23" value="0" step="1" aria-label="Select hour for rain" />
+                    <input type="range" id="timeSlider" min="0" max="23" value="0" step="1" aria-label="Select hour for rain within ±12 hours of now" />
                     <span id="timeSliderLabel">—</span>
                 </div>
             </div>
+            <div id="weatherResult" class="weather-result" aria-live="polite"></div>
 
             <div id="floodControls" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
                 <h3 style="margin:0 0 8px 0; font-size:13px; color:#fff;">Flood Simulation</h3>
                 <!-- User: 0.5 m / 1 m by button; rain zones auto-show at 0.1 / 0.5 / 1 mm for that hour -->
                 <div id="userFloodView" style="margin-bottom:12px;">
-                    <div style="margin-bottom:6px; font-size:12px; color:rgba(255,255,255,0.85);">Rain zones (0.1 / 0.5 / 1 mm) show when hourly rain reaches that amount; use time slider below after weather load.</div>
+                    <div style="margin-bottom:6px; font-size:12px; color:rgba(255,255,255,0.85);">Rain zones (0.1 / 0.5 / 1 mm) show when hourly rain reaches that amount; use the time slider above after weather load.</div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
                         <button type="button" id="btnFlood05m">Show 0.5 m</button>
                         <button type="button" id="btnFlood1m">Show 1 m</button>
@@ -484,8 +885,32 @@
 
     <button type="button" id="panelExpandBtn" class="coords-weather-panel-expand" title="Show Master Control">Master Control ▱</button>
 
-    <div class="toolbar">
-        <button type="button" id="copyUrlBtn">Copy view URL</button>
+    <div id="authModal" class="auth-modal" hidden role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+        <div class="auth-modal__backdrop" id="authModalBackdrop"></div>
+        <div class="auth-modal__dialog">
+            <button type="button" class="auth-modal__close" id="authModalClose" aria-label="Close dialog">×</button>
+            <h2 id="authModalTitle" class="auth-modal__title">Account</h2>
+            <div id="authPanel" class="auth-panel">
+                <div class="auth-panel__title">Username + 4-digit PIN (zones saved per account when logged in)</div>
+                <div id="authLoggedOut">
+                    <div class="auth-panel__row">
+                        <input type="text" id="authUsername" placeholder="Username" autocomplete="username" maxlength="32" />
+                        <input type="password" id="authPin" placeholder="PIN (4 digits)" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" />
+                    </div>
+                    <div class="auth-panel__row">
+                        <button type="button" id="authSignIn">Log in</button>
+                        <button type="button" id="authSignUp">Sign up</button>
+                    </div>
+                </div>
+                <div id="authLoggedIn" style="display:none;">
+                    <div class="auth-panel__row">
+                        <span id="authUserEmail" class="auth-panel__user"></span>
+                        <button type="button" id="authSignOut">Log out</button>
+                    </div>
+                </div>
+                <div id="authError" class="auth-panel__error" style="display:none;"></div>
+            </div>
+        </div>
     </div>
 
     <button type="button" class="api-hint-toggle" id="apiHintToggle" aria-expanded="false" aria-controls="apiHint">Show API help</button>
@@ -505,5 +930,7 @@
     <script src="js/floodState.js"></script>
     <script src="js/adminMode.js"></script>
     <script src="js/app.js"></script>
+    <script src="js/readTheWater.js"></script>
+    <script src="js/identifyFlood.js"></script>
 </body>
 </html>

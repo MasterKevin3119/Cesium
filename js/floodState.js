@@ -22,7 +22,7 @@
     zones.forEach(function (zid) {
       const z = (window.floodZones || []).find(function (zz) { return zz.id === Number(zid); });
       if (!z) return;
-      try { if (window.animateZoneFlood) window.animateZoneFlood(z, meters, 700); } catch (e) { /* ignore */ }
+      try { if (window.animateZoneFlood) window.animateZoneFlood(z, meters, 700, { level: level }); } catch (e) { /* ignore */ }
     });
   }
 

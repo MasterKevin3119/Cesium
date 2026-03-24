@@ -16,7 +16,7 @@
   let rainParticleSystem = null;
   /** Cesium ImageryLayer for precipitation/radar overlay (RainViewer) */
   let precipitationLayer = null;
-  /** Last fetched hourly data for time slider: { lat, lon, time[], precipitation[] } */
+  /** Last fetched hourly data for time slider: { lat, lon, time[], precipitation[], weatherCode[], sliderStartIndex } */
   let lastHourlyData = null;
   /** Whether the weather data table (Time/Rain/Temp/etc.) is minimized */
   let weatherTableCollapsed = false;
@@ -122,14 +122,42 @@
   }
 
   /**
+   * Raised water-surface colour for per-zone flood animation.
+   * Rain-driven (30/60/100) uses blue tints; “Show 0.5 m / 1 m” uses green (matches legend + gridManager).
+   * Keep aligned with js/gridManager.js COLOR_*.
+   */
+  const OVERLAY_RAIN_30 = new Cesium.Color(0.88, 0.96, 1.0, 0.5);
+  const OVERLAY_RAIN_60 = new Cesium.Color(0.7, 0.9, 1.0, 0.55);
+  const OVERLAY_RAIN_100 = new Cesium.Color(0.0, 0.25, 0.7, 0.65);
+  const OVERLAY_FLOOD_05 = new Cesium.Color(0.5, 0.95, 0.6, 0.55);
+  const OVERLAY_FLOOD_1 = new Cesium.Color(0.0, 0.6, 0.25, 0.65);
+
+  function floodOverlayMaterialForLevel(level, targetDeltaMeters) {
+    const d = Number(targetDeltaMeters) || 0;
+    if (d <= 0) return Cesium.Color.WHITE.withAlpha(0.05);
+    if (level === '30') return OVERLAY_RAIN_30;
+    if (level === '60') return OVERLAY_RAIN_60;
+    if (level === '100') return OVERLAY_RAIN_100;
+    if (level === '0.5' || level === '0.5m' || level === 0.5) return OVERLAY_FLOOD_05;
+    if (level === '1' || level === '1m' || level === 1) return OVERLAY_FLOOD_1;
+    if (d <= 0.11) return OVERLAY_RAIN_30;
+    if (d <= 0.51) return OVERLAY_RAIN_60;
+    return OVERLAY_RAIN_100;
+  }
+
+  /**
    * Apply flood surface to given zone IDs with severity string.
    * zoneIds: array of numeric IDs (1-25). severity: "moderate"|"severe"|"none".
    */
   // Animate a zone's flood surface to target delta (meters above GRID_BASE_HEIGHT)
-  function animateZoneFlood(z, targetDelta, durationMs) {
+  // opts.level: '30'|'60'|'100' (rain) vs '0.5'|'1' (flood buttons) — same depth may differ in colour
+  function animateZoneFlood(z, targetDelta, durationMs, opts) {
     if (!z) return;
     durationMs = typeof durationMs === 'number' ? durationMs : 800;
+    opts = opts || {};
+    const level = opts.level;
     const targetHeight = GRID_BASE_HEIGHT + (Number(targetDelta) || 0);
+    const mat = floodOverlayMaterialForLevel(level, targetDelta);
     // Ensure floodEntity exists
     if (!z.floodEntity) {
       const rect = Cesium.Rectangle.fromDegrees(z.bounds.west, z.bounds.south, z.bounds.east, z.bounds.north);
@@ -137,12 +165,16 @@
         name: 'Flood overlay ' + z.id,
         rectangle: {
           coordinates: rect,
-          material: Cesium.Color.BLUE.withAlpha(0.5),
+          material: mat,
           fill: true,
           outline: false,
           height: GRID_BASE_HEIGHT + (z.currentFloodDelta || 0),
         },
       });
+    } else {
+      try {
+        if (z.floodEntity.rectangle) z.floodEntity.rectangle.material = mat;
+      } catch (e) { /* ignore */ }
     }
 
     const startHeight = (z.floodEntity.rectangle && z.floodEntity.rectangle.height) || (GRID_BASE_HEIGHT + (z.currentFloodDelta || 0));
@@ -219,7 +251,7 @@
       else if (level === '1' || level === '1m' || level === 1) meters = 1.0;
       else if (!isNaN(Number(level))) meters = Number(level);
       if (meters == null) meters = 0.5;
-      animateZoneFlood(z, meters, duration);
+      animateZoneFlood(z, meters, duration, { level: level });
     });
   }
 
@@ -415,13 +447,43 @@
 
   function initAuthPanel() {
     var panel = document.getElementById('authPanel');
+    var modal = document.getElementById('authModal');
+    var userAuthBtn = document.getElementById('userAuthBtn');
     var loggedOut = document.getElementById('authLoggedOut');
     var loggedIn = document.getElementById('authLoggedIn');
     var authUserEmail = document.getElementById('authUserEmail');
     var authError = document.getElementById('authError');
     var authUsername = document.getElementById('authUsername');
     var authPin = document.getElementById('authPin');
-    if (!panel || !window.supabaseAuth || !window.supabaseAuth.isReady()) return;
+    if (!panel || !window.supabaseAuth || !window.supabaseAuth.isReady()) {
+      if (userAuthBtn) userAuthBtn.style.display = 'none';
+      return;
+    }
+
+    function openAuthModal() {
+      if (!modal) return;
+      modal.hidden = false;
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      try { if (authUsername) authUsername.focus(); } catch (e) { /* ignore */ }
+    }
+    function closeAuthModal() {
+      if (!modal) return;
+      modal.hidden = true;
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      showError('');
+    }
+    if (userAuthBtn) {
+      userAuthBtn.addEventListener('click', function () { openAuthModal(); });
+    }
+    var closeBtn = document.getElementById('authModalClose');
+    var backdrop = document.getElementById('authModalBackdrop');
+    if (closeBtn) closeBtn.addEventListener('click', closeAuthModal);
+    if (backdrop) backdrop.addEventListener('click', closeAuthModal);
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && modal && !modal.hidden) closeAuthModal();
+    });
 
     function usernameToSupabaseEmail(raw) {
       var s = String(raw || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
@@ -433,10 +495,16 @@
       if (d.length !== 4) return null;
       return '00' + d;
     }
-    panel.style.display = 'block';
 
     function showError(msg) {
       if (authError) { authError.textContent = msg || ''; authError.style.display = msg ? 'block' : 'none'; }
+    }
+    function formatAuthSignupError(err) {
+      var s = typeof err === 'string' ? err : ((err && err.message) ? String(err.message) : String(err || ''));
+      if (/signup.*disabled|signups.*disabled|email signups/i.test(s)) {
+        return 'Supabase has signups disabled. In the Supabase Dashboard: Authentication → Settings → allow new users to sign up. See docs/SUPABASE_SETUP.md.';
+      }
+      return s;
     }
     function updateAuthUI() {
       var user = window.supabaseAuth.getCurrentUser();
@@ -447,11 +515,22 @@
           var em = user.email || '';
           authUserEmail.textContent = em.indexOf('@flood-app.local') !== -1 ? em.replace(/@flood-app\.local$/, '') : (em || 'Logged in');
         }
+        if (userAuthBtn) {
+          var shortName = (user.email || '').indexOf('@flood-app.local') !== -1
+            ? (user.email || '').replace(/@flood-app\.local$/, '')
+            : (user.email || 'Account');
+          userAuthBtn.textContent = shortName.length > 12 ? shortName.slice(0, 11) + '…' : shortName;
+          userAuthBtn.title = 'Signed in — open account';
+        }
         showError('');
       } else {
         if (loggedOut) loggedOut.style.display = 'block';
         if (loggedIn) loggedIn.style.display = 'none';
         if (authUserEmail) authUserEmail.textContent = '';
+        if (userAuthBtn) {
+          userAuthBtn.textContent = 'Sign in';
+          userAuthBtn.title = 'Sign in or create an account';
+        }
       }
     }
     function refreshZonesAfterAuth() {
@@ -483,7 +562,7 @@
         if (!password) { showError('Enter exactly 4 digits for PIN'); return; }
         showError('');
         window.supabaseAuth.signIn(email, password, function (err) {
-          if (err) showError(err); else updateAuthUI();
+          if (err) showError(err); else { updateAuthUI(); closeAuthModal(); }
         });
       });
     }
@@ -495,7 +574,7 @@
         if (!password) { showError('Enter exactly 4 digits for PIN'); return; }
         showError('');
         window.supabaseAuth.signUp(email, password, function (err) {
-          if (err) showError(err); else updateAuthUI();
+          if (err) showError(formatAuthSignupError(err)); else { updateAuthUI(); closeAuthModal(); }
         });
       });
     }
@@ -503,6 +582,7 @@
       document.getElementById('authSignOut').addEventListener('click', function () {
         showError('');
         window.supabaseAuth.signOut();
+        closeAuthModal();
       });
     }
   }
@@ -763,6 +843,24 @@
     return day + " " + hour;
   }
 
+  /** Index of hourly sample closest to the client clock (for ±12 h window around “now”). */
+  function findClosestHourIndex(timeIsoStrings) {
+    if (!timeIsoStrings || !timeIsoStrings.length) return 0;
+    const now = Date.now();
+    let best = 0;
+    let bestDiff = Infinity;
+    for (let i = 0; i < timeIsoStrings.length; i++) {
+      const t = new Date(timeIsoStrings[i]).getTime();
+      if (isNaN(t)) continue;
+      const d = Math.abs(t - now);
+      if (d < bestDiff) {
+        bestDiff = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
   function drawHourlyChart(canvas) {
     if (!canvas || !lastRenderedHourlyData) return;
     const d = lastRenderedHourlyData;
@@ -899,6 +997,7 @@
     }
 
     let html = "";
+    let hourIndexForNow = 0;
 
     if (c) {
       const temp = c.temperature_2m != null ? c.temperature_2m + " °C" : "—";
@@ -918,10 +1017,22 @@
     if (h && h.time && h.time.length) {
       const precips = h.precipitation || h.rain || [];
       const codes = h.weather_code || [];
-      lastHourlyData = { lat: lat, lon: lon, time: h.time, precipitation: precips, weatherCode: codes };
-      const firstPrecip = precips[0] != null ? precips[0] : 0;
-      const firstCode = codes[0] != null ? codes[0] : 0;
-      showTimeSlider(h.time.length, h.time[0], getRainIntensityFromCondition(firstCode, firstPrecip));
+      const len = h.time.length;
+      hourIndexForNow = findClosestHourIndex(h.time);
+      // 24 hourly steps: 12 h before through 11 h after the hour nearest “now” (±12 h window)
+      let startIdx = Math.max(0, hourIndexForNow - 12);
+      let endIdx = Math.min(len - 1, hourIndexForNow + 11);
+      const sliderSteps = endIdx - startIdx + 1;
+      const initialSlider = hourIndexForNow - startIdx;
+      lastHourlyData = {
+        lat: lat,
+        lon: lon,
+        time: h.time,
+        precipitation: precips,
+        weatherCode: codes,
+        sliderStartIndex: startIdx,
+      };
+      showTimeSlider(sliderSteps, initialSlider, h.time[hourIndexForNow]);
       const temps = h.temperature_2m || [];
       const humids = h.relative_humidity_2m || [];
       const clouds = h.cloud_cover || [];
@@ -958,8 +1069,8 @@
       html += '<div id="hourlyGraphTooltip" class="graph-tooltip" aria-hidden="true"></div></div></div>';
       html += "</div>";
 
-      // First hour precip (mm): show rain zones when ≥0.1 / ≥0.5 / ≥1 mm
-      var precipForHour = (precips[0] != null && !isNaN(precips[0])) ? precips[0] : 0;
+      // Precip for hour nearest “now”: rain zones when ≥0.1 / ≥0.5 / ≥1 mm
+      var precipForHour = (precips[hourIndexForNow] != null && !isNaN(precips[hourIndexForNow])) ? precips[hourIndexForNow] : 0;
       try { if (window.gridManager && window.gridManager.setRainVisibility) window.gridManager.setRainVisibility(precipForHour); } catch (e) { /* ignore */ }
       var lr = document.getElementById('legendCurrentRain');
       if (lr) lr.textContent = (precipForHour != null && !isNaN(precipForHour)) ? Number(precipForHour).toFixed(2) + ' mm' : '—';
@@ -979,8 +1090,8 @@
       precipMm = c.precipitation != null ? c.precipitation : (c.rain != null ? c.rain : 0);
       weatherCode = c.weather_code != null ? c.weather_code : null;
     } else if (h && (h.precipitation || h.rain) && (h.precipitation || h.rain).length) {
-      precipMm = (h.precipitation || h.rain)[0] || 0;
-      weatherCode = (h.weather_code && h.weather_code[0]) != null ? h.weather_code[0] : null;
+      precipMm = (h.precipitation || h.rain)[hourIndexForNow] || 0;
+      weatherCode = (h.weather_code && h.weather_code[hourIndexForNow]) != null ? h.weather_code[hourIndexForNow] : null;
     }
     if (!h || !h.time || !h.time.length) {
       lastHourlyData = null;
@@ -991,16 +1102,16 @@
     updateRainEffect(lon, lat, effectivePrecip);
   }
 
-  function showTimeSlider(hourCount, firstTimeIso, firstPrecip) {
+  function showTimeSlider(sliderSteps, initialSliderValue, firstTimeIso) {
     const wrap = document.getElementById("timeSliderWrap");
     const slider = document.getElementById("timeSlider");
     const label = document.getElementById("timeSliderLabel");
     if (!wrap || !slider || !label) return;
-    // Today only: first 24 hours (indices 0–23)
-    const max = Math.max(0, Math.min(23, hourCount - 1));
+    const steps = Math.max(1, sliderSteps);
+    const max = steps - 1;
     slider.min = 0;
     slider.max = max;
-    slider.value = 0;
+    slider.value = Math.min(max, Math.max(0, initialSliderValue));
     label.textContent = formatHourlyTime(firstTimeIso);
     wrap.style.display = "block";
     wrap.setAttribute("aria-hidden", "false");
@@ -1018,7 +1129,9 @@
     const slider = document.getElementById("timeSlider");
     const label = document.getElementById("timeSliderLabel");
     if (!lastHourlyData || !slider || !label) return;
-    const index = parseInt(slider.value, 10);
+    const rel = parseInt(slider.value, 10);
+    const start = lastHourlyData.sliderStartIndex != null ? lastHourlyData.sliderStartIndex : 0;
+    const index = start + rel;
     const times = lastHourlyData.time;
     const precips = lastHourlyData.precipitation || [];
     const codes = lastHourlyData.weatherCode || [];
