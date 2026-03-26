@@ -1,6 +1,6 @@
 /**
  * Flood Awareness & Safe Decision-Making (?mission=decision-making)
- * Step 1: flow direction — South-East (1.png). Step 2: escape route — Blue & Green correct (2.png).
+ * Step 1: compass (1.png). Step 2: routes — Blue+Green (2.png). Step 3: same map — only “no path” (2.png, 1 m).
  *
  * Emits CustomEvent "decisionMaking:selection", window.__DECISION_MAKING_LAST_SELECTION__,
  * postMessage { type: "decisionMaking:selection", payload } from iframe.
@@ -81,6 +81,7 @@
       question:
         "Considering the flood flow direction and 0.5 m water depth, which route offers the safest escape to a less affected area?",
       mapFile: "2.png",
+      routeHint: "Select all safe routes.",
       correctAnswers: ["blue", "green"],
       options: [
         { id: "blue", label: "Blue Path" },
@@ -97,8 +98,52 @@
       wrong: {
         title: "Not Quite",
         body:
-          "Consider which paths move away from the river and flood flow. Blue and Green routes lead to higher ground.",
-        tryAgainLabel: "Try Again",
+          "There is a suitable escape route available.",
+        bodyHtml:
+          "There <em>is</em> a suitable escape route available.",
+        tryAgainLabel: "Try Again →",
+      },
+      wrongIncomplete: {
+        title: "Not Quite",
+        body: "Choose all correct answers.",
+        bodyHtml: "Choose <strong>all</strong> correct answers.",
+        tryAgainLabel: "Try Again →",
+      },
+    },
+    {
+      scenarioId: 3,
+      type: "routes",
+      questionId: "escape-route-1m",
+      question:
+        "Considering the flood flow direction and 1 m water depth, which route offers the safest escape to a less affected area?",
+      mapFile: "2.png",
+      routeHint: "Choose the option that matches this scenario, then tap Submit.",
+      correctAnswers: ["none"],
+      options: [
+        { id: "blue", label: "Blue Path" },
+        { id: "green", label: "Green Path" },
+        { id: "red", label: "Red Path" },
+        { id: "none", label: "There's no suitable path" },
+      ],
+      correct: {
+        title: "Good Job",
+        body:
+          "At 1 m depth, conditions can make every visible route unsafe. Recognising when there is no suitable path is an important part of flood decision-making.",
+        nextLabel: "Next",
+      },
+      wrong: {
+        title: "Not Quite",
+        body:
+          "At 1 m water depth, flooding is severe. Re-check whether any of these routes is still safe—or if none of them is.",
+        bodyHtml:
+          "At <strong>1 m</strong> water depth, flooding is severe. Re-check whether any route is still safe—or if <strong>none</strong> of them is.",
+        tryAgainLabel: "Try Again →",
+      },
+      wrongIncomplete: {
+        title: "Not Quite",
+        body: "Select an answer, then tap Submit.",
+        bodyHtml: "Select an answer, then tap <strong>Submit</strong>.",
+        tryAgainLabel: "Try Again →",
       },
     },
   ];
@@ -170,7 +215,7 @@
       if (modal) modal.hidden = true;
     }
 
-    function openModal(isCorrect) {
+    function openModal(isCorrect, wrongVariant) {
       if (!modal || !modalTitle || !modalBody || !modalBtn) return;
       var step = getStep();
       modal.hidden = false;
@@ -179,11 +224,21 @@
         modalBody.textContent = step.correct.body;
         modalBtn.textContent = step.correct.nextLabel;
         modalBtn.dataset.action = "next";
+        modalBtn.classList.remove("decision-making__modal-btn--inline");
       } else {
-        modalTitle.textContent = step.wrong.title;
-        modalBody.textContent = step.wrong.body;
-        modalBtn.textContent = step.wrong.tryAgainLabel;
+        var w = step.wrong;
+        if (step.type === "routes" && wrongVariant === "incomplete" && step.wrongIncomplete) {
+          w = step.wrongIncomplete;
+        }
+        modalTitle.textContent = w.title;
+        if (w.bodyHtml) {
+          modalBody.innerHTML = w.bodyHtml;
+        } else {
+          modalBody.textContent = w.body || "";
+        }
+        modalBtn.textContent = w.tryAgainLabel || "Try Again →";
         modalBtn.dataset.action = "tryAgain";
+        modalBtn.classList.add("decision-making__modal-btn--inline");
       }
     }
 
@@ -200,36 +255,88 @@
 
     function buildRoutes() {
       var step = getStep();
-      var correctIds = step.correctAnswers || [];
+      var correctIds = (step.correctAnswers || []).slice().sort();
       var wrap = document.createElement("div");
       wrap.className = "decision-making__routes";
+
+      var hint = document.createElement("p");
+      hint.className = "decision-making__route-hint";
+      hint.textContent = step.routeHint || "Select all correct routes, then tap Submit.";
+      wrap.appendChild(hint);
+
+      var inputs = [];
       (step.options || []).forEach(function (opt) {
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "decision-making__route-btn";
-        btn.dataset.optionId = opt.id;
-        btn.textContent = opt.label;
-        btn.setAttribute("aria-label", "Select " + opt.label);
-        btn.addEventListener("click", function () {
-          var isCorrect = correctIds.indexOf(opt.id) !== -1;
-          var detail = {
-            mission: "decision-making",
-            missionId: "decision-making",
-            questionId: step.questionId,
-            scenarioId: step.scenarioId,
-            stepIndex: stepIndex,
-            selectedOption: opt.id,
-            selectedLabel: opt.label,
-            correctAnswers: correctIds.slice(),
-            isCorrect: isCorrect,
-            at: new Date().toISOString(),
-          };
-          emitSelection(detail);
-          openModal(isCorrect);
-        });
-        wrap.appendChild(btn);
+        var lbl = document.createElement("label");
+        lbl.className = "decision-making__route-label";
+        var input = document.createElement("input");
+        input.type = "checkbox";
+        input.className = "decision-making__route-check";
+        input.value = opt.id;
+        input.setAttribute("aria-label", opt.label);
+        var span = document.createElement("span");
+        span.className = "decision-making__route-label-text";
+        span.textContent = opt.label;
+        lbl.appendChild(input);
+        lbl.appendChild(span);
+        inputs.push(input);
+        wrap.appendChild(lbl);
       });
+
+      var submit = document.createElement("button");
+      submit.type = "button";
+      submit.className = "decision-making__route-submit";
+      submit.textContent = "Submit";
+      submit.setAttribute("aria-label", "Submit route choices");
+      submit.addEventListener("click", function () {
+        var selected = inputs
+          .filter(function (inp) {
+            return inp.checked;
+          })
+          .map(function (inp) {
+            return inp.value;
+          })
+          .sort();
+        var isCorrect =
+          selected.length === correctIds.length &&
+          correctIds.every(function (id, i) {
+            return selected[i] === id;
+          });
+        var wrongVariant = "default";
+        if (!isCorrect) {
+          var onlyCorrectChoices =
+            selected.length === 0 ||
+            selected.every(function (id) {
+              return correctIds.indexOf(id) !== -1;
+            });
+          if (onlyCorrectChoices && selected.length < correctIds.length) {
+            wrongVariant = "incomplete";
+          }
+        }
+        var detail = {
+          mission: "decision-making",
+          missionId: "decision-making",
+          questionId: step.questionId,
+          scenarioId: step.scenarioId,
+          stepIndex: stepIndex,
+          selectedOptions: selected,
+          correctAnswers: correctIds.slice(),
+          isCorrect: isCorrect,
+          wrongVariant: isCorrect ? null : wrongVariant,
+          at: new Date().toISOString(),
+        };
+        emitSelection(detail);
+        openModal(isCorrect, wrongVariant);
+      });
+      wrap.appendChild(submit);
+
       compassEl.appendChild(wrap);
+    }
+
+    function clearRouteCheckboxes() {
+      if (!compassEl) return;
+      compassEl.querySelectorAll(".decision-making__route-check").forEach(function (inp) {
+        inp.checked = false;
+      });
     }
 
     function buildCompass() {
@@ -294,6 +401,9 @@
         if (modalBtn.dataset.action === "next") {
           advanceOrFinish();
         } else {
+          if (getStep().type === "routes") {
+            clearRouteCheckboxes();
+          }
           closeModal();
         }
       });

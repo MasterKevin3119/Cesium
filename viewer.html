@@ -822,10 +822,19 @@
             flex-direction: column;
             gap: 10px;
             width: 100%;
-            max-width: 200px;
+            max-width: 260px;
         }
-        .decision-making__route-btn {
-            padding: 12px 16px;
+        .decision-making__route-hint {
+            margin: 0 0 4px;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            color: #94a3b8;
+        }
+        .decision-making__route-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
             font-size: 0.95rem;
             font-weight: 600;
             color: #f1f5f9;
@@ -835,14 +844,37 @@
             cursor: pointer;
             transition: border-color 0.15s ease, background 0.15s ease;
         }
-        .decision-making__route-btn:hover {
-            border-color: rgba(56, 189, 248, 0.7);
-            background: rgba(51, 65, 85, 0.98);
+        .decision-making__route-label:hover {
+            border-color: rgba(56, 189, 248, 0.55);
         }
-        .decision-making__route-btn:focus {
+        .decision-making__route-check {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            accent-color: #38bdf8;
+            cursor: pointer;
+        }
+        .decision-making__route-label-text {
+            flex: 1;
+        }
+        .decision-making__route-submit {
+            margin-top: 6px;
+            padding: 12px 16px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #0f172a;
+            background: #f8fafc;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .decision-making__route-submit:hover {
+            background: #fff;
+        }
+        .decision-making__route-submit:focus {
             outline: none;
-            border-color: #38bdf8;
-            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.35);
         }
         .decision-making__dial {
             position: relative;
@@ -914,11 +946,13 @@
             transform: translate(-50%, -50%);
             z-index: 9992;
             width: min(440px, calc(100vw - 32px));
-            padding: 20px 20px 18px;
-            border-radius: 14px;
-            background: rgba(30, 41, 59, 0.96);
-            border: 1px solid rgba(148, 163, 184, 0.25);
-            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+            padding: 22px 22px 18px;
+            border-radius: 20px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
         }
         .decision-making__modal-head {
             display: flex;
@@ -947,10 +981,19 @@
         }
         .decision-making__modal-close:hover { background: rgba(255, 255, 255, 0.15); }
         .decision-making__modal-body {
-            margin: 0 0 16px;
+            margin: 0 0 18px;
             font-size: 0.95rem;
-            line-height: 1.5;
-            color: #cbd5e1;
+            line-height: 1.55;
+            color: #e2e8f0;
+            text-align: center;
+        }
+        .decision-making__modal-body em {
+            font-style: italic;
+            color: #f1f5f9;
+        }
+        .decision-making__modal-body strong {
+            font-weight: 600;
+            color: #fff;
         }
         .decision-making__modal-btn {
             width: 100%;
@@ -958,14 +1001,18 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            padding: 12px 16px;
+            padding: 12px 18px;
             font-size: 0.95rem;
             font-weight: 600;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             background: #f8fafc;
             color: #0f172a;
             cursor: pointer;
+        }
+        .decision-making__modal-btn.decision-making__modal-btn--inline {
+            width: auto;
+            align-self: flex-end;
         }
         .decision-making__modal-btn:hover { background: #fff; }
     </style>
