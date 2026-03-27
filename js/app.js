@@ -437,6 +437,12 @@
 
   function readUrlParams() {
     const params = new URLSearchParams(window.location.search);
+    try {
+      if (window.floodConfig && typeof window.floodConfig.setViewSourceKey === "function") {
+        const layout = params.get("layout");
+        if (layout != null && layout !== "") window.floodConfig.setViewSourceKey(layout);
+      }
+    } catch (e) { /* ignore */ }
     const lat = params.get("lat");
     const lon = params.get("lon");
     const height = params.get("height");
@@ -455,13 +461,26 @@
     var authError = document.getElementById('authError');
     var authUsername = document.getElementById('authUsername');
     var authPin = document.getElementById('authPin');
+    var authAdminCode = document.getElementById('authAdminCode');
+    /** Sign-up only: must match to set user metadata flood_is_admin (shown as Admin in UI). */
+    var FLOOD_ADMIN_SIGNUP_CODE = '3119';
     if (!panel || !window.supabaseAuth || !window.supabaseAuth.isReady()) {
       if (userAuthBtn) userAuthBtn.style.display = 'none';
       return;
     }
 
-    function openAuthModal() {
+    var authModalContext = document.getElementById('authModalContext');
+    function openAuthModal(contextText) {
       if (!modal) return;
+      if (authModalContext) {
+        if (contextText) {
+          authModalContext.textContent = contextText;
+          authModalContext.hidden = false;
+        } else {
+          authModalContext.textContent = '';
+          authModalContext.hidden = true;
+        }
+      }
       modal.hidden = false;
       modal.setAttribute('aria-hidden', 'false');
       document.body.style.overflow = 'hidden';
@@ -469,13 +488,21 @@
     }
     function closeAuthModal() {
       if (!modal) return;
+      if (authModalContext) {
+        authModalContext.textContent = '';
+        authModalContext.hidden = true;
+      }
       modal.hidden = true;
       modal.setAttribute('aria-hidden', 'true');
       document.body.style.overflow = '';
       showError('');
+      try { if (authAdminCode) authAdminCode.value = ''; } catch (e) { /* ignore */ }
     }
+    window.openFloodAuthModal = function (contextText) {
+      openAuthModal(contextText || '');
+    };
     if (userAuthBtn) {
-      userAuthBtn.addEventListener('click', function () { openAuthModal(); });
+      userAuthBtn.addEventListener('click', function () { openAuthModal(''); });
     }
     var closeBtn = document.getElementById('authModalClose');
     var backdrop = document.getElementById('authModalBackdrop');
@@ -506,32 +533,63 @@
       }
       return s;
     }
+    function accountDisplayName(user) {
+      if (!user) return '';
+      var em = user.email || '';
+      return em.indexOf('@flood-app.local') !== -1 ? em.replace(/@flood-app\.local$/, '') : (em || 'Account');
+    }
     function updateAuthUI() {
       var user = window.supabaseAuth.getCurrentUser();
         if (user) {
         if (loggedOut) loggedOut.style.display = 'none';
         if (loggedIn) loggedIn.style.display = 'block';
         if (authUserEmail) {
-          var em = user.email || '';
-          authUserEmail.textContent = em.indexOf('@flood-app.local') !== -1 ? em.replace(/@flood-app\.local$/, '') : (em || 'Logged in');
+          var nm = accountDisplayName(user);
+          authUserEmail.textContent = user.isAdmin ? (nm + ' · Admin') : nm;
         }
         if (userAuthBtn) {
-          var shortName = (user.email || '').indexOf('@flood-app.local') !== -1
-            ? (user.email || '').replace(/@flood-app\.local$/, '')
-            : (user.email || 'Account');
-          userAuthBtn.textContent = shortName.length > 12 ? shortName.slice(0, 11) + '…' : shortName;
-          userAuthBtn.title = 'Signed in — open account';
+          var shortName = accountDisplayName(user);
+          var btnLabel = user.isAdmin ? (shortName + ' (Admin)') : shortName;
+          if (btnLabel.length > 18) btnLabel = btnLabel.slice(0, 17) + '…';
+          userAuthBtn.textContent = btnLabel;
+          userAuthBtn.title = user.isAdmin ? 'Signed in as admin — open account' : 'Signed in — open account';
+          userAuthBtn.classList.toggle('mc-header-btn--admin', !!user.isAdmin);
         }
         showError('');
+        try {
+          if (window._floodPendingAdminEnable && window.adminMode && typeof window.adminMode.enableAfterAuth === 'function') {
+            window._floodPendingAdminEnable = false;
+            if (user.isAdmin) {
+              window.adminMode.enableAfterAuth();
+              closeAuthModal();
+            } else {
+              showError('Only admin accounts can edit flood zones. Sign up using the admin code, or sign in with an admin account.');
+            }
+          }
+        } catch (e) { /* ignore */ }
+        var adminModeBtn = document.getElementById('adminModeBtn');
+        if (adminModeBtn) {
+          if (user.isAdmin) adminModeBtn.style.removeProperty('display');
+          else adminModeBtn.style.display = 'none';
+        }
       } else {
+        try { if (window.adminMode && typeof window.adminMode.disableAfterLogout === 'function') window.adminMode.disableAfterLogout(); } catch (e) { /* ignore */ }
         if (loggedOut) loggedOut.style.display = 'block';
         if (loggedIn) loggedIn.style.display = 'none';
         if (authUserEmail) authUserEmail.textContent = '';
         if (userAuthBtn) {
           userAuthBtn.textContent = 'Sign in';
           userAuthBtn.title = 'Sign in or create an account';
+          userAuthBtn.classList.remove('mc-header-btn--admin');
         }
+        var adminModeBtnOut = document.getElementById('adminModeBtn');
+        if (adminModeBtnOut) adminModeBtnOut.style.removeProperty('display');
       }
+      try {
+        if (window.adminMode && typeof window.adminMode.synchronizeEditorWithAccount === 'function') {
+          window.adminMode.synchronizeEditorWithAccount();
+        }
+      } catch (e) { /* ignore */ }
     }
     function refreshZonesAfterAuth() {
       try {
@@ -543,16 +601,17 @@
       } catch (e) { /* ignore */ }
     }
 
-    window.supabaseAuth.getAuthForApi(function () {
-      updateAuthUI();
-      refreshZonesAfterAuth();
-    });
-    window.supabaseAuth.onAuthChange(function () {
+    function authRefreshUi() {
       window.supabaseAuth.getAuthForApi(function () {
         updateAuthUI();
         refreshZonesAfterAuth();
+        try {
+          if (typeof window.rebuildFloodMapSourceSelect === "function") window.rebuildFloodMapSourceSelect();
+        } catch (e) { /* ignore */ }
       });
-    });
+    }
+    authRefreshUi();
+    window.supabaseAuth.onAuthChange(authRefreshUi);
 
     if (document.getElementById('authSignIn')) {
       document.getElementById('authSignIn').addEventListener('click', function () {
@@ -562,7 +621,9 @@
         if (!password) { showError('Enter exactly 4 digits for PIN'); return; }
         showError('');
         window.supabaseAuth.signIn(email, password, function (err) {
-          if (err) showError(err); else { updateAuthUI(); closeAuthModal(); }
+          if (err) { showError(err); return; }
+          authRefreshUi();
+          closeAuthModal();
         });
       });
     }
@@ -573,9 +634,19 @@
         if (!email) { showError('Username: letters, numbers, _ or - (min 2 chars)'); return; }
         if (!password) { showError('Enter exactly 4 digits for PIN'); return; }
         showError('');
+        var adminRaw = authAdminCode ? String(authAdminCode.value).trim() : '';
+        var signUpOpts = {};
+        if (adminRaw === FLOOD_ADMIN_SIGNUP_CODE) {
+          signUpOpts.userData = { flood_is_admin: true };
+        } else if (adminRaw.length > 0 && adminRaw !== FLOOD_ADMIN_SIGNUP_CODE) {
+          showError('Admin code is not valid. Leave the field empty or use the correct code when signing up.');
+          return;
+        }
         window.supabaseAuth.signUp(email, password, function (err) {
-          if (err) showError(formatAuthSignupError(err)); else { updateAuthUI(); closeAuthModal(); }
-        });
+          if (err) { showError(formatAuthSignupError(err)); return; }
+          authRefreshUi();
+          closeAuthModal();
+        }, signUpOpts);
       });
     }
     if (document.getElementById('authSignOut')) {
@@ -705,6 +776,122 @@
     }
 
     // Admin button is wired in adminMode.init() (called once at startup)
+  }
+
+  function initFloodMapSourceUI() {
+    var wrap = document.getElementById("floodMapSourceWrap");
+    var sel = document.getElementById("floodMapSourceSelect");
+    if (!wrap || !sel || !window.floodConfig) return;
+    if (!window.floodConfig.isSupabaseReady()) {
+      wrap.style.display = "none";
+      window.rebuildFloodMapSourceSelect = function () {};
+      return;
+    }
+
+    function syncPublishButton() {
+      var pubBtn = document.getElementById("btnPublishScenario");
+      if (!pubBtn) return;
+      var show = !!(window.supabaseAuth && typeof window.supabaseAuth.isFloodAdmin === "function" && window.supabaseAuth.isFloodAdmin());
+      pubBtn.style.display = show ? "" : "none";
+      if (!show) {
+        var pan = document.getElementById("publishScenarioPanel");
+        if (pan) pan.hidden = true;
+      }
+    }
+
+    function applyLayoutFromSelect() {
+      window.floodConfig.setViewSourceKey(sel.value);
+      window.floodConfig.pullFromSupabase(function () {
+        try {
+          if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals();
+        } catch (e) { /* ignore */ }
+      });
+    }
+
+    function rebuildFloodMapSourceSelect(after) {
+      syncPublishButton();
+      if (!window.supabaseAuth || typeof window.supabaseAuth.getAuthForApi !== "function") {
+        if (typeof after === "function") after();
+        return;
+      }
+      window.supabaseAuth.getAuthForApi(function (auth) {
+        window.floodConfig.listPublishedScenarios(function (rows) {
+          var stored = window.floodConfig.getViewSourceKey();
+          var selKey = stored;
+          if (selKey === "__mine__" && !auth) selKey = "default";
+          if (selKey == null) selKey = auth ? "__mine__" : "default";
+          sel.innerHTML = "";
+          function opt(v, t) {
+            var o = document.createElement("option");
+            o.value = v;
+            o.textContent = t;
+            sel.appendChild(o);
+          }
+          opt("default", "Public · default map");
+          if (auth) opt("__mine__", "My saved zones");
+          rows.forEach(function (r) {
+            opt(r.map_id, "Scenario · " + window.floodConfig.scenarioDisplayLabel(r.map_id, r.label));
+          });
+          var has = false;
+          for (var i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].value === selKey) {
+              has = true;
+              break;
+            }
+          }
+          if (!has) {
+            selKey = auth ? "__mine__" : "default";
+            window.floodConfig.setViewSourceKey(selKey);
+          }
+          sel.value = selKey;
+          if (typeof after === "function") after();
+        });
+      });
+    }
+
+    window.rebuildFloodMapSourceSelect = function (after) {
+      rebuildFloodMapSourceSelect(after);
+    };
+
+    sel.addEventListener("change", applyLayoutFromSelect);
+
+    var pubBtn = document.getElementById("btnPublishScenario");
+    var pubPanel = document.getElementById("publishScenarioPanel");
+    var pubInput = document.getElementById("publishScenarioName");
+    var pubGo = document.getElementById("publishScenarioConfirm");
+    var pubCancel = document.getElementById("publishScenarioCancel");
+    var pubStat = document.getElementById("publishScenarioStatus");
+    if (pubBtn && pubPanel && pubInput && pubGo && pubCancel && pubStat) {
+      pubBtn.addEventListener("click", function () {
+        pubStat.textContent = "";
+        pubInput.value = "";
+        pubPanel.hidden = false;
+        try {
+          pubInput.focus();
+        } catch (e) { /* ignore */ }
+      });
+      pubCancel.addEventListener("click", function () {
+        pubPanel.hidden = true;
+      });
+      pubGo.addEventListener("click", function () {
+        pubStat.textContent = "";
+        if (!window.supabaseAuth || typeof window.supabaseAuth.isFloodAdmin !== "function" || !window.supabaseAuth.isFloodAdmin()) {
+          pubStat.textContent = "Only flood admins can publish.";
+          return;
+        }
+        window.floodConfig.publishScenario(pubInput.value, function (ok, err, slug) {
+          if (!ok) {
+            pubStat.textContent = err || "Publish failed";
+            return;
+          }
+          pubPanel.hidden = true;
+          window.floodConfig.setViewSourceKey(slug);
+          rebuildFloodMapSourceSelect(applyLayoutFromSelect);
+        });
+      });
+    }
+
+    rebuildFloodMapSourceSelect();
   }
 
   const WEATHER_API = "https://api.open-meteo.com/v1/forecast";
@@ -1268,6 +1455,13 @@
     url.searchParams.set("lat", lat.toFixed(6));
     url.searchParams.set("lon", lon.toFixed(6));
     url.searchParams.set("height", Math.round(height));
+    try {
+      if (window.floodConfig && typeof window.floodConfig.getViewSourceKey === "function") {
+        const lk = window.floodConfig.getViewSourceKey();
+        if (lk != null && lk !== "") url.searchParams.set("layout", lk);
+        else url.searchParams.delete("layout");
+      }
+    } catch (e) { /* ignore */ }
     return url.toString();
   }
 
@@ -1409,6 +1603,13 @@
       try { if (window.gridManager && typeof window.gridManager.init === 'function') window.gridManager.init(viewer); } catch (e) { /* ignore */ }
       renderZoneGrid();
       try {
+        if (window.floodConfig && typeof window.floodConfig.setViewSourceKey === "function") {
+          const p = new URLSearchParams(window.location.search);
+          const ly = p.get("layout");
+          if (ly != null && ly !== "") window.floodConfig.setViewSourceKey(ly);
+        }
+      } catch (e) { /* ignore */ }
+      try {
         if (window.floodConfig && typeof window.floodConfig.pullFromSupabase === 'function') {
           window.floodConfig.pullFromSupabase(function (ok) {
             if (ok) {
@@ -1434,6 +1635,7 @@
     initTimeSlider();
     // Flood controls in the coords/weather panel
     try { initFloodControls(); } catch (e) { /* ignore */ }
+    try { initFloodMapSourceUI(); } catch (e) { /* ignore */ }
     try { initAuthPanel(); } catch (e) { /* ignore */ }
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("lat") == null || urlParams.get("lon") == null) {

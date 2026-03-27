@@ -25,6 +25,20 @@
     return cachedUser;
   }
 
+  function userFromSupabaseUser(u) {
+    if (!u) return null;
+    var meta = u.user_metadata || {};
+    var appMeta = u.app_metadata || {};
+    var flag = meta.flood_is_admin;
+    if (flag !== true && flag !== 'true') flag = appMeta.flood_is_admin;
+    var isAdmin = flag === true || flag === 'true';
+    return {
+      id: u.id,
+      email: u.email || '',
+      isAdmin: isAdmin,
+    };
+  }
+
   /**
    * Call cb with { token, userId } when logged in (for API calls), or cb(null) when not.
    * Use this before fetch to Supabase so RLS sees the user.
@@ -44,9 +58,19 @@
         cb(null);
         return;
       }
-      cachedUser = { id: session.user.id, email: session.user.email || '' };
       cachedToken = session.access_token || null;
-      cb(cachedToken ? { token: cachedToken, userId: session.user.id } : null);
+      cachedUser = userFromSupabaseUser(session.user);
+      var uid = session.user.id;
+      function finish() {
+        cb(cachedToken ? { token: cachedToken, userId: uid } : null);
+      }
+      if (c.auth.getUser) {
+        c.auth.getUser().then(function (ur) {
+          if (ur && !ur.error && ur.data && ur.data.user) cachedUser = userFromSupabaseUser(ur.data.user);
+        }).catch(function () { /* keep session-based user */ }).then(finish);
+      } else {
+        finish();
+      }
     }).catch(function () {
       cachedUser = null;
       cachedToken = null;
@@ -71,16 +95,26 @@
       });
   }
 
-  function signUp(email, password, done) {
+  /**
+   * @param {function} done
+   * @param {object} [opts] opts.userData — merged into signUp options.data (e.g. { flood_is_admin: true })
+   */
+  function signUp(email, password, done, opts) {
     var c = getClient();
     if (!c) {
       if (done) done(new Error('Supabase not configured'), null);
       return;
     }
-    c.auth.signUp({ email: email, password: password })
+    opts = opts || {};
+    var payload = { email: email, password: password };
+    if (opts.userData && typeof opts.userData === 'object') {
+      payload.options = { data: opts.userData };
+    }
+    c.auth.signUp(payload)
       .then(function (r) {
         var err = r.error ? (r.error.message || 'Sign up failed') : null;
-        if (done) done(err, err ? null : (r.data && r.data.user ? { id: r.data.user.id, email: r.data.user.email } : null));
+        var u = r.data && r.data.user ? userFromSupabaseUser(r.data.user) : null;
+        if (done) done(err, err ? null : u);
         if (!err && authCallback) authCallback();
       })
       .catch(function (e) {
@@ -118,6 +152,10 @@
     signUp: signUp,
     signOut: signOut,
     onAuthChange: onAuthChange,
-    isReady: function () { return getClient() !== null; }
+    isReady: function () { return getClient() !== null; },
+    isFloodAdmin: function () {
+      var u = getCurrentUser();
+      return !!(u && u.isAdmin);
+    },
   };
 })();

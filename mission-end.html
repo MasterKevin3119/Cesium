@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mission complete — Flood Simulator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path fill='%2338bdf8' d='M16 4c-2 4-8 10-8 16a8 8 0 0 0 16 0c0-6-6-12-8-16z'/></svg>" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="mission-pages.css" />
+</head>
+<body>
+  <div class="mission-shell">
+    <header class="mission-shell__header">
+      <a class="logo" href="index.html">Flood Simulator</a>
+      <nav class="mission-shell__nav" aria-label="Mission navigation">
+        <a href="index.html#mission">All missions</a>
+        <a href="viewer.html">Simulation</a>
+      </nav>
+    </header>
+    <main class="mission-shell__main">
+      <span class="mission-shell__badge">Complete</span>
+      <h1 class="mission-shell__title mission-end__title" id="endTitle">Mission complete</h1>
+      <p class="mission-end__sub" id="endSub"></p>
+      <div class="mission-actions">
+        <a class="btn btn-primary" id="btnNextMission" href="index.html#mission">Next</a>
+        <a class="btn btn-secondary" id="btnMissionHub" href="index.html#mission">Back to missions</a>
+      </div>
+    </main>
+  </div>
+  <script>
+    (function () {
+      var ORDER = [
+        { id: "read-water", label: "Read The Water", intro: "mission-read-water.html", play: "viewer.html?mission=read-water" },
+        { id: "flooded-areas", label: "Identify Flooded Areas", intro: "mission-flooded-areas.html", play: "viewer.html?mission=flooded-areas" },
+        { id: "decision-making", label: "Flood Awareness & Decision Making", intro: "mission-decision-making.html", play: "viewer.html?mission=decision-making" }
+      ];
+      var params = new URLSearchParams(window.location.search);
+      var completed = params.get("completed") || "";
+      var idx = ORDER.findIndex(function (m) { return m.id === completed; });
+
+      var titleEl = document.getElementById("endTitle");
+      var subEl = document.getElementById("endSub");
+      var btnNext = document.getElementById("btnNextMission");
+      var btnHub = document.getElementById("btnMissionHub");
+
+      if (titleEl) titleEl.textContent = "Mission complete";
+
+      if (idx < 0) {
+        if (subEl) subEl.textContent = "Thanks for playing. Return to the mission list when you are ready.";
+        if (btnNext) btnNext.hidden = true;
+      } else {
+        var mission = ORDER[idx];
+        if (subEl) {
+          subEl.textContent =
+            "You finished " + mission.label + ". Go to the next mission or return to the mission list.";
+        }
+        var next = ORDER[idx + 1];
+        if (btnNext) {
+          if (next) {
+            btnNext.textContent = "Next mission";
+            btnNext.href = next.intro;
+          } else {
+            btnNext.textContent = "Play again";
+            btnNext.href = mission.intro;
+          }
+        }
+      }
+
+      if (btnHub) {
+        btnHub.textContent = "Back to missions";
+        btnHub.href = "index.html#mission";
+      }
+    })();
+  </script>
+</body>
+</html>

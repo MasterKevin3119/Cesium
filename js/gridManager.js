@@ -38,6 +38,9 @@
 
   function saveSelection(level) {
     try {
+      if (window.adminMode && typeof window.adminMode.isFloodEditorAccount === 'function' && !window.adminMode.isFloodEditorAccount()) return;
+    } catch (e) { /* ignore */ }
+    try {
       if (window.floodConfig && typeof window.floodConfig.setZones === 'function') {
         window.floodConfig.setZones(level, tempSelection);
       }
@@ -61,9 +64,7 @@
 
   function setCurrentFloodLevel(level) {
     if (level === 'none') {
-      showLevel30 = false;
-      showLevel60 = false;
-      showLevel100 = false;
+      // Clear only 0.5 m / 1 m flood demo; keep rain tier flags (live hourly data from setRainVisibility).
       showLevel05 = false;
       showLevel1 = false;
     } else if (level === '30') {

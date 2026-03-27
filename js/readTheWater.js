@@ -250,7 +250,7 @@
         buildGrid();
         closeModal();
       } else {
-        window.location.href = "index.html";
+        window.location.href = "mission-end.html?completed=read-water";
       }
     }
 

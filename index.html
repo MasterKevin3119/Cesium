@@ -338,12 +338,31 @@
             margin: 0;
             font-size: 0.875rem;
         }
-        /* Mission mini-game / trivia cards */
+        /* Mission mini-game / trivia cards — one row in .wrap; stack & center on small screens */
+        #mission > h2,
+        #mission > p:first-of-type {
+            text-align: center;
+        }
+        #mission > p:first-of-type {
+            max-width: 40em;
+            margin-left: auto;
+            margin-right: auto;
+        }
         .mission-cards {
             display: grid;
-            gap: 1.25rem;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             margin-top: 1.5rem;
+            width: 100%;
+            align-items: stretch;
+        }
+        @media (max-width: 700px) {
+            .mission-cards {
+                grid-template-columns: 1fr;
+                max-width: 22rem;
+                margin-left: auto;
+                margin-right: auto;
+            }
         }
         a.card.mission-card {
             display: flex;
@@ -475,6 +494,11 @@
             border-top: 1px solid rgba(148, 163, 184, 0.15);
             font-size: 0.85rem;
             color: var(--muted);
+            text-align: center;
+        }
+        footer .cta-row {
+            justify-content: center;
+            margin-bottom: 0;
         }
     </style>
 </head>
@@ -559,35 +583,35 @@
         <section id="mission">
             <h2>Mission</h2>
             <p style="margin-bottom: 1.5rem;">
-                The mission page guides users through the simulation's key learning objectives. Each mission opens a mini-game or trivia in the simulator—tap a card to start.
+                Open a mission to read what you will do, then tap <strong>Play</strong> to start in the simulator. When you finish, you can continue to the next mission or return here.
             </p>
             <div class="mission-cards">
-                <a class="card mission-card" href="viewer.html?mission=read-water">
+                <a class="card mission-card" href="mission-read-water.html">
                     <span class="mission-card__icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
                     </span>
                     <span class="mission-card__badge">Mini-game</span>
                     <h3>Read The Water</h3>
                     <p>Learn what <strong>0.5 m</strong> and <strong>1.0 m</strong> flood depths look like—quick visual challenges.</p>
-                    <span class="mission-card__cta">Start <span aria-hidden="true">→</span></span>
+                    <span class="mission-card__cta">Open mission <span aria-hidden="true">→</span></span>
                 </a>
-                <a class="card mission-card" href="viewer.html?mission=flooded-areas">
+                <a class="card mission-card" href="mission-flooded-areas.html">
                     <span class="mission-card__icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                     </span>
                     <span class="mission-card__badge">Mini-game</span>
                     <h3>Identify Flooded Areas</h3>
                     <p>See how floodwater spreads—interactive prompts on which zones flood first.</p>
-                    <span class="mission-card__cta">Start <span aria-hidden="true">→</span></span>
+                    <span class="mission-card__cta">Open mission <span aria-hidden="true">→</span></span>
                 </a>
-                <a class="card mission-card" href="viewer.html?mission=decision-making">
+                <a class="card mission-card" href="mission-decision-making.html">
                     <span class="mission-card__icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
                     </span>
                     <span class="mission-card__badge">Mini-game</span>
                     <h3>Flood Awareness &amp; Decision Making</h3>
                     <p>This mission teaches players to read flood flow, choose safe routes, and make critical decisions when evacuation is no longer possible.</p>
-                    <span class="mission-card__cta">Start <span aria-hidden="true">→</span></span>
+                    <span class="mission-card__cta">Open mission <span aria-hidden="true">→</span></span>
                 </a>
             </div>
         </section>
@@ -595,7 +619,7 @@
         <div class="section-divider"></div>
 
         <footer>
-            <div class="cta-row" style="margin-bottom: 0;">
+            <div class="cta-row">
                 <a class="btn btn-primary" href="viewer.html">Try now!</a>
             </div>
         </footer>

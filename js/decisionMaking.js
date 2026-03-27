@@ -1,6 +1,6 @@
 /**
  * Flood Awareness & Safe Decision-Making (?mission=decision-making)
- * Step 1: compass (1.png). Step 2: routes — Blue+Green (2.png). Step 3: same map — only “no path” (2.png, 1 m).
+ * Step 1: compass (1.png). Step 2–3: routes (2.png); feedback uses assets/escape-route/*.mp4 (no video when step 3 correct).
  *
  * Emits CustomEvent "decisionMaking:selection", window.__DECISION_MAKING_LAST_SELECTION__,
  * postMessage { type: "decisionMaking:selection", payload } from iframe.
@@ -9,6 +9,7 @@
   "use strict";
 
   var ASSETS_BASE = "assets/decision-making/";
+  var ESCAPE_ROUTE_VIDEO_BASE = "assets/escape-route/";
 
   /** Order around the compass dial (0° = N, 90° = E). */
   var COMPASS_DIRECTIONS = [
@@ -81,7 +82,7 @@
       question:
         "Considering the flood flow direction and 0.5 m water depth, which route offers the safest escape to a less affected area?",
       mapFile: "2.png",
-      routeHint: "Select all safe routes.",
+      routeHint: "Select Blue and/or Green if they are safe for this scenario, then tap Submit.",
       correctAnswers: ["blue", "green"],
       options: [
         { id: "blue", label: "Blue Path" },
@@ -90,24 +91,39 @@
         { id: "none", label: "There's no suitable path" },
       ],
       correct: {
-        title: "Good Job",
+        title: "Good choice",
         body:
-          "Well done! Blue and Green paths both offer safe escape routes away from the main flood flow.",
+          "This route remains dry and avoids flooded road sections. Dry roads reduce the risk of slipping, vehicle stalling, and being caught by moving water, making evacuation safer.",
+        bodyHtml:
+          "This route remains dry and avoids flooded road sections.<br><br>Dry roads reduce the risk of slipping, vehicle stalling, and being caught by moving water, making evacuation safer.",
         nextLabel: "Next",
       },
       wrong: {
         title: "Not Quite",
         body:
-          "There is a suitable escape route available.",
+          "This route passes through flooded road sections. Flooded roads can hide strong currents, uneven surfaces, and debris, increasing the risk during evacuation.",
         bodyHtml:
-          "There <em>is</em> a suitable escape route available.",
+          "This route passes through flooded road sections.<br><br>Flooded roads can hide strong currents, uneven surfaces, and debris, increasing the risk during evacuation.",
         tryAgainLabel: "Try Again →",
       },
       wrongIncomplete: {
         title: "Not Quite",
-        body: "Choose all correct answers.",
-        bodyHtml: "Choose <strong>all</strong> correct answers.",
+        body: "Select at least one route (Blue or Green), then tap Submit.",
+        bodyHtml: "Select at least one route (<strong>Blue</strong> or <strong>Green</strong>), then tap <strong>Submit</strong>.",
         tryAgainLabel: "Try Again →",
+      },
+      wrongNoneAt05: {
+        title: "Not Quite",
+        body: "There is a suitable route",
+        bodyHtml: "There is a suitable route",
+        tryAgainLabel: "Try Again →",
+      },
+      feedbackVideos: {
+        correctFiles: {
+          blue: "blue-0.5m.mp4",
+          green: "green-0.5m.mp4",
+        },
+        wrong: "red-0.5m.mp4",
       },
     },
     {
@@ -128,15 +144,17 @@
       correct: {
         title: "Good Job",
         body:
-          "At 1 m depth, conditions can make every visible route unsafe. Recognising when there is no suitable path is an important part of flood decision-making.",
+          "That's right. All available routes are already flooded and unsafe to use. This highlights why early evacuation is critical; leaving earlier provides safer options and reduces risk during floods.",
+        bodyHtml:
+          "That's right. All available routes are already flooded and unsafe to use.<br><br>This highlights why early evacuation is critical; leaving earlier provides safer options and reduces risk during floods.",
         nextLabel: "Next",
       },
       wrong: {
         title: "Not Quite",
         body:
-          "At 1 m water depth, flooding is severe. Re-check whether any of these routes is still safe—or if none of them is.",
+          "This route is covered by floodwater and is unsafe for evacuation. When all routes are flooded, attempting to escape can be more dangerous than staying put and seeking higher ground.",
         bodyHtml:
-          "At <strong>1 m</strong> water depth, flooding is severe. Re-check whether any route is still safe—or if <strong>none</strong> of them is.",
+          "This route is covered by floodwater and is unsafe for evacuation.<br><br>When all routes are flooded, attempting to escape can be more dangerous than staying put and seeking higher ground.",
         tryAgainLabel: "Try Again →",
       },
       wrongIncomplete: {
@@ -144,6 +162,10 @@
         body: "Select an answer, then tap Submit.",
         bodyHtml: "Select an answer, then tap <strong>Submit</strong>.",
         tryAgainLabel: "Try Again →",
+      },
+      feedbackVideos: {
+        correct: null,
+        wrong: "red-1m.mp4",
       },
     },
   ];
@@ -195,8 +217,84 @@
     var modalBody = root.querySelector(".decision-making__modal-body");
     var modalBtn = root.querySelector(".decision-making__modal-btn");
     var modalClose = root.querySelector(".decision-making__modal-close");
+    var modalMedia = root.querySelector(".decision-making__modal-media");
 
     var stepIndex = 0;
+
+    function pauseModalVideos() {
+      if (!modalMedia) return;
+      modalMedia.querySelectorAll("video").forEach(function (v) {
+        try {
+          v.pause();
+        } catch (e) {
+          /* ignore */
+        }
+      });
+      modalMedia.innerHTML = "";
+      modalMedia.hidden = true;
+      modalMedia.setAttribute("aria-hidden", "true");
+    }
+
+    function showFeedbackVideos(relPaths) {
+      if (!modalMedia || !relPaths || relPaths.length === 0) {
+        pauseModalVideos();
+        return;
+      }
+      modalMedia.innerHTML = "";
+      relPaths.forEach(function (name) {
+        var v = document.createElement("video");
+        v.className = "decision-making__modal-video";
+        v.setAttribute("controls", "");
+        v.setAttribute("playsinline", "");
+        v.preload = "metadata";
+        v.src = ESCAPE_ROUTE_VIDEO_BASE + name;
+        modalMedia.appendChild(v);
+      });
+      modalMedia.hidden = false;
+      modalMedia.setAttribute("aria-hidden", "false");
+      modalMedia.querySelectorAll("video").forEach(function (v) {
+        try {
+          var p = v.play();
+          if (p && typeof p.catch === "function") {
+            p.catch(function () {
+              /* autoplay blocked */
+            });
+          }
+        } catch (e) {
+          /* ignore */
+        }
+      });
+    }
+
+    function feedbackVideoPathsForStep(step, isCorrect, wrongVariant, routeSelected) {
+      if (step.type !== "routes" || !step.feedbackVideos) return null;
+      var fv = step.feedbackVideos;
+      var numCorrect = (step.correctAnswers || []).length;
+      if (isCorrect) {
+        if (fv.correctFiles && step.questionId === "escape-route-1") {
+          var order = ["blue", "green"];
+          var out = [];
+          order.forEach(function (id) {
+            if (routeSelected && routeSelected.indexOf(id) !== -1 && fv.correctFiles[id]) {
+              out.push(fv.correctFiles[id]);
+            }
+          });
+          return out.length ? out : null;
+        }
+        var c = fv.correct;
+        if (c == null || (Array.isArray(c) && c.length === 0)) return null;
+        return Array.isArray(c) ? c : [c];
+      }
+      if (numCorrect > 1 && wrongVariant === "incomplete") {
+        return null;
+      }
+      if (step.questionId === "escape-route-1" && wrongVariant === "noneAt05") {
+        return null;
+      }
+      var w = fv.wrong;
+      if (!w) return null;
+      return Array.isArray(w) ? w : [w];
+    }
 
     function getStep() {
       return STEPS[stepIndex];
@@ -212,16 +310,22 @@
     }
 
     function closeModal() {
+      pauseModalVideos();
       if (modal) modal.hidden = true;
     }
 
-    function openModal(isCorrect, wrongVariant) {
+    function openModal(isCorrect, wrongVariant, routeSelected) {
       if (!modal || !modalTitle || !modalBody || !modalBtn) return;
       var step = getStep();
       modal.hidden = false;
+      pauseModalVideos();
       if (isCorrect) {
         modalTitle.textContent = step.correct.title;
-        modalBody.textContent = step.correct.body;
+        if (step.correct.bodyHtml) {
+          modalBody.innerHTML = step.correct.bodyHtml;
+        } else {
+          modalBody.textContent = step.correct.body;
+        }
         modalBtn.textContent = step.correct.nextLabel;
         modalBtn.dataset.action = "next";
         modalBtn.classList.remove("decision-making__modal-btn--inline");
@@ -229,6 +333,9 @@
         var w = step.wrong;
         if (step.type === "routes" && wrongVariant === "incomplete" && step.wrongIncomplete) {
           w = step.wrongIncomplete;
+        }
+        if (step.type === "routes" && wrongVariant === "noneAt05" && step.wrongNoneAt05) {
+          w = step.wrongNoneAt05;
         }
         modalTitle.textContent = w.title;
         if (w.bodyHtml) {
@@ -239,6 +346,10 @@
         modalBtn.textContent = w.tryAgainLabel || "Try Again →";
         modalBtn.dataset.action = "tryAgain";
         modalBtn.classList.add("decision-making__modal-btn--inline");
+      }
+      var vids = feedbackVideoPathsForStep(step, isCorrect, wrongVariant, routeSelected);
+      if (vids && vids.length) {
+        showFeedbackVideos(vids);
       }
     }
 
@@ -251,6 +362,17 @@
         return;
       }
       buildCompass();
+    }
+
+    function updateRouteSubmitEnabled() {
+      if (!compassEl) return;
+      var submitBtn = compassEl.querySelector(".decision-making__route-submit");
+      if (!submitBtn) return;
+      var any = false;
+      compassEl.querySelectorAll(".decision-making__route-check").forEach(function (inp) {
+        if (inp.checked) any = true;
+      });
+      submitBtn.disabled = !any;
     }
 
     function buildRoutes() {
@@ -279,6 +401,7 @@
         lbl.appendChild(input);
         lbl.appendChild(span);
         inputs.push(input);
+        input.addEventListener("change", updateRouteSubmitEnabled);
         wrap.appendChild(lbl);
       });
 
@@ -287,6 +410,7 @@
       submit.className = "decision-making__route-submit";
       submit.textContent = "Submit";
       submit.setAttribute("aria-label", "Submit route choices");
+      submit.disabled = true;
       submit.addEventListener("click", function () {
         var selected = inputs
           .filter(function (inp) {
@@ -296,20 +420,37 @@
             return inp.value;
           })
           .sort();
-        var isCorrect =
-          selected.length === correctIds.length &&
-          correctIds.every(function (id, i) {
-            return selected[i] === id;
-          });
+        if (selected.length === 0) return;
+        var isCorrect;
         var wrongVariant = "default";
-        if (!isCorrect) {
-          var onlyCorrectChoices =
-            selected.length === 0 ||
+        if (step.questionId === "escape-route-1") {
+          var safeIds = step.correctAnswers || ["blue", "green"];
+          var onlySafePicked =
+            selected.length > 0 &&
             selected.every(function (id) {
-              return correctIds.indexOf(id) !== -1;
+              return safeIds.indexOf(id) !== -1;
             });
-          if (onlyCorrectChoices && selected.length < correctIds.length) {
+          isCorrect = onlySafePicked;
+          if (!isCorrect && selected.length === 0) {
             wrongVariant = "incomplete";
+          } else if (!isCorrect && selected.indexOf("none") !== -1) {
+            wrongVariant = "noneAt05";
+          }
+        } else {
+          isCorrect =
+            selected.length === correctIds.length &&
+            correctIds.every(function (id, i) {
+              return selected[i] === id;
+            });
+          if (!isCorrect) {
+            var onlyCorrectChoices =
+              selected.length === 0 ||
+              selected.every(function (id) {
+                return correctIds.indexOf(id) !== -1;
+              });
+            if (onlyCorrectChoices && selected.length < correctIds.length) {
+              wrongVariant = "incomplete";
+            }
           }
         }
         var detail = {
@@ -325,11 +466,12 @@
           at: new Date().toISOString(),
         };
         emitSelection(detail);
-        openModal(isCorrect, wrongVariant);
+        openModal(isCorrect, wrongVariant, selected);
       });
       wrap.appendChild(submit);
 
       compassEl.appendChild(wrap);
+      updateRouteSubmitEnabled();
     }
 
     function clearRouteCheckboxes() {
@@ -337,6 +479,7 @@
       compassEl.querySelectorAll(".decision-making__route-check").forEach(function (inp) {
         inp.checked = false;
       });
+      updateRouteSubmitEnabled();
     }
 
     function buildCompass() {
@@ -386,7 +529,7 @@
         buildStepContent();
         closeModal();
       } else {
-        window.location.href = "index.html";
+        window.location.href = "mission-end.html?completed=decision-making";
       }
     }
 

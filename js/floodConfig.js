@@ -1,6 +1,8 @@
 (function () {
   'use strict';
   const STORAGE_KEY = 'floodConfig_v2';
+  /** Which zone layout to show: __mine__ | default | pub_* (shared flood_zones.map_id). */
+  const VIEW_SOURCE_KEY = 'floodViewSource_v1';
   const LEVELS = ['30', '60', '100', '0.5', '1'];
 
   let state = { '30': [], '60': [], '100': [], '0.5': [], '1': [] };
@@ -13,6 +15,44 @@
 
   function mapId() {
     return String(window.FLOOD_MAP_ID || 'default').trim() || 'default';
+  }
+
+  function getViewSourceKey() {
+    try {
+      var v = localStorage.getItem(VIEW_SOURCE_KEY);
+      if (v != null && v !== '') return v;
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
+  function setViewSourceKey(key) {
+    try {
+      if (key == null || key === '') localStorage.removeItem(VIEW_SOURCE_KEY);
+      else localStorage.setItem(VIEW_SOURCE_KEY, String(key));
+    } catch (e) { /* ignore */ }
+  }
+
+  /** Resolved key for pull (logged out cannot use __mine__). */
+  function effectiveViewKey(auth) {
+    var k = getViewSourceKey();
+    if (k === '__mine__' && !auth) return 'default';
+    if (k) return k;
+    return auth ? '__mine__' : 'default';
+  }
+
+  function pullTarget(auth) {
+    var key = effectiveViewKey(auth);
+    if (key === '__mine__' && auth) {
+      return { type: 'by_user', mapId: mapId() };
+    }
+    return { type: 'shared', mapId: key === '__mine__' ? 'default' : key };
+  }
+
+  function scenarioDisplayLabel(mapId, label) {
+    if (label != null && String(label).trim() !== '') return String(label).trim();
+    var s = String(mapId || '').replace(/^pub_/, '').replace(/-/g, ' ');
+    if (!s) return mapId;
+    return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
   function applyZonesFromServer(zonesObj) {
@@ -149,7 +189,7 @@
   }
 
   /**
-   * Pull from Supabase. Logged-in admins: load from flood_zones_by_user (per-admin). Else: shared flood_zones.
+   * Pull zone layout: by user choice — own row (__mine__), public default, or published scenario (pub_*).
    */
   function pullFromSupabase(done) {
     if (!isSupabaseReady()) {
@@ -158,12 +198,16 @@
     }
     var base = window.FLOOD_SUPABASE_URL.replace(/\/$/, '');
     var anonKey = window.FLOOD_SUPABASE_ANON_KEY;
-    var mid = mapId();
     function doPull(auth) {
-      var url = auth
-        ? base + '/rest/v1/flood_zones_by_user?user_id=eq.' + encodeURIComponent(auth.userId) + '&map_id=eq.' + encodeURIComponent(mid) + '&select=zones'
-        : base + '/rest/v1/flood_zones?map_id=eq.' + encodeURIComponent(mid) + '&select=zones';
-      var headers = { apikey: anonKey, Authorization: 'Bearer ' + (auth ? auth.token : anonKey) };
+      var target = pullTarget(auth);
+      var url;
+      if (target.type === 'by_user' && auth) {
+        url = base + '/rest/v1/flood_zones_by_user?user_id=eq.' + encodeURIComponent(auth.userId) + '&map_id=eq.' + encodeURIComponent(target.mapId) + '&select=zones';
+      } else {
+        url = base + '/rest/v1/flood_zones?map_id=eq.' + encodeURIComponent(target.mapId) + '&select=zones';
+      }
+      var token = auth ? auth.token : anonKey;
+      var headers = { apikey: anonKey, Authorization: 'Bearer ' + token };
       fetch(url, { headers: headers })
         .then(function (res) { return res.json(); })
         .then(function (rows) {
@@ -198,6 +242,103 @@
     }
   }
 
+  function listPublishedScenarios(done) {
+    if (!isSupabaseReady()) {
+      if (typeof done === 'function') done([]);
+      return;
+    }
+    var base = window.FLOOD_SUPABASE_URL.replace(/\/$/, '');
+    var anonKey = window.FLOOD_SUPABASE_ANON_KEY;
+    var headers = { apikey: anonKey, Authorization: 'Bearer ' + anonKey };
+    var urlWithLabel = base + '/rest/v1/flood_zones?select=map_id,updated_at,label&order=updated_at.desc';
+    var urlNoLabel = base + '/rest/v1/flood_zones?select=map_id,updated_at&order=updated_at.desc';
+    fetch(urlWithLabel, { headers: headers })
+      .then(function (res) {
+        if (res.ok) return res.json();
+        return fetch(urlNoLabel, { headers: headers }).then(function (r2) { return r2.json(); });
+      })
+      .then(function (rows) {
+        var list = (Array.isArray(rows) ? rows : []).filter(function (row) {
+          return row && row.map_id && String(row.map_id).indexOf('pub_') === 0;
+        });
+        if (typeof done === 'function') done(list);
+      })
+      .catch(function () {
+        if (typeof done === 'function') done([]);
+      });
+  }
+
+  /**
+   * Copy current in-memory zones to flood_zones as pub_<slug> (merge). Caller should verify flood admin.
+   */
+  function publishScenario(displayName, done) {
+    if (!isSupabaseReady()) {
+      if (typeof done === 'function') done(false, 'Supabase not configured');
+      return;
+    }
+    var raw = String(displayName || '').trim();
+    if (raw.length < 2) {
+      if (typeof done === 'function') done(false, 'Enter a short scenario name');
+      return;
+    }
+    var slug = 'pub_' + raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+    if (slug.length < 5) {
+      if (typeof done === 'function') done(false, 'Use letters or numbers in the name');
+      return;
+    }
+    var base = window.FLOOD_SUPABASE_URL.replace(/\/$/, '');
+    var anonKey = window.FLOOD_SUPABASE_ANON_KEY;
+    var payload = {
+      map_id: slug,
+      zones: stateToJson(),
+      updated_at: new Date().toISOString(),
+      label: raw.slice(0, 120),
+    };
+    function postJson(bodyObj, authToken) {
+      return fetch(base + '/rest/v1/flood_zones', {
+        method: 'POST',
+        headers: {
+          apikey: anonKey,
+          Authorization: 'Bearer ' + authToken,
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify(bodyObj),
+      });
+    }
+    function tryPost(withLabel, authToken, cb) {
+      var b = { map_id: payload.map_id, zones: payload.zones, updated_at: payload.updated_at };
+      if (withLabel) b.label = payload.label;
+      postJson(b, authToken)
+        .then(function (res) {
+          if (res.ok) {
+            cb(true);
+            return;
+          }
+          if (withLabel) {
+            tryPost(false, authToken, cb);
+            return;
+          }
+          cb(false, 'Could not publish (' + res.status + ')');
+        })
+        .catch(function (e) {
+          cb(false, e.message || 'Network error');
+        });
+    }
+    if (window.supabaseAuth && typeof window.supabaseAuth.getAuthForApi === 'function') {
+      window.supabaseAuth.getAuthForApi(function (auth) {
+        var t = auth && auth.token ? auth.token : anonKey;
+        tryPost(true, t, function (ok, err) {
+          if (typeof done === 'function') done(ok, err, ok ? slug : null);
+        });
+      });
+    } else {
+      tryPost(true, anonKey, function (ok, err) {
+        if (typeof done === 'function') done(ok, err, ok ? slug : null);
+      });
+    }
+  }
+
   window.floodConfig = {
     load: load,
     save: save,
@@ -208,7 +349,13 @@
     toggle: toggle,
     isSelected: isSelected,
     pullFromSupabase: pullFromSupabase,
-    isSupabaseReady: isSupabaseReady
+    isSupabaseReady: isSupabaseReady,
+    getViewSourceKey: getViewSourceKey,
+    setViewSourceKey: setViewSourceKey,
+    effectiveViewKey: effectiveViewKey,
+    listPublishedScenarios: listPublishedScenarios,
+    publishScenario: publishScenario,
+    scenarioDisplayLabel: scenarioDisplayLabel,
   };
 
   load();

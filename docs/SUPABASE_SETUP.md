@@ -35,10 +35,28 @@ Reload the app. You should see **Admin login** in the Master Control panel.
 
 ## Behaviour
 
-- **Not logged in:** Zones use the shared **`flood_zones`** table. Anyone can edit.
-- **Logged in:** Zones use **`flood_zones_by_user`**. Each admin has their own zone set; Save/load is per account.
+- **Not logged in:** Zones load/save against the shared **`flood_zones`** table. The **Admin** toolbar button is visible so admins can sign in; the **zone editor** opens only for **admin accounts** (see admin code below).
+- **Logged in:** Zones use **`flood_zones_by_user`**. Each account has its own zone set. **Admin → Save** applies only when the account is an **admin** editor account.
 
-**Login in the app:** use a **username** (letters, numbers, `_`, `-`, min 2 chars) and a **4-digit PIN**. Behind the scenes this becomes a Supabase email like `yourname@flood-app.local` and a 6-character password (`00` + your PIN) so it works with Supabase’s minimum password length. Sign up once, then Admin → Save for your zones. Another username = another zone set.
+**Login in the app:** use a **username** (letters, numbers, `_`, `-`, min 2 chars) and a **4-digit PIN**. Behind the scenes this becomes a Supabase email like `yourname@flood-app.local` and a 6-character password (`00` + your PIN) so it works with Supabase’s minimum password length. **Sign up or log in**, then click **Admin** to edit zones and **Save**. Another username = another zone set.
+
+**Admin code (required to edit zones):** On **sign up only**, the **Admin code** field must be set to the app’s configured code (`3119` in `js/app.js`) to store `flood_is_admin` in **user metadata**. Only those accounts see the **Admin** button and can open the grid editor. Other signed-in users do not see **Admin** and cannot edit zones (app-side only; use RLS/Edge Functions for stronger guarantees).
+
+**Existing users** created before the admin flag: add `flood_is_admin: true` under **User metadata** in the Supabase Dashboard (Authentication → user), or create a new account with the admin code.
+
+## Published scenarios (shared zone layouts)
+
+Run **`supabase/migrations/003_flood_zones_label.sql`** if you want an optional **`label`** column on **`flood_zones`** (nicer names in the viewer). The app works without it.
+
+In **Master Control → Zone layout**:
+
+- **Public · default map** — row `map_id = default` in **`flood_zones`**.
+- **My saved zones** — your row in **`flood_zones_by_user`** (when signed in).
+- **Scenario · …** — rows whose **`map_id`** starts with **`pub_`** (published snapshots).
+
+**Flood admins** can use **Publish current layout as scenario…** to copy the **current in-memory zones** (what you last loaded or edited) into **`flood_zones`** as `pub_<slug>` with an optional **label**.
+
+Deep link: **`viewer.html?lat=…&lon=…&layout=pub_your-slug`**. **Copy view URL** includes **`layout`** when a non-default source is selected.
 
 ## Security
 

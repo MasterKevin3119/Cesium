@@ -408,6 +408,8 @@
         .auth-panel button:hover { background: rgba(255,255,255,0.25); }
         .auth-panel__user { font-size: 11px; color: rgba(255,255,255,0.7); }
         .auth-panel__error { font-size: 11px; color: #f87171; margin-top: 4px; }
+        .auth-panel__hint { font-size: 10px; color: rgba(255,255,255,0.45); margin: -2px 0 6px 0; line-height: 1.35; }
+        .mc-header-btn--admin { box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.45); }
         .auth-modal { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
         .auth-modal[hidden] { display: none !important; }
         .auth-modal__backdrop { position: absolute; inset: 0; z-index: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
@@ -415,7 +417,76 @@
         .auth-modal__close { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; padding: 0; border: none; border-radius: 8px; background: rgba(255,255,255,0.1); color: #fff; font-size: 20px; line-height: 1; cursor: pointer; }
         .auth-modal__close:hover { background: rgba(255,255,255,0.2); }
         .auth-modal__title { margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #f1f5f9; padding-right: 36px; }
+        .auth-modal__context { margin: -6px 0 12px 0; font-size: 12px; line-height: 1.45; color: rgba(148, 163, 184, 0.95); padding-right: 36px; }
+        .auth-modal__context[hidden] { display: none !important; }
         .auth-modal .auth-panel { margin-bottom: 0; }
+        .flood-map-source {
+            margin-bottom: 14px;
+            padding: 10px 10px 12px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .flood-map-source__label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.88);
+            margin-bottom: 6px;
+            letter-spacing: 0.02em;
+        }
+        .flood-map-source__select {
+            width: 100%;
+            max-width: 100%;
+            padding: 8px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.35);
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .flood-map-source__hint {
+            font-size: 10px;
+            line-height: 1.4;
+            color: rgba(255,255,255,0.5);
+            margin: 0 0 10px 0;
+        }
+        .flood-map-source__publish {
+            width: 100%;
+            padding: 8px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 6px;
+            border: 1px solid rgba(250, 204, 21, 0.45);
+            background: rgba(250, 204, 21, 0.12);
+            color: #fef9c3;
+        }
+        .flood-map-source__publish:hover { background: rgba(250, 204, 21, 0.2); }
+        .flood-map-source__publish-panel { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .flood-map-source__publish-panel[hidden] { display: none !important; }
+        .flood-map-source__input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.22);
+            background: rgba(0,0,0,0.35);
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .flood-map-source__publish-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .flood-map-source__publish-actions button {
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.12);
+            color: #fff;
+        }
+        .flood-map-source__status { font-size: 11px; color: rgba(167, 243, 208, 0.95); margin: 8px 0 0 0; min-height: 1.2em; }
         /* Solid, shared button look (toolbar + Master Control minimize) */
         .mc-header-btn {
             display: inline-flex;
@@ -876,6 +947,13 @@
             outline: none;
             box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.35);
         }
+        .decision-making__route-submit:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .decision-making__route-submit:disabled:hover {
+            background: #f8fafc;
+        }
         .decision-making__dial {
             position: relative;
             width: min(260px, 80vw);
@@ -945,14 +1023,56 @@
             top: 50%;
             transform: translate(-50%, -50%);
             z-index: 9992;
-            width: min(440px, calc(100vw - 32px));
-            padding: 22px 22px 18px;
+            width: min(960px, calc(100vw - 24px));
+            max-height: calc(100vh - 24px);
+            overflow-y: auto;
+            padding: 20px 22px 18px;
             border-radius: 20px;
             background: rgba(15, 23, 42, 0.92);
             border: 1px solid rgba(255, 255, 255, 0.28);
             box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
             display: flex;
             flex-direction: column;
+        }
+        .decision-making__modal-media {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            align-items: flex-start;
+            width: 100%;
+            margin-bottom: 14px;
+        }
+        .decision-making__modal-media[hidden] {
+            display: none !important;
+        }
+        .decision-making__modal-video {
+            display: block;
+            width: 100%;
+            max-width: min(880px, 100%);
+            max-height: min(62vh, 640px);
+            height: auto;
+            border-radius: 12px;
+            background: #000;
+            object-fit: contain;
+        }
+        .decision-making__modal-media:has(> .decision-making__modal-video:nth-child(2)) {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .decision-making__modal-media:has(> .decision-making__modal-video:nth-child(2)) .decision-making__modal-video {
+            max-width: 100%;
+            max-height: min(52vh, 520px);
+            width: 100%;
+        }
+        @media (max-width: 640px) {
+            .decision-making__modal-media:has(> .decision-making__modal-video:nth-child(2)) {
+                grid-template-columns: 1fr;
+            }
+            .decision-making__modal-media:has(> .decision-making__modal-video:nth-child(2)) .decision-making__modal-video {
+                max-height: min(42vh, 360px);
+            }
         }
         .decision-making__modal-head {
             display: flex;
@@ -1074,6 +1194,7 @@
                     <h2 id="decisionMakingModalTitle" class="decision-making__modal-title"></h2>
                     <button type="button" class="decision-making__modal-close" aria-label="Close">×</button>
                 </div>
+                <div class="decision-making__modal-media" hidden aria-hidden="true"></div>
                 <p class="decision-making__modal-body"></p>
                 <button type="button" class="decision-making__modal-btn"></button>
             </div>
@@ -1094,7 +1215,7 @@
     <div class="toolbar" role="toolbar" aria-label="Viewer actions">
         <a href="index.html" class="mc-header-btn" title="Back to intro">← Intro</a>
         <button type="button" id="userAuthBtn" class="mc-header-btn mc-header-btn--accent" title="Sign in or create an account">Sign in</button>
-        <button type="button" id="adminModeBtn" class="mc-header-btn" title="Admin mode">Admin</button>
+        <button type="button" id="adminModeBtn" class="mc-header-btn" title="Zone editor (admin accounts only)">Admin</button>
         <button type="button" id="copyUrlBtn" class="mc-header-btn">Copy view URL</button>
     </div>
 
@@ -1121,6 +1242,20 @@
             <div id="weatherResult" class="weather-result" aria-live="polite"></div>
 
             <div id="floodControls" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
+                <div id="floodMapSourceWrap" class="flood-map-source">
+                    <label class="flood-map-source__label" for="floodMapSourceSelect">Zone layout</label>
+                    <select id="floodMapSourceSelect" aria-label="Which zone map to display on the grid"></select>
+                    <p class="flood-map-source__hint">Public map, <strong>your saved zones</strong> (when signed in), or a <strong>published scenario</strong>. Link: add <code style="font-size:10px;">&amp;layout=pub_your-slug</code> to the URL.</p>
+                    <button type="button" id="btnPublishScenario" class="flood-map-source__publish" style="display:none;">Publish current layout as scenario…</button>
+                    <div id="publishScenarioPanel" class="flood-map-source__publish-panel" hidden>
+                        <input type="text" id="publishScenarioName" class="flood-map-source__input" placeholder="Name (e.g. North campus drill)" maxlength="80" aria-label="Scenario name" />
+                        <div class="flood-map-source__publish-actions">
+                            <button type="button" id="publishScenarioConfirm">Publish</button>
+                            <button type="button" id="publishScenarioCancel">Cancel</button>
+                        </div>
+                        <p id="publishScenarioStatus" class="flood-map-source__status" role="status"></p>
+                    </div>
+                </div>
                 <h3 style="margin:0 0 8px 0; font-size:13px; color:#fff;">Flood Simulation</h3>
                 <!-- User: 0.5 m / 1 m by button; rain zones auto-show at 0.1 / 0.5 / 1 mm for that hour -->
                 <div id="userFloodView" style="margin-bottom:12px;">
@@ -1161,7 +1296,7 @@
 
                 <!-- Admin mode: define which grid cells are 0.5 m or 1 m flood zones -->
                 <div id="adminControls" style="margin-top:12px; display:none; border-top:1px dashed rgba(255,255,255,0.06); padding-top:8px;">
-                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Admin: define zones (one level per cell)</div>
+                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Admin editor: only accounts signed up with the admin code can open this. Pick a level, click grid cells, then Save (one level per cell).</div>
                     <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Pale blue = 0.1 mm · Light blue = 0.5 mm · Dark blue = 1 mm · Light green = 0.5 m · Dark green = 1 m · Amber = pending</div>
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                         <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="30" checked> 0.1 mm</label>
@@ -1186,6 +1321,7 @@
         <div class="auth-modal__dialog">
             <button type="button" class="auth-modal__close" id="authModalClose" aria-label="Close dialog">×</button>
             <h2 id="authModalTitle" class="auth-modal__title">Account</h2>
+            <p id="authModalContext" class="auth-modal__context" hidden></p>
             <div id="authPanel" class="auth-panel">
                 <div class="auth-panel__title">Username + 4-digit PIN (zones saved per account when logged in)</div>
                 <div id="authLoggedOut">
@@ -1193,6 +1329,10 @@
                         <input type="text" id="authUsername" placeholder="Username" autocomplete="username" maxlength="32" />
                         <input type="password" id="authPin" placeholder="PIN (4 digits)" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" />
                     </div>
+                    <div class="auth-panel__row">
+                        <input type="password" id="authAdminCode" placeholder="Admin code (sign up only)" autocomplete="off" maxlength="16" aria-describedby="authAdminCodeHint" />
+                    </div>
+                    <p id="authAdminCodeHint" class="auth-panel__hint">Leave blank for a normal account. Enter the admin code only when signing up to be labelled Admin on this app.</p>
                     <div class="auth-panel__row">
                         <button type="button" id="authSignIn">Log in</button>
                         <button type="button" id="authSignUp">Sign up</button>

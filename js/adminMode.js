@@ -11,14 +11,15 @@
     return enabled;
   }
 
-  function promptPassword() {
-    const p = prompt('Enter admin password:');
-    if (p === null) return false;
-    return String(p) === '3119';
-  }
-
   function setEnabled(val) {
-    enabled = !!val;
+    var on = !!val;
+    if (on) {
+      if (!isFloodEditorAccount()) {
+        on = false;
+        clearStoredAdminPreference();
+      }
+    }
+    enabled = on;
     try { localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0'); } catch (e) { /* ignore */ }
     const adminPanel = document.getElementById('adminControls');
     if (adminPanel) adminPanel.style.display = enabled ? 'block' : 'none';
@@ -28,6 +29,16 @@
     try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
   }
 
+  /** If editor is on but this account is not allowed, turn it off (stale session or toggled user). */
+  function synchronizeEditorWithAccount() {
+    if (!enabled) return;
+    if (!isFloodEditorAccount()) {
+      setEnabled(false);
+      detachClick();
+      clearStoredAdminPreference();
+    }
+  }
+
   function loadEnabled() {
     try {
       const v = localStorage.getItem(STORAGE_KEY);
@@ -35,19 +46,79 @@
     } catch (e) { return false; }
   }
 
+  function clearStoredAdminPreference() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+  }
+
+  /** Turn off admin after sign-out or missing session. */
+  function disableAfterLogout() {
+    try { window._floodPendingAdminEnable = false; } catch (e) { /* ignore */ }
+    if (!enabled) return;
+    setEnabled(false);
+    detachClick();
+    clearStoredAdminPreference();
+  }
+
+  function isFloodEditorAccount() {
+    return !!(window.supabaseAuth && typeof window.supabaseAuth.isFloodAdmin === 'function' && window.supabaseAuth.isFloodAdmin());
+  }
+
+  /** Called from app.js after successful sign-in/up when user opened Admin first. */
+  function enableAfterAuth() {
+    if (!viewerRef || !isFloodEditorAccount()) return;
+    setEnabled(true);
+    attachClick();
+  }
+
+  function tryEnableAdminFromClick() {
+    if (!window.supabaseAuth || typeof window.supabaseAuth.isReady !== 'function' || !window.supabaseAuth.isReady()) {
+      alert('Account sign-in is not configured. Add Supabase URL and anon key in js/supabaseConfig.js (see docs/SUPABASE_SETUP.md).');
+      return;
+    }
+    window.supabaseAuth.getAuthForApi(function (auth) {
+      if (!auth) {
+        try { window._floodPendingAdminEnable = true; } catch (e) { /* ignore */ }
+        if (typeof window.openFloodAuthModal === 'function') {
+          window.openFloodAuthModal('Sign in or sign up to edit flood zones. New admins must use Sign up and enter the admin code. Zones save to the signed-in account.');
+        } else {
+          alert('Please use Sign in in the toolbar, then open Admin again.');
+        }
+        return;
+      }
+      if (!isFloodEditorAccount()) {
+        alert('Only admin accounts can edit flood zones. Use Sign up with the admin code, or sign in with an admin account.');
+        return;
+      }
+      setEnabled(true);
+      attachClick();
+    });
+  }
+
   function init(viewer) {
     viewerRef = viewer;
-    enabled = loadEnabled();
-    setEnabled(enabled);
+    const stored = loadEnabled();
+    setEnabled(false);
+    detachClick();
+
+    if (!window.supabaseAuth || typeof window.supabaseAuth.isReady !== 'function' || !window.supabaseAuth.isReady()) {
+      if (stored) clearStoredAdminPreference();
+    } else {
+      window.supabaseAuth.getAuthForApi(function (auth) {
+        if (stored && auth && isFloodEditorAccount()) {
+          setEnabled(true);
+          attachClick();
+        } else if (stored && (!auth || !isFloodEditorAccount())) {
+          clearStoredAdminPreference();
+        }
+      });
+    }
 
     const btn = document.getElementById('adminModeBtn');
     if (btn && !buttonListenerAttached) {
       buttonListenerAttached = true;
       btn.addEventListener('click', function () {
         if (enabled) { setEnabled(false); detachClick(); return; }
-        if (!promptPassword()) { alert('Incorrect password'); return; }
-        setEnabled(true);
-        attachClick();
+        tryEnableAdminFromClick();
       });
     }
 
@@ -70,12 +141,11 @@
         alert('Saved selection for ' + label);
       } catch (e) { alert('Save failed'); }
     });
-
-    if (enabled) attachClick();
   }
 
   function attachClick() {
     if (!viewerRef || clickHandler) return;
+    if (!isFloodEditorAccount()) return;
     const handler = new Cesium.ScreenSpaceEventHandler(viewerRef.scene.canvas);
     handler.setInputAction(function (click) {
       if (!enabled) return;
@@ -104,5 +174,9 @@
     isEnabled: isEnabled,
     attachClick: attachClick,
     detachClick: detachClick,
+    enableAfterAuth: enableAfterAuth,
+    disableAfterLogout: disableAfterLogout,
+    isFloodEditorAccount: isFloodEditorAccount,
+    synchronizeEditorWithAccount: synchronizeEditorWithAccount,
   };
 })();
