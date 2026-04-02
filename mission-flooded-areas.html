@@ -14,6 +14,7 @@
   <div class="mission-shell">
     <header class="mission-shell__header">
       <a class="logo" href="index.html">Flood Simulator</a>
+      <div class="mission-shell__player" id="missionPlayerSlot" aria-label="Your explorer"></div>
       <nav class="mission-shell__nav" aria-label="Mission navigation">
         <a href="index.html#mission">All missions</a>
         <a href="viewer.html">Simulation</a>
@@ -34,5 +35,18 @@
       </div>
     </main>
   </div>
+  <script src="js/userAvatar.js?v=202604023"></script>
+  <script>
+    (function () {
+      function go() {
+        var slot = document.getElementById("missionPlayerSlot");
+        if (slot && window.userAvatar && typeof window.userAvatar.mountInSlot === "function") {
+          window.userAvatar.mountInSlot(slot, { size: 44 });
+        }
+      }
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go);
+      else go();
+    })();
+  </script>
 </body>
 </html>

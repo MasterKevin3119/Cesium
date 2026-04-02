@@ -25,6 +25,20 @@
     return cachedUser;
   }
 
+  function parseFloodAvatar(meta) {
+    if (!meta || typeof meta !== 'object') return null;
+    var raw = meta.flood_avatar;
+    if (!raw) return null;
+    if (typeof raw === 'string') {
+      try { raw = JSON.parse(raw); } catch (e) { return null; }
+    }
+    if (typeof raw !== 'object' || !raw) return null;
+    var style = typeof raw.style === 'string' ? raw.style : '';
+    var seed = typeof raw.seed === 'string' ? raw.seed : '';
+    if (!style || !seed) return null;
+    return { style: style, seed: seed };
+  }
+
   function userFromSupabaseUser(u) {
     if (!u) return null;
     var meta = u.user_metadata || {};
@@ -36,6 +50,7 @@
       id: u.id,
       email: u.email || '',
       isAdmin: isAdmin,
+      avatar: parseFloodAvatar(meta),
     };
   }
 
@@ -145,6 +160,37 @@
     }
   }
 
+  /**
+   * Merge into auth.users.user_metadata (e.g. { flood_avatar: { style, seed } }).
+   * @param {object} data
+   * @param {function(Error|string|null)} [done]
+   */
+  function updateUserMetadata(data, done) {
+    if (!data || typeof data !== 'object') {
+      if (done) done(null);
+      return;
+    }
+    var c = getClient();
+    if (!c) {
+      if (done) done(new Error('Supabase not configured'));
+      return;
+    }
+    c.auth.updateUser({ data: data })
+      .then(function (r) {
+        var err = r.error ? (r.error.message || 'Update failed') : null;
+        if (err) {
+          if (done) done(err);
+          return;
+        }
+        if (r.data && r.data.user) cachedUser = userFromSupabaseUser(r.data.user);
+        if (authCallback) authCallback();
+        if (done) done(null);
+      })
+      .catch(function (e) {
+        if (done) done(e.message || e);
+      });
+  }
+
   window.supabaseAuth = {
     getCurrentUser: getCurrentUser,
     getAuthForApi: getAuthForApi,
@@ -152,6 +198,7 @@
     signUp: signUp,
     signOut: signOut,
     onAuthChange: onAuthChange,
+    updateUserMetadata: updateUserMetadata,
     isReady: function () { return getClient() !== null; },
     isFloodAdmin: function () {
       var u = getCurrentUser();

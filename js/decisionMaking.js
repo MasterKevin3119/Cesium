@@ -82,7 +82,7 @@
       question:
         "Considering the flood flow direction and 0.5 m water depth, which route offers the safest escape to a less affected area?",
       mapFile: "2.png",
-      routeHint: "Select Blue and/or Green if they are safe for this scenario, then tap Submit.",
+      routeHint: "Select all possible answers that apply for this scenario, then tap Submit.",
       correctAnswers: ["blue", "green"],
       options: [
         { id: "blue", label: "Blue Path" },
@@ -108,8 +108,15 @@
       },
       wrongIncomplete: {
         title: "Not Quite",
-        body: "Select at least one route (Blue or Green), then tap Submit.",
-        bodyHtml: "Select at least one route (<strong>Blue</strong> or <strong>Green</strong>), then tap <strong>Submit</strong>.",
+        body: "Select all possible answers, then tap Submit.",
+        bodyHtml: "Select <strong>all possible answers</strong>, then tap <strong>Submit</strong>.",
+        tryAgainLabel: "Try Again →",
+      },
+      wrongNeedBoth: {
+        title: "Not Quite",
+        body: "Choose all possible answers: select every safe route that applies, then tap Submit.",
+        bodyHtml:
+          "Choose <strong>all possible answers</strong>: select <strong>every safe route</strong> that applies, then tap <strong>Submit</strong>.",
         tryAgainLabel: "Try Again →",
       },
       wrongNoneAt05: {
@@ -166,6 +173,8 @@
       feedbackVideos: {
         correct: null,
         wrong: "red-1m.mp4",
+        /** Filename contains "red" but clip illustrates any route at 1 m — not only Red path. */
+        wrongFeedbackLabel: "Flooded route at 1 m depth",
       },
     },
   ];
@@ -208,6 +217,11 @@
     root.hidden = false;
     root.setAttribute("aria-hidden", "false");
 
+    var headerBar = root.querySelector(".decision-making__header");
+    if (headerBar && window.userAvatar && typeof window.userAvatar.mountBadgeInHeader === "function") {
+      window.userAvatar.mountBadgeInHeader(headerBar, { size: 40 });
+    }
+
     var titleEl = root.querySelector(".decision-making__title");
     var qEl = root.querySelector(".decision-making__question");
     var mapImg = root.querySelector(".decision-making__map-img");
@@ -235,20 +249,66 @@
       modalMedia.setAttribute("aria-hidden", "true");
     }
 
-    function showFeedbackVideos(relPaths) {
-      if (!modalMedia || !relPaths || relPaths.length === 0) {
+    /** Label + modifier class for escape-route feedback filenames. */
+    function labelForEscapeRouteVideoFile(filename) {
+      var lower = String(filename || "").toLowerCase();
+      if (lower.indexOf("blue") !== -1) {
+        return { text: "Blue path", mod: "blue" };
+      }
+      if (lower.indexOf("green") !== -1) {
+        return { text: "Green path", mod: "green" };
+      }
+      if (lower.indexOf("red") !== -1) {
+        return { text: "Red path", mod: "red" };
+      }
+      return null;
+    }
+
+    /**
+     * @param {Array<string|{file:string,label?:string}>} items
+     */
+    function showFeedbackVideos(items) {
+      if (!modalMedia || !items || items.length === 0) {
         pauseModalVideos();
         return;
       }
       modalMedia.innerHTML = "";
-      relPaths.forEach(function (name) {
+      items.forEach(function (item) {
+        var name = typeof item === "string" ? item : item.file;
+        var inferred = labelForEscapeRouteVideoFile(name);
+        var hasCustomLabel =
+          typeof item === "object" && item != null && item.label != null && item.label !== "";
+        var labelText = hasCustomLabel ? item.label : inferred ? inferred.text : null;
+        /* Custom labels (e.g. 1 m wrong clip) must not inherit filename colour (red-1m.mp4 ≠ "Red path"). */
+        var labelMod = null;
+        if (typeof item === "object" && item != null && item.labelMod) {
+          labelMod = item.labelMod;
+        } else if (!hasCustomLabel && inferred) {
+          labelMod = inferred.mod;
+        }
+
+        var cell = document.createElement("div");
+        cell.className = "decision-making__modal-media-cell";
+        if (labelText) {
+          var lab = document.createElement("div");
+          lab.className = "decision-making__modal-video-label";
+          if (labelMod) {
+            lab.classList.add("decision-making__modal-video-label--" + labelMod);
+          }
+          lab.textContent = labelText;
+          cell.appendChild(lab);
+        }
         var v = document.createElement("video");
         v.className = "decision-making__modal-video";
         v.setAttribute("controls", "");
         v.setAttribute("playsinline", "");
         v.preload = "metadata";
         v.src = ESCAPE_ROUTE_VIDEO_BASE + name;
-        modalMedia.appendChild(v);
+        if (labelText) {
+          v.setAttribute("aria-label", labelText + " video");
+        }
+        cell.appendChild(v);
+        modalMedia.appendChild(cell);
       });
       modalMedia.hidden = false;
       modalMedia.setAttribute("aria-hidden", "false");
@@ -276,7 +336,11 @@
           var out = [];
           order.forEach(function (id) {
             if (routeSelected && routeSelected.indexOf(id) !== -1 && fv.correctFiles[id]) {
-              out.push(fv.correctFiles[id]);
+              out.push({
+                file: fv.correctFiles[id],
+                label: id === "blue" ? "Blue path" : "Green path",
+                labelMod: id,
+              });
             }
           });
           return out.length ? out : null;
@@ -288,12 +352,18 @@
       if (numCorrect > 1 && wrongVariant === "incomplete") {
         return null;
       }
-      if (step.questionId === "escape-route-1" && wrongVariant === "noneAt05") {
+      if (step.questionId === "escape-route-1" && (wrongVariant === "noneAt05" || wrongVariant === "needBoth")) {
         return null;
       }
       var w = fv.wrong;
       if (!w) return null;
-      return Array.isArray(w) ? w : [w];
+      var list = Array.isArray(w) ? w.slice() : [w];
+      if (fv.wrongFeedbackLabel) {
+        return list.map(function (f) {
+          return { file: f, label: fv.wrongFeedbackLabel };
+        });
+      }
+      return list;
     }
 
     function getStep() {
@@ -333,6 +403,9 @@
         var w = step.wrong;
         if (step.type === "routes" && wrongVariant === "incomplete" && step.wrongIncomplete) {
           w = step.wrongIncomplete;
+        }
+        if (step.type === "routes" && wrongVariant === "needBoth" && step.wrongNeedBoth) {
+          w = step.wrongNeedBoth;
         }
         if (step.type === "routes" && wrongVariant === "noneAt05" && step.wrongNoneAt05) {
           w = step.wrongNoneAt05;
@@ -424,17 +497,25 @@
         var isCorrect;
         var wrongVariant = "default";
         if (step.questionId === "escape-route-1") {
-          var safeIds = step.correctAnswers || ["blue", "green"];
-          var onlySafePicked =
-            selected.length > 0 &&
-            selected.every(function (id) {
-              return safeIds.indexOf(id) !== -1;
+          var safeIds = (step.correctAnswers || ["blue", "green"]).slice().sort();
+          isCorrect =
+            selected.length === safeIds.length &&
+            safeIds.every(function (id, i) {
+              return selected[i] === id;
             });
-          isCorrect = onlySafePicked;
-          if (!isCorrect && selected.length === 0) {
-            wrongVariant = "incomplete";
-          } else if (!isCorrect && selected.indexOf("none") !== -1) {
-            wrongVariant = "noneAt05";
+          if (!isCorrect) {
+            var onlySafePicked =
+              selected.length > 0 &&
+              selected.every(function (id) {
+                return safeIds.indexOf(id) !== -1;
+              });
+            if (selected.length === 0) {
+              wrongVariant = "incomplete";
+            } else if (selected.indexOf("none") !== -1) {
+              wrongVariant = "noneAt05";
+            } else if (onlySafePicked && selected.length < safeIds.length) {
+              wrongVariant = "needBoth";
+            }
           }
         } else {
           isCorrect =

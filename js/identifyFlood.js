@@ -141,6 +141,11 @@
     root.hidden = false;
     root.setAttribute("aria-hidden", "false");
 
+    var headerBar = root.querySelector(".identify-flood__header");
+    if (headerBar && window.userAvatar && typeof window.userAvatar.mountBadgeInHeader === "function") {
+      window.userAvatar.mountBadgeInHeader(headerBar, { size: 40 });
+    }
+
     var titleEl = root.querySelector(".identify-flood__title");
     var qEl = root.querySelector(".identify-flood__question");
     var grid = root.querySelector(".identify-flood__grid");

@@ -157,6 +157,11 @@
     root.hidden = false;
     root.setAttribute("aria-hidden", "false");
 
+    var headerBar = root.querySelector(".read-the-water__header");
+    if (headerBar && window.userAvatar && typeof window.userAvatar.mountBadgeInHeader === "function") {
+      window.userAvatar.mountBadgeInHeader(headerBar, { size: 40 });
+    }
+
     var titleEl = root.querySelector(".read-the-water__title");
     var qEl = root.querySelector(".read-the-water__question");
     var grid = root.querySelector(".read-the-water__grid");

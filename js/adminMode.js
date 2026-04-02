@@ -77,11 +77,12 @@
     }
     window.supabaseAuth.getAuthForApi(function (auth) {
       if (!auth) {
-        try { window._floodPendingAdminEnable = true; } catch (e) { /* ignore */ }
-        if (typeof window.openFloodAuthModal === 'function') {
-          window.openFloodAuthModal('Sign in or sign up to edit flood zones. New admins must use Sign up and enter the admin code. Zones save to the signed-in account.');
-        } else {
-          alert('Please use Sign in in the toolbar, then open Admin again.');
+        try {
+          var page = (window.location.pathname.split('/').pop() || 'viewer.html');
+          var next = encodeURIComponent(page + (window.location.search || '') + (window.location.hash || ''));
+          window.location.href = 'index.html?next=' + next;
+        } catch (e) {
+          alert('Sign in on the intro page (Sign in / Admin), then open the simulator again.');
         }
         return;
       }

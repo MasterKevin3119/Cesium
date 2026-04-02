@@ -90,6 +90,176 @@
             border-radius: 1px;
         }
         .site-header nav a:hover::after { transform: scaleX(1); }
+        .site-header__nav-wrap {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .site-header__actions {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            flex-shrink: 0;
+        }
+        .site-header__auth {
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.45rem 0.7rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.92);
+            cursor: pointer;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+        .site-header__auth:hover {
+            background: rgba(255, 255, 255, 0.14);
+            color: #fff;
+        }
+        .site-header__auth--primary {
+            border-color: rgba(56, 189, 248, 0.55);
+            background: rgba(14, 165, 233, 0.22);
+            color: #e0f2fe;
+        }
+        .site-header__auth--primary:hover {
+            background: rgba(14, 165, 233, 0.32);
+            border-color: rgba(56, 189, 248, 0.75);
+        }
+        .site-header__auth--admin {
+            box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.45);
+        }
+        .site-header__auth.site-header__auth--has-face {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding-left: 0.35rem;
+        }
+        .site-header__auth-face {
+            display: inline-flex;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            background: rgba(0, 0, 0, 0.25);
+            flex-shrink: 0;
+        }
+        .site-header__auth-face-img {
+            display: block;
+            width: 28px;
+            height: 28px;
+            object-fit: cover;
+        }
+        .site-header__auth-label {
+            min-width: 0;
+        }
+        .avatar-picker {
+            margin-bottom: 14px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+        }
+        .avatar-picker__lead {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(226, 232, 240, 0.95);
+            margin: 0 0 4px 0;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .avatar-picker__hint {
+            font-size: 10px;
+            color: rgba(148, 163, 184, 0.85);
+            margin: 0 0 10px 0;
+            line-height: 1.4;
+        }
+        .avatar-picker__preview {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+        .avatar-picker__preview img {
+            border-radius: 14px;
+            border: 2px solid rgba(56, 189, 248, 0.35);
+            background: rgba(15, 23, 42, 0.9);
+        }
+        .avatar-picker__styles {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+        .avatar-picker__chip {
+            font-size: 10px;
+            padding: 5px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(30, 41, 59, 0.8);
+            color: rgba(226, 232, 240, 0.9);
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        .avatar-picker__chip:hover {
+            background: rgba(51, 65, 85, 0.95);
+            border-color: rgba(56, 189, 248, 0.45);
+        }
+        .avatar-picker__chip--active {
+            border-color: rgba(56, 189, 248, 0.75);
+            background: rgba(14, 165, 233, 0.2);
+            color: #f0f9ff;
+        }
+        .avatar-picker__shuffle {
+            display: block;
+            width: 100%;
+            margin: 0 auto;
+            max-width: 200px;
+            font-size: 11px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px dashed rgba(148, 163, 184, 0.4);
+            background: transparent;
+            color: rgba(186, 230, 253, 0.95);
+            cursor: pointer;
+        }
+        .avatar-picker__shuffle:hover {
+            border-color: rgba(56, 189, 248, 0.55);
+            background: rgba(56, 189, 248, 0.08);
+        }
+        .auth-panel { margin-bottom: 12px; padding: 10px 12px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+        .auth-panel__title { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.85); margin-bottom: 8px; }
+        .auth-panel__row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+        .auth-panel__row:last-of-type { margin-bottom: 0; }
+        .auth-panel input[type="text"], .auth-panel input[type="password"] { flex: 1; min-width: 120px; padding: 8px 10px; font-size: 13px; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; background: rgba(0,0,0,0.35); color: #fff; }
+        .auth-panel button { padding: 8px 12px; font-size: 12px; cursor: pointer; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.15); color: #fff; }
+        .auth-panel button:hover { background: rgba(255,255,255,0.25); }
+        .auth-panel__user { font-size: 12px; color: rgba(255,255,255,0.75); }
+        .auth-panel__error { font-size: 12px; color: #f87171; margin-top: 4px; }
+        .auth-panel__hint { font-size: 10px; color: rgba(255,255,255,0.45); margin: -2px 0 6px 0; line-height: 1.35; }
+        .auth-panel__hint--tight { margin: 0 0 12px 0; }
+        .auth-panel__switch { font-size: 11px; color: rgba(148, 163, 184, 0.95); margin: 12px 0 0 0; text-align: center; }
+        .auth-panel__link-btn {
+            font: inherit;
+            font-weight: 600;
+            color: #7dd3fc;
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        .auth-panel__link-btn:hover { color: #bae6fd; }
+        .auth-modal { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+        .auth-modal[hidden] { display: none !important; }
+        .auth-modal__backdrop { position: absolute; inset: 0; z-index: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
+        .auth-modal__dialog { position: relative; z-index: 1; width: 100%; max-width: 380px; background: #1e293b; border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 12px; box-shadow: 0 24px 48px rgba(0,0,0,0.45); padding: 18px 18px 16px; }
+        .auth-modal__close { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; padding: 0; border: none; border-radius: 8px; background: rgba(255,255,255,0.1); color: #fff; font-size: 20px; line-height: 1; cursor: pointer; }
+        .auth-modal__close:hover { background: rgba(255,255,255,0.2); }
+        .auth-modal__title { margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #f1f5f9; padding-right: 36px; }
+        .auth-modal__context { margin: -6px 0 12px 0; font-size: 12px; line-height: 1.45; color: rgba(148, 163, 184, 0.95); padding-right: 36px; }
+        .auth-modal__context[hidden] { display: none !important; }
+        .auth-modal .auth-panel { margin-bottom: 0; }
         @media (max-width: 520px) {
             .site-header { padding: 0.75rem 1rem; }
             .site-header nav { gap: 0; }
@@ -166,21 +336,6 @@
             max-width: 32em;
             margin: 0 auto 1.25rem;
             text-shadow: 0 1px 2px rgba(0,0,0,0.65);
-        }
-        .hero .hero-info-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 1.5rem;
-            height: 1.5rem;
-            border: 1px solid var(--white);
-            border-radius: 50%;
-            color: var(--white);
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin-bottom: 2.5rem;
-            text-shadow: 0 0 6px rgba(0,0,0,0.8);
-            box-shadow: 0 0 12px rgba(0,0,0,0.5);
         }
         .hero .btn-ghost {
             display: inline-flex;
@@ -505,16 +660,22 @@
 <body>
     <header class="site-header" id="site-header">
         <a href="#" class="logo">Flood Simulator</a>
-        <nav>
-            <a href="#">Home</a>
-            <a href="viewer.html">Simulation</a>
-            <a href="#content">Introduction</a>
-            <a href="#study-area">Study Area</a>
-            <a href="#flood-extent">Flood & 3D</a>
-            <a href="#purpose">Purpose</a>
-            <a href="#supporting-decisions">Decisions</a>
-            <a href="#mission">Mission</a>
-        </nav>
+        <div class="site-header__nav-wrap">
+            <nav>
+                <a href="#">Home</a>
+                <a href="viewer.html">Simulation</a>
+                <a href="#content">Introduction</a>
+                <a href="#study-area">Study Area</a>
+                <a href="#flood-extent">Flood & 3D</a>
+                <a href="#purpose">Purpose</a>
+                <a href="#supporting-decisions">Decisions</a>
+                <a href="#mission">Mission</a>
+            </nav>
+            <div class="site-header__actions">
+                <button type="button" id="landingAuthBtn" class="site-header__auth site-header__auth--primary" title="Sign in or create an account">Sign in</button>
+                <button type="button" id="landingAdminBtn" class="site-header__auth" title="Zone editor (admin) — opens simulator">Admin</button>
+            </div>
+        </div>
     </header>
 
     <div class="hero-wrap">
@@ -527,7 +688,6 @@
             <p class="hero-lead">
                 Floods are complex events where every decision matters. This simulation allows you to explore how different choices can influence flood impacts, helping build awareness and support better decision-making during flood events.
             </p>
-            <div class="hero-info-icon" aria-hidden="true">i</div>
             <div class="hero-buttons">
                 <a class="btn-ghost" href="viewer.html">Try now!</a>
                 <a class="btn-ghost btn-scroll" href="#content">Introduction</a>
@@ -584,6 +744,7 @@
             <h2>Mission</h2>
             <p style="margin-bottom: 1.5rem;">
                 Open a mission to read what you will do, then tap <strong>Play</strong> to start in the simulator. When you finish, you can continue to the next mission or return here.
+                When you <strong>create an account</strong>, you choose an <strong>explorer avatar</strong> — the same face follows you on mission pages and in the simulator after you sign in.
             </p>
             <div class="mission-cards">
                 <a class="card mission-card" href="mission-read-water.html">
@@ -624,6 +785,62 @@
             </div>
         </footer>
     </div>
+
+    <div id="authModal" class="auth-modal" hidden role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+        <div class="auth-modal__backdrop" id="authModalBackdrop"></div>
+        <div class="auth-modal__dialog">
+            <button type="button" class="auth-modal__close" id="authModalClose" aria-label="Close dialog">×</button>
+            <h2 id="authModalTitle" class="auth-modal__title">Account</h2>
+            <p id="authModalContext" class="auth-modal__context" hidden></p>
+            <div id="authPanel" class="auth-panel">
+                <div class="auth-panel__title" id="authSharedTitle">Username + 4-digit PIN (zones saved per account when logged in)</div>
+                <div id="authLoggedOut">
+                    <div class="auth-panel__row">
+                        <input type="text" id="authUsername" placeholder="Username" autocomplete="username" maxlength="32" />
+                        <input type="password" id="authPin" placeholder="PIN (4 digits)" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" />
+                    </div>
+                    <div id="authModeLogin">
+                        <p class="auth-panel__hint auth-panel__hint--tight">Use the same username and PIN you created at sign up.</p>
+                        <div class="auth-panel__row">
+                            <button type="button" id="authSignIn">Log in</button>
+                        </div>
+                        <p class="auth-panel__switch">Need an account? <button type="button" class="auth-panel__link-btn" id="authSwitchToSignUp">Create an account</button></p>
+                    </div>
+                    <div id="authModeSignUp" hidden>
+                        <div class="avatar-picker" id="avatarPickerRoot">
+                            <div class="avatar-picker__lead">Your explorer avatar</div>
+                            <p class="avatar-picker__hint">Choose your look once here — it is saved with your new account (not when logging in).</p>
+                            <div class="avatar-picker__preview"><img id="avatarPreview" width="72" height="72" alt="" /></div>
+                            <div class="avatar-picker__styles" id="avatarStyleChips"></div>
+                            <button type="button" id="avatarShuffle" class="avatar-picker__shuffle">Shuffle look</button>
+                        </div>
+                        <div class="auth-panel__row">
+                            <input type="password" id="authAdminCode" placeholder="Admin code (optional)" autocomplete="off" maxlength="16" aria-describedby="authAdminCodeHint" />
+                        </div>
+                        <p id="authAdminCodeHint" class="auth-panel__hint">Leave blank for a normal account. Enter the admin code only when creating an admin account.</p>
+                        <div class="auth-panel__row">
+                            <button type="button" id="authSignUp">Sign up</button>
+                        </div>
+                        <p class="auth-panel__switch"><button type="button" class="auth-panel__link-btn" id="authSwitchToLogin">Back to log in</button></p>
+                    </div>
+                </div>
+                <div id="authLoggedIn" style="display:none;">
+                    <div class="auth-panel__row">
+                        <span id="authUserEmail" class="auth-panel__user"></span>
+                        <button type="button" id="authSignOut">Log out</button>
+                    </div>
+                </div>
+                <div id="authError" class="auth-panel__error" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js?v=202604022"></script>
+    <script src="js/supabaseConfig.js?v=202604022"></script>
+    <script src="js/supabaseAuth.js?v=202604024"></script>
+    <script src="js/userAvatar.js?v=202604024"></script>
+    <script src="js/authUi.js?v=202604024"></script>
     <script>
         (function () {
             var hero = document.querySelector("section.hero");
@@ -667,6 +884,13 @@
             }, { rootMargin: "0px 0px -60px 0px", threshold: 0.1 });
 
             wrap.querySelectorAll(".section-divider, section, .section-fig, .card").forEach(function (el) { observer.observe(el); });
+        })();
+        (function () {
+            function bootAuth() {
+                if (typeof window.initFloodAuthUi === "function") window.initFloodAuthUi();
+            }
+            if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootAuth);
+            else bootAuth();
         })();
     </script>
 </body>

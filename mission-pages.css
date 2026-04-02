@@ -29,13 +29,44 @@ body {
 .mission-shell__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 0.75rem;
   padding: 0.875rem 1.5rem;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(12, 18, 34, 0.6);
   backdrop-filter: blur(10px);
+}
+.mission-shell__player {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+.flood-mission-avatar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.flood-mission-avatar__img {
+  display: block;
+  border-radius: 12px;
+  border: 2px solid rgba(56, 189, 248, 0.35);
+  background: rgba(0, 0, 0, 0.25);
+}
+.flood-mission-avatar__cap {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(56, 189, 248, 0.95);
+}
+@media (max-width: 520px) {
+  .mission-shell__player {
+    margin-left: 0;
+    width: 100%;
+    order: 3;
+    justify-content: flex-end;
+  }
 }
 .mission-shell__header a.logo {
   font-family: "Oswald", sans-serif;
@@ -50,6 +81,7 @@ body {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+  margin-left: 0;
 }
 .mission-shell__nav a {
   color: rgba(255, 255, 255, 0.85);

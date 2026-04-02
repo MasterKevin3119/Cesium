@@ -451,211 +451,76 @@
     }
   }
 
-  function initAuthPanel() {
-    var panel = document.getElementById('authPanel');
-    var modal = document.getElementById('authModal');
-    var userAuthBtn = document.getElementById('userAuthBtn');
-    var loggedOut = document.getElementById('authLoggedOut');
-    var loggedIn = document.getElementById('authLoggedIn');
-    var authUserEmail = document.getElementById('authUserEmail');
-    var authError = document.getElementById('authError');
-    var authUsername = document.getElementById('authUsername');
-    var authPin = document.getElementById('authPin');
-    var authAdminCode = document.getElementById('authAdminCode');
-    /** Sign-up only: must match to set user metadata flood_is_admin (shown as Admin in UI). */
-    var FLOOD_ADMIN_SIGNUP_CODE = '3119';
-    if (!panel || !window.supabaseAuth || !window.supabaseAuth.isReady()) {
-      if (userAuthBtn) userAuthBtn.style.display = 'none';
-      return;
-    }
-
-    var authModalContext = document.getElementById('authModalContext');
-    function openAuthModal(contextText) {
-      if (!modal) return;
-      if (authModalContext) {
-        if (contextText) {
-          authModalContext.textContent = contextText;
-          authModalContext.hidden = false;
-        } else {
-          authModalContext.textContent = '';
-          authModalContext.hidden = true;
-        }
-      }
-      modal.hidden = false;
-      modal.setAttribute('aria-hidden', 'false');
-      document.body.style.overflow = 'hidden';
-      try { if (authUsername) authUsername.focus(); } catch (e) { /* ignore */ }
-    }
-    function closeAuthModal() {
-      if (!modal) return;
-      if (authModalContext) {
-        authModalContext.textContent = '';
-        authModalContext.hidden = true;
-      }
-      modal.hidden = true;
-      modal.setAttribute('aria-hidden', 'true');
-      document.body.style.overflow = '';
-      showError('');
-      try { if (authAdminCode) authAdminCode.value = ''; } catch (e) { /* ignore */ }
-    }
-    window.openFloodAuthModal = function (contextText) {
-      openAuthModal(contextText || '');
-    };
-    if (userAuthBtn) {
-      userAuthBtn.addEventListener('click', function () { openAuthModal(''); });
-    }
-    var closeBtn = document.getElementById('authModalClose');
-    var backdrop = document.getElementById('authModalBackdrop');
-    if (closeBtn) closeBtn.addEventListener('click', closeAuthModal);
-    if (backdrop) backdrop.addEventListener('click', closeAuthModal);
-    document.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Escape' && modal && !modal.hidden) closeAuthModal();
-    });
-
-    function usernameToSupabaseEmail(raw) {
-      var s = String(raw || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-      if (s.length < 2) return null;
-      return s + '@flood-app.local';
-    }
-    function pinToSupabasePassword(pin) {
-      var d = String(pin || '').replace(/\D/g, '');
-      if (d.length !== 4) return null;
-      return '00' + d;
-    }
-
-    function showError(msg) {
-      if (authError) { authError.textContent = msg || ''; authError.style.display = msg ? 'block' : 'none'; }
-    }
-    function formatAuthSignupError(err) {
-      var s = typeof err === 'string' ? err : ((err && err.message) ? String(err.message) : String(err || ''));
-      if (/signup.*disabled|signups.*disabled|email signups/i.test(s)) {
-        return 'Supabase has signups disabled. In the Supabase Dashboard: Authentication → Settings → allow new users to sign up. See docs/SUPABASE_SETUP.md.';
-      }
-      return s;
-    }
-    function accountDisplayName(user) {
-      if (!user) return '';
-      var em = user.email || '';
-      return em.indexOf('@flood-app.local') !== -1 ? em.replace(/@flood-app\.local$/, '') : (em || 'Account');
-    }
-    function updateAuthUI() {
-      var user = window.supabaseAuth.getCurrentUser();
-        if (user) {
-        if (loggedOut) loggedOut.style.display = 'none';
-        if (loggedIn) loggedIn.style.display = 'block';
-        if (authUserEmail) {
-          var nm = accountDisplayName(user);
-          authUserEmail.textContent = user.isAdmin ? (nm + ' · Admin') : nm;
-        }
-        if (userAuthBtn) {
-          var shortName = accountDisplayName(user);
-          var btnLabel = user.isAdmin ? (shortName + ' (Admin)') : shortName;
-          if (btnLabel.length > 18) btnLabel = btnLabel.slice(0, 17) + '…';
-          userAuthBtn.textContent = btnLabel;
-          userAuthBtn.title = user.isAdmin ? 'Signed in as admin — open account' : 'Signed in — open account';
-          userAuthBtn.classList.toggle('mc-header-btn--admin', !!user.isAdmin);
-        }
-        showError('');
-        try {
-          if (window._floodPendingAdminEnable && window.adminMode && typeof window.adminMode.enableAfterAuth === 'function') {
-            window._floodPendingAdminEnable = false;
-            if (user.isAdmin) {
-              window.adminMode.enableAfterAuth();
-              closeAuthModal();
-            } else {
-              showError('Only admin accounts can edit flood zones. Sign up using the admin code, or sign in with an admin account.');
-            }
-          }
-        } catch (e) { /* ignore */ }
-        var adminModeBtn = document.getElementById('adminModeBtn');
-        if (adminModeBtn) {
-          if (user.isAdmin) adminModeBtn.style.removeProperty('display');
-          else adminModeBtn.style.display = 'none';
-        }
-      } else {
-        try { if (window.adminMode && typeof window.adminMode.disableAfterLogout === 'function') window.adminMode.disableAfterLogout(); } catch (e) { /* ignore */ }
-        if (loggedOut) loggedOut.style.display = 'block';
-        if (loggedIn) loggedIn.style.display = 'none';
-        if (authUserEmail) authUserEmail.textContent = '';
-        if (userAuthBtn) {
-          userAuthBtn.textContent = 'Sign in';
-          userAuthBtn.title = 'Sign in or create an account';
-          userAuthBtn.classList.remove('mc-header-btn--admin');
-        }
-        var adminModeBtnOut = document.getElementById('adminModeBtn');
-        if (adminModeBtnOut) adminModeBtnOut.style.removeProperty('display');
-      }
-      try {
-        if (window.adminMode && typeof window.adminMode.synchronizeEditorWithAccount === 'function') {
-          window.adminMode.synchronizeEditorWithAccount();
-        }
-      } catch (e) { /* ignore */ }
-    }
+  /** Sign-in UI is on index.html; keep session + zones in sync on the viewer. */
+  function initViewerSessionSync() {
+    if (!window.supabaseAuth || typeof window.supabaseAuth.isReady !== "function" || !window.supabaseAuth.isReady()) return;
     function refreshZonesAfterAuth() {
       try {
         if (window.floodConfig && window.floodConfig.pullFromSupabase) {
-          window.floodConfig.pullFromSupabase(function (ok) {
+          window.floodConfig.pullFromSupabase(function () {
             try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
           });
         }
       } catch (e) { /* ignore */ }
     }
-
-    function authRefreshUi() {
+    function onSessionChange() {
       window.supabaseAuth.getAuthForApi(function () {
-        updateAuthUI();
+        var user = window.supabaseAuth.getCurrentUser();
+        if (!user) {
+          try { if (window.adminMode && typeof window.adminMode.disableAfterLogout === "function") window.adminMode.disableAfterLogout(); } catch (e) { /* ignore */ }
+        }
+        try {
+          if (window.adminMode && typeof window.adminMode.synchronizeEditorWithAccount === "function") {
+            window.adminMode.synchronizeEditorWithAccount();
+          }
+        } catch (e) { /* ignore */ }
         refreshZonesAfterAuth();
         try {
           if (typeof window.rebuildFloodMapSourceSelect === "function") window.rebuildFloodMapSourceSelect();
         } catch (e) { /* ignore */ }
       });
     }
-    authRefreshUi();
-    window.supabaseAuth.onAuthChange(authRefreshUi);
+    onSessionChange();
+    window.supabaseAuth.onAuthChange(onSessionChange);
+  }
 
-    if (document.getElementById('authSignIn')) {
-      document.getElementById('authSignIn').addEventListener('click', function () {
-        var email = usernameToSupabaseEmail(authUsername && authUsername.value);
-        var password = pinToSupabasePassword(authPin && authPin.value);
-        if (!email) { showError('Username: letters, numbers, _ or - (min 2 chars)'); return; }
-        if (!password) { showError('Enter exactly 4 digits for PIN'); return; }
-        showError('');
-        window.supabaseAuth.signIn(email, password, function (err) {
-          if (err) { showError(err); return; }
-          authRefreshUi();
-          closeAuthModal();
-        });
-      });
-    }
-    if (document.getElementById('authSignUp')) {
-      document.getElementById('authSignUp').addEventListener('click', function () {
-        var email = usernameToSupabaseEmail(authUsername && authUsername.value);
-        var password = pinToSupabasePassword(authPin && authPin.value);
-        if (!email) { showError('Username: letters, numbers, _ or - (min 2 chars)'); return; }
-        if (!password) { showError('Enter exactly 4 digits for PIN'); return; }
-        showError('');
-        var adminRaw = authAdminCode ? String(authAdminCode.value).trim() : '';
-        var signUpOpts = {};
-        if (adminRaw === FLOOD_ADMIN_SIGNUP_CODE) {
-          signUpOpts.userData = { flood_is_admin: true };
-        } else if (adminRaw.length > 0 && adminRaw !== FLOOD_ADMIN_SIGNUP_CODE) {
-          showError('Admin code is not valid. Leave the field empty or use the correct code when signing up.');
+  function applyAdminDeepLink() {
+    try {
+      var p = new URLSearchParams(window.location.search);
+      if (p.get("admin") !== "1") return;
+      function stripAdminParam() {
+        try {
+          p.delete("admin");
+          var qs = p.toString();
+          var url = window.location.pathname + (qs ? "?" + qs : "") + window.location.hash;
+          window.history.replaceState({}, "", url);
+        } catch (e) { /* ignore */ }
+      }
+      if (!window.supabaseAuth || typeof window.supabaseAuth.isReady !== "function" || !window.supabaseAuth.isReady()) {
+        stripAdminParam();
+        return;
+      }
+      window.supabaseAuth.getAuthForApi(function (auth) {
+        if (!auth) {
+          var page = window.location.pathname.split("/").pop() || "viewer.html";
+          var q = new URLSearchParams(window.location.search);
+          q.set("admin", "1");
+          var qs = q.toString();
+          var target = qs ? page + "?" + qs : page + "?admin=1";
+          window.location.replace("index.html?next=" + encodeURIComponent(target));
           return;
         }
-        window.supabaseAuth.signUp(email, password, function (err) {
-          if (err) { showError(formatAuthSignupError(err)); return; }
-          authRefreshUi();
-          closeAuthModal();
-        }, signUpOpts);
+        if (!window.supabaseAuth.isFloodAdmin || !window.supabaseAuth.isFloodAdmin()) {
+          stripAdminParam();
+          alert("Only admin accounts can open the zone editor. Use Admin on the intro page after signing in with an admin account.");
+          return;
+        }
+        if (window.adminMode && typeof window.adminMode.enableAfterAuth === "function") {
+          window.adminMode.enableAfterAuth();
+        }
+        stripAdminParam();
       });
-    }
-    if (document.getElementById('authSignOut')) {
-      document.getElementById('authSignOut').addEventListener('click', function () {
-        showError('');
-        window.supabaseAuth.signOut();
-        closeAuthModal();
-      });
-    }
+    } catch (e) { /* ignore */ }
   }
 
   // Initialize flood UI controls inside the coords/weather panel
@@ -1555,7 +1420,22 @@
     if (el) el.classList.add("loading-overlay--hidden");
   }
 
+  /** Mini-games only: skip creating the Cesium viewer (no globe / terrain / flood tiles). */
+  function isMissionOnlyMode() {
+    try {
+      const m = new URLSearchParams(window.location.search).get("mission") || "";
+      return m === "read-water" || m === "flooded-areas" || m === "decision-making";
+    } catch (e) {
+      return false;
+    }
+  }
+
   async function init() {
+    if (isMissionOnlyMode()) {
+      document.documentElement.classList.add("mission-only-mode");
+      hideLoading();
+      return;
+    }
     if (typeof Cesium === "undefined") {
       console.error("Cesium failed to load.");
       return;
@@ -1636,7 +1516,8 @@
     // Flood controls in the coords/weather panel
     try { initFloodControls(); } catch (e) { /* ignore */ }
     try { initFloodMapSourceUI(); } catch (e) { /* ignore */ }
-    try { initAuthPanel(); } catch (e) { /* ignore */ }
+    try { initViewerSessionSync(); } catch (e) { /* ignore */ }
+    setTimeout(function () { try { applyAdminDeepLink(); } catch (e) { /* ignore */ } }, 500);
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("lat") == null || urlParams.get("lon") == null) {
       const lat = typeof CONFIG !== "undefined" && CONFIG.defaultLat != null ? CONFIG.defaultLat : 3.3633483;

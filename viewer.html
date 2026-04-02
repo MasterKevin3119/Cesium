@@ -26,6 +26,25 @@
             height: 100%;
         }
 
+        /* Missions (?mission=read-water|flooded-areas|decision-making): no globe / flood load */
+        html.mission-only-mode body {
+            background: #060d18;
+        }
+        html.mission-only-mode #cesiumContainer {
+            display: none !important;
+        }
+        html.mission-only-mode #loadingOverlay {
+            display: none !important;
+        }
+        html.mission-only-mode .search-box,
+        html.mission-only-mode .toolbar,
+        html.mission-only-mode .coords-weather,
+        html.mission-only-mode #panelExpandBtn,
+        html.mission-only-mode .api-hint,
+        html.mission-only-mode .api-hint-toggle {
+            display: none !important;
+        }
+
         .search-box {
             position: absolute;
             top: 12px;
@@ -399,27 +418,6 @@
         .swatch-rain1 { background: rgba(0, 64, 179, 0.65); }
         .swatch-depth05 { background: rgba(128, 242, 153, 0.55); }
         .swatch-depth1 { background: rgba(0, 153, 64, 0.65); }
-        .auth-panel { margin-bottom: 12px; padding: 10px 12px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
-        .auth-panel__title { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.85); margin-bottom: 8px; }
-        .auth-panel__row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
-        .auth-panel__row:last-of-type { margin-bottom: 0; }
-        .auth-panel input[type="email"], .auth-panel input[type="password"] { flex: 1; min-width: 120px; padding: 6px 8px; font-size: 12px; border: 1px solid rgba(255,255,255,0.25); border-radius: 4px; background: rgba(0,0,0,0.3); color: #fff; }
-        .auth-panel button { padding: 6px 10px; font-size: 12px; cursor: pointer; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.15); color: #fff; }
-        .auth-panel button:hover { background: rgba(255,255,255,0.25); }
-        .auth-panel__user { font-size: 11px; color: rgba(255,255,255,0.7); }
-        .auth-panel__error { font-size: 11px; color: #f87171; margin-top: 4px; }
-        .auth-panel__hint { font-size: 10px; color: rgba(255,255,255,0.45); margin: -2px 0 6px 0; line-height: 1.35; }
-        .mc-header-btn--admin { box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.45); }
-        .auth-modal { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
-        .auth-modal[hidden] { display: none !important; }
-        .auth-modal__backdrop { position: absolute; inset: 0; z-index: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
-        .auth-modal__dialog { position: relative; z-index: 1; width: 100%; max-width: 380px; background: #1e293b; border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 12px; box-shadow: 0 24px 48px rgba(0,0,0,0.45); padding: 18px 18px 16px; }
-        .auth-modal__close { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; padding: 0; border: none; border-radius: 8px; background: rgba(255,255,255,0.1); color: #fff; font-size: 20px; line-height: 1; cursor: pointer; }
-        .auth-modal__close:hover { background: rgba(255,255,255,0.2); }
-        .auth-modal__title { margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #f1f5f9; padding-right: 36px; }
-        .auth-modal__context { margin: -6px 0 12px 0; font-size: 12px; line-height: 1.45; color: rgba(148, 163, 184, 0.95); padding-right: 36px; }
-        .auth-modal__context[hidden] { display: none !important; }
-        .auth-modal .auth-panel { margin-bottom: 0; }
         .flood-map-source {
             margin-bottom: 14px;
             padding: 10px 10px 12px;
@@ -541,6 +539,45 @@
             color: #e2e8f0;
             font-family: system-ui, -apple-system, sans-serif;
             overflow: auto;
+        }
+        .read-the-water__header,
+        .identify-flood__header,
+        .decision-making__header {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0 14px;
+            align-items: start;
+        }
+        .read-the-water__header .flood-mission-avatar,
+        .identify-flood__header .flood-mission-avatar,
+        .decision-making__header .flood-mission-avatar {
+            grid-column: 1;
+            grid-row: 1 / span 2;
+            align-self: start;
+        }
+        .read-the-water__title,
+        .identify-flood__title,
+        .decision-making__title { grid-column: 2; }
+        .read-the-water__question,
+        .identify-flood__question,
+        .decision-making__question { grid-column: 2; }
+        .flood-mission-avatar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .flood-mission-avatar__img {
+            display: block;
+            border-radius: 12px;
+            border: 2px solid rgba(56, 189, 248, 0.35);
+            background: rgba(0, 0, 0, 0.35);
+        }
+        .flood-mission-avatar__cap {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(56, 189, 248, 0.9);
         }
         .read-the-water__header { max-width: 960px; margin: 0 auto 1rem; }
         .read-the-water__title {
@@ -1046,6 +1083,26 @@
         .decision-making__modal-media[hidden] {
             display: none !important;
         }
+        .decision-making__modal-media-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            min-width: 0;
+            flex: 1 1 auto;
+            width: 100%;
+            max-width: min(880px, 100%);
+        }
+        .decision-making__modal-video-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            text-align: center;
+            margin-bottom: 8px;
+            color: #94a3b8;
+        }
+        .decision-making__modal-video-label--blue { color: #7dd3fc; }
+        .decision-making__modal-video-label--green { color: #86efac; }
+        .decision-making__modal-video-label--red { color: #fca5a5; }
         .decision-making__modal-video {
             display: block;
             width: 100%;
@@ -1056,21 +1113,25 @@
             background: #000;
             object-fit: contain;
         }
-        .decision-making__modal-media:has(> .decision-making__modal-video:nth-child(2)) {
+        .decision-making__modal-media-cell .decision-making__modal-video {
+            max-width: 100%;
+        }
+        .decision-making__modal-media:has(> .decision-making__modal-media-cell:nth-child(2)) {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
         }
-        .decision-making__modal-media:has(> .decision-making__modal-video:nth-child(2)) .decision-making__modal-video {
-            max-width: 100%;
+        .decision-making__modal-media:has(> .decision-making__modal-media-cell:nth-child(2)) .decision-making__modal-media-cell {
+            max-width: none;
+        }
+        .decision-making__modal-media:has(> .decision-making__modal-media-cell:nth-child(2)) .decision-making__modal-video {
             max-height: min(52vh, 520px);
-            width: 100%;
         }
         @media (max-width: 640px) {
-            .decision-making__modal-media:has(> .decision-making__modal-video:nth-child(2)) {
+            .decision-making__modal-media:has(> .decision-making__modal-media-cell:nth-child(2)) {
                 grid-template-columns: 1fr;
             }
-            .decision-making__modal-media:has(> .decision-making__modal-video:nth-child(2)) .decision-making__modal-video {
+            .decision-making__modal-media:has(> .decision-making__modal-media-cell:nth-child(2)) .decision-making__modal-video {
                 max-height: min(42vh, 360px);
             }
         }
@@ -1136,6 +1197,16 @@
         }
         .decision-making__modal-btn:hover { background: #fff; }
     </style>
+    <script>
+        (function () {
+            try {
+                var m = new URLSearchParams(window.location.search).get("mission") || "";
+                if (m === "read-water" || m === "flooded-areas" || m === "decision-making") {
+                    document.documentElement.classList.add("mission-only-mode");
+                }
+            } catch (e) { /* ignore */ }
+        })();
+    </script>
 </head>
 <body>
     <div id="readTheWaterOverlay" class="read-the-water" hidden aria-hidden="true">
@@ -1214,8 +1285,6 @@
 
     <div class="toolbar" role="toolbar" aria-label="Viewer actions">
         <a href="index.html" class="mc-header-btn" title="Back to intro">← Intro</a>
-        <button type="button" id="userAuthBtn" class="mc-header-btn mc-header-btn--accent" title="Sign in or create an account">Sign in</button>
-        <button type="button" id="adminModeBtn" class="mc-header-btn" title="Zone editor (admin accounts only)">Admin</button>
         <button type="button" id="copyUrlBtn" class="mc-header-btn">Copy view URL</button>
     </div>
 
@@ -1316,39 +1385,6 @@
 
     <button type="button" id="panelExpandBtn" class="coords-weather-panel-expand" title="Show Master Control">Master Control ▱</button>
 
-    <div id="authModal" class="auth-modal" hidden role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
-        <div class="auth-modal__backdrop" id="authModalBackdrop"></div>
-        <div class="auth-modal__dialog">
-            <button type="button" class="auth-modal__close" id="authModalClose" aria-label="Close dialog">×</button>
-            <h2 id="authModalTitle" class="auth-modal__title">Account</h2>
-            <p id="authModalContext" class="auth-modal__context" hidden></p>
-            <div id="authPanel" class="auth-panel">
-                <div class="auth-panel__title">Username + 4-digit PIN (zones saved per account when logged in)</div>
-                <div id="authLoggedOut">
-                    <div class="auth-panel__row">
-                        <input type="text" id="authUsername" placeholder="Username" autocomplete="username" maxlength="32" />
-                        <input type="password" id="authPin" placeholder="PIN (4 digits)" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" />
-                    </div>
-                    <div class="auth-panel__row">
-                        <input type="password" id="authAdminCode" placeholder="Admin code (sign up only)" autocomplete="off" maxlength="16" aria-describedby="authAdminCodeHint" />
-                    </div>
-                    <p id="authAdminCodeHint" class="auth-panel__hint">Leave blank for a normal account. Enter the admin code only when signing up to be labelled Admin on this app.</p>
-                    <div class="auth-panel__row">
-                        <button type="button" id="authSignIn">Log in</button>
-                        <button type="button" id="authSignUp">Sign up</button>
-                    </div>
-                </div>
-                <div id="authLoggedIn" style="display:none;">
-                    <div class="auth-panel__row">
-                        <span id="authUserEmail" class="auth-panel__user"></span>
-                        <button type="button" id="authSignOut">Log out</button>
-                    </div>
-                </div>
-                <div id="authError" class="auth-panel__error" style="display:none;"></div>
-            </div>
-        </div>
-    </div>
-
     <button type="button" class="api-hint-toggle" id="apiHintToggle" aria-expanded="false" aria-controls="apiHint">Show API help</button>
     <div class="api-hint api-hint--collapsed" id="apiHint" role="region" aria-label="API usage">
         <h3>Send coordinates to Cesium</h3>
@@ -1358,16 +1394,18 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/config.js"></script>
-    <script src="js/supabaseConfig.js"></script>
-    <script src="js/supabaseAuth.js"></script>
-    <script src="js/floodConfig.js"></script>
-    <script src="js/gridManager.js"></script>
-    <script src="js/floodState.js"></script>
-    <script src="js/adminMode.js"></script>
-    <script src="js/app.js"></script>
-    <script src="js/readTheWater.js"></script>
-    <script src="js/identifyFlood.js"></script>
-    <script src="js/decisionMaking.js"></script>
+    <!-- Bump ?v= when local JS changes (avoids stale cache on localhost). -->
+    <script src="js/config.js?v=202604023"></script>
+    <script src="js/supabaseConfig.js?v=202604023"></script>
+    <script src="js/supabaseAuth.js?v=202604023"></script>
+    <script src="js/userAvatar.js?v=202604023"></script>
+    <script src="js/floodConfig.js?v=202604023"></script>
+    <script src="js/gridManager.js?v=202604023"></script>
+    <script src="js/floodState.js?v=202604023"></script>
+    <script src="js/adminMode.js?v=202604023"></script>
+    <script src="js/app.js?v=202604023"></script>
+    <script src="js/readTheWater.js?v=202604023"></script>
+    <script src="js/identifyFlood.js?v=202604023"></script>
+    <script src="js/decisionMaking.js?v=202604023"></script>
 </body>
 </html>
