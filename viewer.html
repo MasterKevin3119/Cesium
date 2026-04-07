@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Cesium – Meteo</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="favicon.ico" sizes="any" />
 
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
@@ -215,6 +217,12 @@
         .weather-result .rain { color: #7dd3fc; font-weight: 600; }
         .weather-result .error { color: #f87171; }
         .weather-result .loading { color: rgba(255,255,255,0.6); }
+        .weather-result .weather-source-fallback {
+            font-size: 11px;
+            color: rgba(251, 191, 36, 0.9);
+            margin: 10px 0 0 0;
+            line-height: 1.35;
+        }
         .weather-table-toggle-wrap { margin: 10px 0 6px 0; }
         .weather-table-toggle-btn {
             padding: 6px 10px;
@@ -418,73 +426,6 @@
         .swatch-rain1 { background: rgba(0, 64, 179, 0.65); }
         .swatch-depth05 { background: rgba(128, 242, 153, 0.55); }
         .swatch-depth1 { background: rgba(0, 153, 64, 0.65); }
-        .flood-map-source {
-            margin-bottom: 14px;
-            padding: 10px 10px 12px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.08);
-        }
-        .flood-map-source__label {
-            display: block;
-            font-size: 11px;
-            font-weight: 600;
-            color: rgba(255,255,255,0.88);
-            margin-bottom: 6px;
-            letter-spacing: 0.02em;
-        }
-        .flood-map-source__select {
-            width: 100%;
-            max-width: 100%;
-            padding: 8px 10px;
-            font-size: 12px;
-            border-radius: 6px;
-            border: 1px solid rgba(255,255,255,0.2);
-            background: rgba(0,0,0,0.35);
-            color: #fff;
-            margin-bottom: 8px;
-        }
-        .flood-map-source__hint {
-            font-size: 10px;
-            line-height: 1.4;
-            color: rgba(255,255,255,0.5);
-            margin: 0 0 10px 0;
-        }
-        .flood-map-source__publish {
-            width: 100%;
-            padding: 8px 10px;
-            font-size: 12px;
-            cursor: pointer;
-            border-radius: 6px;
-            border: 1px solid rgba(250, 204, 21, 0.45);
-            background: rgba(250, 204, 21, 0.12);
-            color: #fef9c3;
-        }
-        .flood-map-source__publish:hover { background: rgba(250, 204, 21, 0.2); }
-        .flood-map-source__publish-panel { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); }
-        .flood-map-source__publish-panel[hidden] { display: none !important; }
-        .flood-map-source__input {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 8px 10px;
-            font-size: 12px;
-            border-radius: 6px;
-            border: 1px solid rgba(255,255,255,0.22);
-            background: rgba(0,0,0,0.35);
-            color: #fff;
-            margin-bottom: 8px;
-        }
-        .flood-map-source__publish-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-        .flood-map-source__publish-actions button {
-            padding: 6px 12px;
-            font-size: 12px;
-            cursor: pointer;
-            border-radius: 6px;
-            border: 1px solid rgba(255,255,255,0.25);
-            background: rgba(255,255,255,0.12);
-            color: #fff;
-        }
-        .flood-map-source__status { font-size: 11px; color: rgba(167, 243, 208, 0.95); margin: 8px 0 0 0; min-height: 1.2em; }
         /* Solid, shared button look (toolbar + Master Control minimize) */
         .mc-header-btn {
             display: inline-flex;
@@ -1285,6 +1226,7 @@
 
     <div class="toolbar" role="toolbar" aria-label="Viewer actions">
         <a href="index.html" class="mc-header-btn" title="Back to intro">← Intro</a>
+        <button type="button" id="adminModeBtn" class="mc-header-btn" style="display:none;" title="Open zone editor">Edit zones</button>
         <button type="button" id="copyUrlBtn" class="mc-header-btn">Copy view URL</button>
     </div>
 
@@ -1311,20 +1253,6 @@
             <div id="weatherResult" class="weather-result" aria-live="polite"></div>
 
             <div id="floodControls" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
-                <div id="floodMapSourceWrap" class="flood-map-source">
-                    <label class="flood-map-source__label" for="floodMapSourceSelect">Zone layout</label>
-                    <select id="floodMapSourceSelect" aria-label="Which zone map to display on the grid"></select>
-                    <p class="flood-map-source__hint">Public map, <strong>your saved zones</strong> (when signed in), or a <strong>published scenario</strong>. Link: add <code style="font-size:10px;">&amp;layout=pub_your-slug</code> to the URL.</p>
-                    <button type="button" id="btnPublishScenario" class="flood-map-source__publish" style="display:none;">Publish current layout as scenario…</button>
-                    <div id="publishScenarioPanel" class="flood-map-source__publish-panel" hidden>
-                        <input type="text" id="publishScenarioName" class="flood-map-source__input" placeholder="Name (e.g. North campus drill)" maxlength="80" aria-label="Scenario name" />
-                        <div class="flood-map-source__publish-actions">
-                            <button type="button" id="publishScenarioConfirm">Publish</button>
-                            <button type="button" id="publishScenarioCancel">Cancel</button>
-                        </div>
-                        <p id="publishScenarioStatus" class="flood-map-source__status" role="status"></p>
-                    </div>
-                </div>
                 <h3 style="margin:0 0 8px 0; font-size:13px; color:#fff;">Flood Simulation</h3>
                 <!-- User: 0.5 m / 1 m by button; rain zones auto-show at 0.1 / 0.5 / 1 mm for that hour -->
                 <div id="userFloodView" style="margin-bottom:12px;">
@@ -1335,7 +1263,7 @@
                         <button type="button" id="btnClearFlood">Clear</button>
                     </div>
                     <div style="display:flex; gap:8px; margin-top:8px;">
-                        <button type="button" id="btnToggleGrid">Toggle Grid</button>
+                        <button type="button" id="btnToggleGrid">Hide grid lines</button>
                     </div>
                     <div id="zoneColorLegend" class="zone-color-legend" aria-label="Zone colour key">
                         <div class="zone-color-legend__title">Map colours (what you see)</div>
@@ -1365,7 +1293,7 @@
 
                 <!-- Admin mode: define which grid cells are 0.5 m or 1 m flood zones -->
                 <div id="adminControls" style="margin-top:12px; display:none; border-top:1px dashed rgba(255,255,255,0.06); padding-top:8px;">
-                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Admin editor: only accounts signed up with the admin code can open this. Pick a level, click grid cells, then Save (one level per cell).</div>
+                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Zone editor (admin accounts only): pick a level, click grid cells, then Save (one level per cell). Use <strong>Exit admin</strong> for the normal map view; <strong>Edit zones</strong> in the toolbar brings this back.</div>
                     <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Pale blue = 0.1 mm · Light blue = 0.5 mm · Dark blue = 1 mm · Light green = 0.5 m · Dark green = 1 m · Amber = pending</div>
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                         <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="30" checked> 0.1 mm</label>
@@ -1395,15 +1323,16 @@
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Bump ?v= when local JS changes (avoids stale cache on localhost). -->
-    <script src="js/config.js?v=202604023"></script>
+    <script src="js/config.js?v=202604072"></script>
     <script src="js/supabaseConfig.js?v=202604023"></script>
-    <script src="js/supabaseAuth.js?v=202604023"></script>
+    <script src="js/supabaseAuth.js?v=202604025"></script>
+    <script src="js/missionFirstAnswers.js?v=202604025"></script>
     <script src="js/userAvatar.js?v=202604023"></script>
-    <script src="js/floodConfig.js?v=202604023"></script>
+    <script src="js/floodConfig.js?v=202604077"></script>
     <script src="js/gridManager.js?v=202604023"></script>
     <script src="js/floodState.js?v=202604023"></script>
-    <script src="js/adminMode.js?v=202604023"></script>
-    <script src="js/app.js?v=202604023"></script>
+    <script src="js/adminMode.js?v=202604075"></script>
+    <script src="js/app.js?v=202604077"></script>
     <script src="js/readTheWater.js?v=202604023"></script>
     <script src="js/identifyFlood.js?v=202604023"></script>
     <script src="js/decisionMaking.js?v=202604023"></script>

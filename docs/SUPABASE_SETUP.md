@@ -1,4 +1,4 @@
-# Supabase setup for flood zones
+# Supabase setup
 
 ## 1. Create a project
 
@@ -8,10 +8,12 @@
 ## 2. Create the tables
 
 1. Open **SQL Editor** → **New query**.
-2. Paste and run **`supabase/migrations/001_flood_zones.sql`** (shared zones).
-3. New query again, paste and run **`supabase/migrations/002_flood_zones_by_user.sql`** (per-admin zones).
+2. Paste and run **`supabase/migrations/001_flood_zones.sql`** — **one shared zone layout** for the map (row keyed by `map_id`, usually `default`).
+3. (Optional) Skip **`002_flood_zones_by_user.sql`** — the app does **not** use per-user zone rows; all flood admins edit the same `flood_zones` row.
+4. (Optional) Run **`003_flood_zones_label.sql`** only if you maintain extra `flood_zones` rows with labels (not required for the default viewer).
+5. (Optional) Run **`supabase/migrations/004_mission_first_answers.sql`** so each signed-in user’s **first** answer per mission question is stored (retries are not saved again).
 
-## 3. Enable Email auth (for per-admin zones)
+## 3. Enable Email auth
 
 1. **Authentication** → **Providers** → **Email** → enable and save.
 2. (Optional) Under Email auth, turn off “Confirm email” for quicker testing.
@@ -31,34 +33,26 @@ window.FLOOD_SUPABASE_ANON_KEY = 'eyJ...';
 window.FLOOD_MAP_ID = 'default';
 ```
 
-Reload the app. You should see **Admin login** in the Master Control panel.
+Reload the app.
 
 ## Behaviour
 
-- **Not logged in:** Zones load/save against the shared **`flood_zones`** table. The **Admin** toolbar button is visible so admins can sign in; the **zone editor** opens only for **admin accounts** (see admin code below).
-- **Logged in:** Zones use **`flood_zones_by_user`**. Each account has its own zone set. **Admin → Save** applies only when the account is an **admin** editor account.
+### Flood zones (shared)
 
-**Login in the app:** use a **username** (letters, numbers, `_`, `-`, min 2 chars) and a **4-digit PIN**. Behind the scenes this becomes a Supabase email like `yourname@flood-app.local` and a 6-character password (`00` + your PIN) so it works with Supabase’s minimum password length. **Sign up or log in**, then click **Admin** to edit zones and **Save**. Another username = another zone set.
+- **Everyone** (signed in or not) **reads** the same zones from **`flood_zones`** for `FLOOD_MAP_ID` (e.g. `default`).
+- **Only flood admins** can **write** zones to Supabase (the app sends POST only when `flood_is_admin` is set on the user). Multiple admins are different people (PICs) editing the **same** layout; the last save wins for that row.
+- The viewer **re-pulls** periodically and when the tab becomes visible so admins see updates from others without a full reload.
 
-**Admin code (required to edit zones):** On **sign up only**, the **Admin code** field must be set to the app’s configured code (`3119` in `js/app.js`) to store `flood_is_admin` in **user metadata**. Only those accounts see the **Admin** button and can open the grid editor. Other signed-in users do not see **Admin** and cannot edit zones (app-side only; use RLS/Edge Functions for stronger guarantees).
+### Accounts
 
-**Existing users** created before the admin flag: add `flood_is_admin: true` under **User metadata** in the Supabase Dashboard (Authentication → user), or create a new account with the admin code.
+- **Normal users:** sign in so mission flows can store answers (e.g. **`mission_first_answers`**) — not a separate zone layout per user.
+- **Admins:** sign up with the **admin code** (`3119` in `js/authUi.js`) so `flood_is_admin` is set in user metadata. They get the zone editor in the simulator.
 
-## Published scenarios (shared zone layouts)
+**Login in the app:** username (letters, numbers, `_`, `-`, min 2 chars) and **4-digit PIN**. This maps to a Supabase email `name@flood-app.local` and password `00` + PIN.
 
-Run **`supabase/migrations/003_flood_zones_label.sql`** if you want an optional **`label`** column on **`flood_zones`** (nicer names in the viewer). The app works without it.
-
-In **Master Control → Zone layout**:
-
-- **Public · default map** — row `map_id = default` in **`flood_zones`**.
-- **My saved zones** — your row in **`flood_zones_by_user`** (when signed in).
-- **Scenario · …** — rows whose **`map_id`** starts with **`pub_`** (published snapshots).
-
-**Flood admins** can use **Publish current layout as scenario…** to copy the **current in-memory zones** (what you last loaded or edited) into **`flood_zones`** as `pub_<slug>` with an optional **label**.
-
-Deep link: **`viewer.html?lat=…&lon=…&layout=pub_your-slug`**. **Copy view URL** includes **`layout`** when a non-default source is selected.
+**Existing users** without the admin flag: add `flood_is_admin: true` in **User metadata** (Supabase Dashboard → Authentication → user), or create a new account with the admin code.
 
 ## Security
 
-- **`flood_zones`**: RLS in 001 allows public read/write (demo).
-- **`flood_zones_by_user`**: RLS in 002 allows only the authenticated user to read/write their own rows.
+- **`flood_zones`:** default demo RLS often allows anon read/write; for production, restrict **insert/update** to admins (service role, Edge Function, or policies on `auth.jwt()` claims).
+- **`mission_first_answers`:** RLS allows each user to **insert** and **select** only their own rows.

@@ -192,6 +192,8 @@
   }
 
   window.supabaseAuth = {
+    /** Same Supabase client as auth (for RLS-scoped inserts). */
+    getSupabaseClient: getClient,
     getCurrentUser: getCurrentUser,
     getAuthForApi: getAuthForApi,
     signIn: signIn,

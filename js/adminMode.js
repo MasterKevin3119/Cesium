@@ -5,57 +5,96 @@
   let viewerRef = null;
   let clickHandler = null;
   let enabled = false;
+  /** True when signed-in user is a flood admin (zone editor may be shown). */
+  let adminChromeAllowed = false;
   let buttonListenerAttached = false;
 
   function isEnabled() {
     return enabled;
   }
 
-  function setEnabled(val) {
-    var on = !!val;
-    if (on) {
-      if (!isFloodEditorAccount()) {
-        on = false;
-        clearStoredAdminPreference();
-      }
-    }
-    enabled = on;
-    try { localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0'); } catch (e) { /* ignore */ }
-    const adminPanel = document.getElementById('adminControls');
-    if (adminPanel) adminPanel.style.display = enabled ? 'block' : 'none';
-    const btn = document.getElementById('adminModeBtn');
-    if (btn) btn.style.background = enabled ? '#ffcc00' : '';
-    // Refresh grid colors when switching mode (admin vs user view)
-    try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
-  }
-
-  /** If editor is on but this account is not allowed, turn it off (stale session or toggled user). */
-  function synchronizeEditorWithAccount() {
-    if (!enabled) return;
-    if (!isFloodEditorAccount()) {
-      setEnabled(false);
-      detachClick();
-      clearStoredAdminPreference();
-    }
-  }
-
-  function loadEnabled() {
+  function loadAdminEditingPreference() {
     try {
-      const v = localStorage.getItem(STORAGE_KEY);
-      return v === '1';
-    } catch (e) { return false; }
+      var v = localStorage.getItem(STORAGE_KEY);
+      if (v === '0') return false;
+      if (v === '1') return true;
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 
   function clearStoredAdminPreference() {
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
   }
 
-  /** Turn off admin after sign-out or missing session. */
+  function syncToolbarAdminBtn() {
+    var btn = document.getElementById('adminModeBtn');
+    if (!btn) return;
+    if (!adminChromeAllowed) {
+      btn.style.display = 'none';
+      btn.style.background = '';
+      return;
+    }
+    btn.style.display = enabled ? 'none' : 'inline-flex';
+    btn.style.background = '';
+  }
+
+  /**
+   * @param {boolean} val
+   * @param {{ persist?: boolean }} [opts] persist: write localStorage (user chose Exit / Edit zones)
+   */
+  function setEnabled(val, opts) {
+    opts = opts || {};
+    var on = !!val;
+    if (on && !isFloodEditorAccount()) {
+      on = false;
+      clearStoredAdminPreference();
+    }
+    enabled = on;
+    if (opts.persist) {
+      try { localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0'); } catch (e) { /* ignore */ }
+    }
+    var adminPanel = document.getElementById('adminControls');
+    if (adminPanel) {
+      if (!adminChromeAllowed) adminPanel.style.display = 'none';
+      else adminPanel.style.display = enabled ? 'block' : 'none';
+    }
+    syncToolbarAdminBtn();
+    try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
+  }
+
+  function hideAllAdminUi() {
+    adminChromeAllowed = false;
+    enabled = false;
+    detachClick();
+    var adminPanel = document.getElementById('adminControls');
+    if (adminPanel) adminPanel.style.display = 'none';
+    syncToolbarAdminBtn();
+  }
+
+  /** If editor is on but this account is not allowed, turn it off. */
+  function synchronizeEditorWithAccount() {
+    if (!isFloodEditorAccount()) {
+      hideAllAdminUi();
+      clearStoredAdminPreference();
+      return;
+    }
+    var wasAllowed = adminChromeAllowed;
+    adminChromeAllowed = true;
+    if (!wasAllowed) {
+      var pref = loadAdminEditingPreference();
+      var startOn = pref !== false;
+      setEnabled(startOn, { persist: false });
+      if (startOn) attachClick();
+      else detachClick();
+    }
+    syncToolbarAdminBtn();
+  }
+
   function disableAfterLogout() {
     try { window._floodPendingAdminEnable = false; } catch (e) { /* ignore */ }
-    if (!enabled) return;
-    setEnabled(false);
-    detachClick();
+    hideAllAdminUi();
     clearStoredAdminPreference();
   }
 
@@ -63,10 +102,11 @@
     return !!(window.supabaseAuth && typeof window.supabaseAuth.isFloodAdmin === 'function' && window.supabaseAuth.isFloodAdmin());
   }
 
-  /** Called from app.js after successful sign-in/up when user opened Admin first. */
+  /** Deep link ?admin=1 after login. */
   function enableAfterAuth() {
     if (!viewerRef || !isFloodEditorAccount()) return;
-    setEnabled(true);
+    adminChromeAllowed = true;
+    setEnabled(true, { persist: true });
     attachClick();
   }
 
@@ -82,82 +122,96 @@
           var next = encodeURIComponent(page + (window.location.search || '') + (window.location.hash || ''));
           window.location.href = 'index.html?next=' + next;
         } catch (e) {
-          alert('Sign in on the intro page (Sign in / Admin), then open the simulator again.');
+          alert('Sign in on the intro page, then open the simulator again.');
         }
         return;
       }
       if (!isFloodEditorAccount()) {
-        alert('Only admin accounts can edit flood zones. Use Sign up with the admin code, or sign in with an admin account.');
+        alert('Only admin accounts can edit flood zones. Sign up with the admin code, or sign in with an admin account.');
         return;
       }
-      setEnabled(true);
+      adminChromeAllowed = true;
+      setEnabled(true, { persist: true });
       attachClick();
     });
   }
 
   function init(viewer) {
     viewerRef = viewer;
-    const stored = loadEnabled();
-    setEnabled(false);
+    adminChromeAllowed = false;
+    enabled = false;
     detachClick();
+    var adminPanel = document.getElementById('adminControls');
+    if (adminPanel) adminPanel.style.display = 'none';
+    syncToolbarAdminBtn();
 
     if (!window.supabaseAuth || typeof window.supabaseAuth.isReady !== 'function' || !window.supabaseAuth.isReady()) {
-      if (stored) clearStoredAdminPreference();
-    } else {
-      window.supabaseAuth.getAuthForApi(function (auth) {
-        if (stored && auth && isFloodEditorAccount()) {
-          setEnabled(true);
-          attachClick();
-        } else if (stored && (!auth || !isFloodEditorAccount())) {
-          clearStoredAdminPreference();
+      return;
+    }
+    window.supabaseAuth.getAuthForApi(function (auth) {
+      if (!auth || !isFloodEditorAccount()) {
+        return;
+      }
+      adminChromeAllowed = true;
+      var pref = loadAdminEditingPreference();
+      var startOn = pref !== false;
+      setEnabled(startOn, { persist: false });
+      if (startOn) attachClick();
+    });
+
+    var btn = document.getElementById('adminModeBtn');
+    if (btn && !buttonListenerAttached) {
+      buttonListenerAttached = true;
+      btn.addEventListener('click', function () {
+        if (enabled) {
+          setEnabled(false, { persist: true });
+          detachClick();
+        } else {
+          tryEnableAdminFromClick();
         }
       });
     }
 
-    const btn = document.getElementById('adminModeBtn');
-    if (btn && !buttonListenerAttached) {
-      buttonListenerAttached = true;
-      btn.addEventListener('click', function () {
-        if (enabled) { setEnabled(false); detachClick(); return; }
-        tryEnableAdminFromClick();
+    var exitBtn = document.getElementById('btnExitAdmin');
+    if (exitBtn) {
+      exitBtn.addEventListener('click', function () {
+        setEnabled(false, { persist: true });
+        detachClick();
       });
     }
 
-    const exitBtn = document.getElementById('btnExitAdmin');
-    if (exitBtn) exitBtn.addEventListener('click', function () { setEnabled(false); detachClick(); });
-
-    // Wire admin clear/save buttons
-    const clearBtn = document.getElementById('btnAdminClearTemp');
-    const saveBtn = document.getElementById('btnAdminSave');
-    if (clearBtn) clearBtn.addEventListener('click', function () {
-      try { if (window.gridManager) window.gridManager.clearTempSelection(); } catch (e) { /* ignore */ }
-    });
-    if (saveBtn) saveBtn.addEventListener('click', function () {
-      const radios = document.getElementsByName('adminEditLevel');
-      let level = '30';
-      for (let i = 0; i < radios.length; i++) if (radios[i].checked) { level = radios[i].value; break; }
-      try {
-        if (window.gridManager) window.gridManager.saveSelection(level);
-        var label = level === '0.5' ? '0.5 m' : level === '1' ? '1 m' : level === '30' ? '0.1 mm' : level === '60' ? '0.5 mm' : level === '100' ? '1 mm' : level;
-        alert('Saved selection for ' + label);
-      } catch (e) { alert('Save failed'); }
-    });
+    var clearBtn = document.getElementById('btnAdminClearTemp');
+    var saveBtn = document.getElementById('btnAdminSave');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function () {
+        try { if (window.gridManager) window.gridManager.clearTempSelection(); } catch (e) { /* ignore */ }
+      });
+    }
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function () {
+        var radios = document.getElementsByName('adminEditLevel');
+        var level = '30';
+        for (var i = 0; i < radios.length; i++) if (radios[i].checked) { level = radios[i].value; break; }
+        try {
+          if (window.gridManager) window.gridManager.saveSelection(level);
+          var label = level === '0.5' ? '0.5 m' : level === '1' ? '1 m' : level === '30' ? '0.1 mm' : level === '60' ? '0.5 mm' : level === '100' ? '1 mm' : level;
+          alert('Saved selection for ' + label);
+        } catch (e) { alert('Save failed'); }
+      });
+    }
   }
 
   function attachClick() {
     if (!viewerRef || clickHandler) return;
     if (!isFloodEditorAccount()) return;
-    const handler = new Cesium.ScreenSpaceEventHandler(viewerRef.scene.canvas);
+    var handler = new Cesium.ScreenSpaceEventHandler(viewerRef.scene.canvas);
     handler.setInputAction(function (click) {
       if (!enabled) return;
-      const picked = viewerRef.scene.pick(click.position);
+      var picked = viewerRef.scene.pick(click.position);
       if (!picked || !picked.id) return;
-      const entity = picked.id;
-      // find zone whose outlineEntity equals this entity
-      const z = (window.floodZones || []).find(function (zz) { return zz.outlineEntity === entity; });
+      var entity = picked.id;
+      var z = (window.floodZones || []).find(function (zz) { return zz.outlineEntity === entity; });
       if (!z) return;
-      // determine edit level from radio
-      // toggle temporary selection via gridManager
       try { if (window.gridManager) window.gridManager.toggleTempSelection(z.id); } catch (e) { console.error(e); }
       try { if (window.gridManager) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);

@@ -1,6 +1,6 @@
 /**
- * Account UI (Sign in / Admin) for pages without the Cesium viewer.
- * Viewer uses the same Supabase session; zone editor opens in viewer.html?admin=1
+ * Account UI (Sign in / Sign up) for pages without the Cesium viewer.
+ * Viewer uses the same Supabase session; admins get the zone editor automatically.
  */
 (function () {
   'use strict';
@@ -9,13 +9,13 @@
 
   function initFloodAuthUi(opts) {
     opts = opts || {};
-    var adminBtnId = opts.adminBtnId || 'landingAdminBtn';
+    var signUpBtnId = opts.signUpBtnId || 'landingSignUpBtn';
     var userAuthBtnId = opts.userAuthBtnId || 'landingAuthBtn';
 
     var panel = document.getElementById('authPanel');
     var modal = document.getElementById('authModal');
     var userAuthBtn = document.getElementById(userAuthBtnId);
-    var adminModeBtn = document.getElementById(adminBtnId);
+    var landingSignUpBtn = document.getElementById(signUpBtnId);
     var loggedOut = document.getElementById('authLoggedOut');
     var loggedIn = document.getElementById('authLoggedIn');
     var authUserEmail = document.getElementById('authUserEmail');
@@ -30,11 +30,25 @@
 
     if (!panel || !window.supabaseAuth || !window.supabaseAuth.isReady()) {
       if (userAuthBtn) userAuthBtn.style.display = 'none';
-      if (adminModeBtn) adminModeBtn.style.display = 'none';
+      if (landingSignUpBtn) landingSignUpBtn.style.display = 'none';
       return;
     }
 
     var authModalContext = document.getElementById('authModalContext');
+
+    /** Sign up is only for guests — hide whenever Supabase has an active session. */
+    function updateLandingSignUpVisible(show) {
+      if (!landingSignUpBtn) return;
+      if (!show) {
+        landingSignUpBtn.hidden = true;
+        landingSignUpBtn.style.display = 'none';
+        landingSignUpBtn.setAttribute('aria-hidden', 'true');
+      } else {
+        landingSignUpBtn.hidden = false;
+        landingSignUpBtn.style.removeProperty('display');
+        landingSignUpBtn.removeAttribute('aria-hidden');
+      }
+    }
 
     function setAuthModeLogin() {
       if (authModeLogin) authModeLogin.hidden = false;
@@ -93,20 +107,16 @@
       });
     }
 
-    if (adminModeBtn) {
-      adminModeBtn.addEventListener('click', function () {
-        window.supabaseAuth.getAuthForApi(function (auth) {
-          if (!auth) {
-            try { window._floodAuthNext = 'viewer.html?admin=1'; } catch (e) { /* ignore */ }
-            openAuthModal('Sign in or sign up to open the zone editor in the simulator. Admins: use the admin code when signing up.');
-            return;
-          }
-          if (!window.supabaseAuth.isFloodAdmin || !window.supabaseAuth.isFloodAdmin()) {
-            alert('Only admin accounts can edit zones. Sign up with the admin code or use an admin account.');
-            return;
-          }
-          window.location.href = 'viewer.html?admin=1';
-        });
+    if (landingSignUpBtn) {
+      landingSignUpBtn.addEventListener('click', function () {
+        try { window._floodAuthNext = null; } catch (e) { /* ignore */ }
+        openAuthModal('');
+        setAuthModeSignUp();
+        try {
+          var sh = document.getElementById('avatarShuffle');
+          if (sh) sh.focus();
+          else if (authUsername) authUsername.focus();
+        } catch (e2) { /* ignore */ }
       });
     }
 
@@ -186,13 +196,16 @@
         }
         try { window._floodAuthNext = next; } catch (e) { /* ignore */ }
         var ctx = next.indexOf('admin=1') !== -1
-          ? 'Sign in with an admin account to open the zone editor in the simulator.'
+          ? 'Sign in with an admin account to open the zone editor (admins see it automatically after sign-in).'
           : 'Sign in to continue to the simulator.';
         openAuthModal(ctx);
       });
     }
 
-    function updateAuthUI() {
+    function updateAuthUI(sessionAuth) {
+      var hasSession = !!sessionAuth;
+      updateLandingSignUpVisible(!hasSession);
+
       var user = window.supabaseAuth.getCurrentUser();
       if (user) {
         if (loggedOut) loggedOut.style.display = 'none';
@@ -215,10 +228,6 @@
           userAuthBtn.classList.toggle('site-header__auth--admin', !!user.isAdmin);
         }
         showError('');
-        if (adminModeBtn) {
-          if (user.isAdmin) adminModeBtn.style.removeProperty('display');
-          else adminModeBtn.style.display = 'none';
-        }
       } else {
         if (loggedOut) loggedOut.style.display = 'block';
         if (loggedIn) loggedIn.style.display = 'none';
@@ -233,16 +242,15 @@
           userAuthBtn.title = 'Sign in or create an account';
           userAuthBtn.classList.remove('site-header__auth--admin');
         }
-        if (adminModeBtn) adminModeBtn.style.removeProperty('display');
       }
     }
 
     function authRefreshUi() {
-      window.supabaseAuth.getAuthForApi(function () {
+      window.supabaseAuth.getAuthForApi(function (auth) {
         try {
           if (window.userAvatar) window.userAvatar.refreshFromSession();
         } catch (e) { /* ignore */ }
-        updateAuthUI();
+        updateAuthUI(auth);
       });
     }
 

@@ -36,6 +36,8 @@
   let GRID_ROWS = 32;
   let GRID_COLS = 32;
   const GRID_BASE_HEIGHT = 75; // meters elevation for all grid boxes (reduced by 50%)
+  /** When false, zone rectangles stay (for live rain/flood colours); only the yellow cell outlines hide. */
+  let gridOutlineVisible = true;
 
   // Helper: compute rectangle degrees [west, south, east, north] around center
   function computeFloodBounds() {
@@ -109,7 +111,7 @@
           coordinates: rect,
           material: Cesium.Color.WHITE.withAlpha(0.05),
           fill: true,
-          outline: true,
+          outline: gridOutlineVisible,
           outlineColor: Cesium.Color.YELLOW,
           outlineWidth: 3,
           height: GRID_BASE_HEIGHT,
@@ -437,18 +439,27 @@
 
   function readUrlParams() {
     const params = new URLSearchParams(window.location.search);
-    try {
-      if (window.floodConfig && typeof window.floodConfig.setViewSourceKey === "function") {
-        const layout = params.get("layout");
-        if (layout != null && layout !== "") window.floodConfig.setViewSourceKey(layout);
-      }
-    } catch (e) { /* ignore */ }
     const lat = params.get("lat");
     const lon = params.get("lon");
     const height = params.get("height");
     if (lat != null && lon != null) {
       flyToCoordinates(parseFloat(lon), parseFloat(lat), height != null ? parseFloat(height) : undefined, true);
     }
+  }
+
+  /** Re-pull shared `flood_zones` so all admins see each other’s saves; refresh when tab becomes visible. */
+  const SHARED_ZONES_POLL_MS = 90000;
+  function startSharedFloodZonesPolling() {
+    if (!window.floodConfig || typeof window.floodConfig.pullFromSupabase !== "function") return;
+    function pullAndRedraw() {
+      window.floodConfig.pullFromSupabase(function () {
+        try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
+      });
+    }
+    setInterval(pullAndRedraw, SHARED_ZONES_POLL_MS);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") pullAndRedraw();
+    });
   }
 
   /** Sign-in UI is on index.html; keep session + zones in sync on the viewer. */
@@ -475,9 +486,6 @@
           }
         } catch (e) { /* ignore */ }
         refreshZonesAfterAuth();
-        try {
-          if (typeof window.rebuildFloodMapSourceSelect === "function") window.rebuildFloodMapSourceSelect();
-        } catch (e) { /* ignore */ }
       });
     }
     onSessionChange();
@@ -512,7 +520,7 @@
         }
         if (!window.supabaseAuth.isFloodAdmin || !window.supabaseAuth.isFloodAdmin()) {
           stripAdminParam();
-          alert("Only admin accounts can open the zone editor. Use Admin on the intro page after signing in with an admin account.");
+          alert("Only admin accounts can open the zone editor. Sign up with the admin code on the intro page, then sign in.");
           return;
         }
         if (window.adminMode && typeof window.adminMode.enableAfterAuth === "function") {
@@ -529,7 +537,6 @@
     const btn1m = document.getElementById('btnFlood1m');
     const btnClear = document.getElementById('btnClearFlood');
     const btnToggle = document.getElementById('btnToggleGrid');
-    let gridVisible = true;
     if (btn05m) btn05m.addEventListener('click', function () {
       try { if (window.floodState) window.floodState.trigger('0.5'); } catch (e) { /* ignore */ }
     });
@@ -540,20 +547,18 @@
       try { if (window.floodState) window.floodState.clearAll(); } catch (e) { /* ignore */ }
     });
     if (btnToggle) btnToggle.addEventListener('click', function () {
-      gridVisible = !gridVisible;
-      if (!gridVisible) {
-        // remove outlines
-        floodZones.forEach(function (z) {
-          if (z.outlineEntity) {
-            try { viewer.entities.remove(z.outlineEntity); } catch (e) { /* ignore */ }
-            z.outlineEntity = null;
-          }
-        });
-        try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
-      } else {
-        renderZoneGrid();
-      }
+      gridOutlineVisible = !gridOutlineVisible;
+      floodZones.forEach(function (z) {
+        if (z.outlineEntity && z.outlineEntity.rectangle) {
+          try {
+            z.outlineEntity.rectangle.outline = new Cesium.ConstantProperty(gridOutlineVisible);
+          } catch (e) { /* ignore */ }
+        }
+      });
+      if (btnToggle) btnToggle.textContent = gridOutlineVisible ? 'Hide grid lines' : 'Show grid lines';
+      try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
     });
+    if (btnToggle) btnToggle.textContent = gridOutlineVisible ? 'Hide grid lines' : 'Show grid lines';
 
     // Minimize data table + Table/Graph tab (delegation)
     const weatherResultEl = document.getElementById('weatherResult');
@@ -643,123 +648,10 @@
     // Admin button is wired in adminMode.init() (called once at startup)
   }
 
-  function initFloodMapSourceUI() {
-    var wrap = document.getElementById("floodMapSourceWrap");
-    var sel = document.getElementById("floodMapSourceSelect");
-    if (!wrap || !sel || !window.floodConfig) return;
-    if (!window.floodConfig.isSupabaseReady()) {
-      wrap.style.display = "none";
-      window.rebuildFloodMapSourceSelect = function () {};
-      return;
-    }
-
-    function syncPublishButton() {
-      var pubBtn = document.getElementById("btnPublishScenario");
-      if (!pubBtn) return;
-      var show = !!(window.supabaseAuth && typeof window.supabaseAuth.isFloodAdmin === "function" && window.supabaseAuth.isFloodAdmin());
-      pubBtn.style.display = show ? "" : "none";
-      if (!show) {
-        var pan = document.getElementById("publishScenarioPanel");
-        if (pan) pan.hidden = true;
-      }
-    }
-
-    function applyLayoutFromSelect() {
-      window.floodConfig.setViewSourceKey(sel.value);
-      window.floodConfig.pullFromSupabase(function () {
-        try {
-          if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals();
-        } catch (e) { /* ignore */ }
-      });
-    }
-
-    function rebuildFloodMapSourceSelect(after) {
-      syncPublishButton();
-      if (!window.supabaseAuth || typeof window.supabaseAuth.getAuthForApi !== "function") {
-        if (typeof after === "function") after();
-        return;
-      }
-      window.supabaseAuth.getAuthForApi(function (auth) {
-        window.floodConfig.listPublishedScenarios(function (rows) {
-          var stored = window.floodConfig.getViewSourceKey();
-          var selKey = stored;
-          if (selKey === "__mine__" && !auth) selKey = "default";
-          if (selKey == null) selKey = auth ? "__mine__" : "default";
-          sel.innerHTML = "";
-          function opt(v, t) {
-            var o = document.createElement("option");
-            o.value = v;
-            o.textContent = t;
-            sel.appendChild(o);
-          }
-          opt("default", "Public · default map");
-          if (auth) opt("__mine__", "My saved zones");
-          rows.forEach(function (r) {
-            opt(r.map_id, "Scenario · " + window.floodConfig.scenarioDisplayLabel(r.map_id, r.label));
-          });
-          var has = false;
-          for (var i = 0; i < sel.options.length; i++) {
-            if (sel.options[i].value === selKey) {
-              has = true;
-              break;
-            }
-          }
-          if (!has) {
-            selKey = auth ? "__mine__" : "default";
-            window.floodConfig.setViewSourceKey(selKey);
-          }
-          sel.value = selKey;
-          if (typeof after === "function") after();
-        });
-      });
-    }
-
-    window.rebuildFloodMapSourceSelect = function (after) {
-      rebuildFloodMapSourceSelect(after);
-    };
-
-    sel.addEventListener("change", applyLayoutFromSelect);
-
-    var pubBtn = document.getElementById("btnPublishScenario");
-    var pubPanel = document.getElementById("publishScenarioPanel");
-    var pubInput = document.getElementById("publishScenarioName");
-    var pubGo = document.getElementById("publishScenarioConfirm");
-    var pubCancel = document.getElementById("publishScenarioCancel");
-    var pubStat = document.getElementById("publishScenarioStatus");
-    if (pubBtn && pubPanel && pubInput && pubGo && pubCancel && pubStat) {
-      pubBtn.addEventListener("click", function () {
-        pubStat.textContent = "";
-        pubInput.value = "";
-        pubPanel.hidden = false;
-        try {
-          pubInput.focus();
-        } catch (e) { /* ignore */ }
-      });
-      pubCancel.addEventListener("click", function () {
-        pubPanel.hidden = true;
-      });
-      pubGo.addEventListener("click", function () {
-        pubStat.textContent = "";
-        if (!window.supabaseAuth || typeof window.supabaseAuth.isFloodAdmin !== "function" || !window.supabaseAuth.isFloodAdmin()) {
-          pubStat.textContent = "Only flood admins can publish.";
-          return;
-        }
-        window.floodConfig.publishScenario(pubInput.value, function (ok, err, slug) {
-          if (!ok) {
-            pubStat.textContent = err || "Publish failed";
-            return;
-          }
-          pubPanel.hidden = true;
-          window.floodConfig.setViewSourceKey(slug);
-          rebuildFloodMapSourceSelect(applyLayoutFromSelect);
-        });
-      });
-    }
-
-    rebuildFloodMapSourceSelect();
-  }
-
-  const WEATHER_API = "https://api.open-meteo.com/v1/forecast";
+  const WEATHER_API =
+    typeof CONFIG !== "undefined" && CONFIG.OPEN_METEO_FORECAST
+      ? String(CONFIG.OPEN_METEO_FORECAST).replace(/\/$/, "")
+      : "https://api.open-meteo.com/v1/forecast";
 
   const gravityScratch = new Cesium.Cartesian3();
   function rainUpdateCallback(p, dt) {
@@ -1066,6 +958,11 @@
       html += "</div>";
     }
 
+    if (data._floodSimWeatherSource === "wttr") {
+      html +=
+        '<p class="weather-source-fallback">Backup forecast: wttr.in (3-hourly steps). Open-Meteo was unavailable.</p>';
+    }
+
     if (h && h.time && h.time.length) {
       const precips = h.precipitation || h.rain || [];
       const codes = h.weather_code || [];
@@ -1198,6 +1095,109 @@
     if (lr) lr.textContent = (precip != null && !isNaN(precip)) ? Number(precip).toFixed(2) + ' mm' : '—';
   }
 
+  /** wttr.in `time` is HHMM as integer * 100 (e.g. 600 → 06:00). */
+  function wttrTimeToIso(dateStr, timeStr) {
+    var n = parseInt(timeStr, 10);
+    if (isNaN(n)) n = 0;
+    var h = Math.floor(n / 100);
+    var m = n % 100;
+    var hh = (h < 10 ? "0" : "") + h;
+    var mm = (m < 10 ? "0" : "") + m;
+    return dateStr + "T" + hh + ":" + mm + ":00";
+  }
+
+  /** Approximate WMO-style code for our UI (Open-Meteo uses WMO; wttr uses WorldWeatherOnline codes). */
+  function syntheticWmoFromPrecipCloud(precipMm, cloudcover) {
+    var p = Number(precipMm);
+    var c = Number(cloudcover);
+    if (isNaN(p)) p = 0;
+    if (isNaN(c)) c = 0;
+    if (p >= 5) return 65;
+    if (p >= 1.5) return 63;
+    if (p >= 0.1) return 61;
+    if (c >= 90) return 3;
+    if (c >= 50) return 2;
+    if (c >= 25) return 2;
+    return 1;
+  }
+
+  /**
+   * Normalize wttr.in `format=j1` JSON into the same shape as Open-Meteo (hourly is 3-hourly steps).
+   */
+  function normalizeWttrToOpenMeteoShape(w) {
+    var cc = (w && w.current_condition && w.current_condition[0]) || {};
+    var tempRaw = cc.temp_C != null ? cc.temp_C : cc.tempC;
+    var temp = parseFloat(tempRaw);
+    var precip = parseFloat(cc.precipMM);
+    if (isNaN(precip)) precip = 0;
+    if (isNaN(temp)) temp = null;
+    var hum = parseFloat(cc.humidity);
+    var cloud = parseFloat(cc.cloudcover);
+    var wmo = syntheticWmoFromPrecipCloud(precip, cloud);
+    var current = {
+      temperature_2m: temp,
+      precipitation: precip,
+      rain: precip,
+      weather_code: wmo,
+      relative_humidity_2m: isNaN(hum) ? null : hum,
+      cloud_cover: isNaN(cloud) ? null : cloud,
+    };
+    var times = [];
+    var temperature_2m = [];
+    var precips = [];
+    var codes = [];
+    var humids = [];
+    var clouds = [];
+    var days = (w && w.weather) || [];
+    for (var di = 0; di < days.length; di++) {
+      var day = days[di];
+      var dateStr = day.date;
+      var hours = day.hourly || [];
+      for (var hi = 0; hi < hours.length; hi++) {
+        var h = hours[hi];
+        times.push(wttrTimeToIso(dateStr, h.time));
+        var t2 = parseFloat(h.tempC);
+        temperature_2m.push(isNaN(t2) ? null : t2);
+        var pr = parseFloat(h.precipMM);
+        if (isNaN(pr)) pr = 0;
+        precips.push(pr);
+        var cl = parseFloat(h.cloudcover);
+        codes.push(syntheticWmoFromPrecipCloud(pr, cl));
+        var hu = parseFloat(h.humidity);
+        humids.push(isNaN(hu) ? null : hu);
+        clouds.push(isNaN(cl) ? null : cl);
+      }
+    }
+    return {
+      current: current,
+      hourly: {
+        time: times,
+        temperature_2m: temperature_2m,
+        precipitation: precips,
+        rain: precips,
+        weather_code: codes,
+        relative_humidity_2m: humids,
+        cloud_cover: clouds,
+      },
+    };
+  }
+
+  function fetchWeatherWttrFallback(lat, lon) {
+    var path = "https://wttr.in/" + String(lat) + "," + String(lon) + "?format=j1";
+    return fetch(path)
+      .then(function (res) {
+        if (!res.ok) throw new Error("Backup weather failed: " + res.status);
+        return res.json();
+      })
+      .then(function (wttr) {
+        var json = normalizeWttrToOpenMeteoShape(wttr);
+        var h = json.hourly;
+        if (!h || !h.time || !h.time.length) throw new Error("Backup weather: no hourly data");
+        json._floodSimWeatherSource = "wttr";
+        showWeatherData(lat, lon, json);
+      });
+  }
+
   function fetchWeatherForCoordinates(lat, lon) {
     const url = WEATHER_API +
       "?latitude=" + encodeURIComponent(lat) +
@@ -1213,10 +1213,22 @@
         return res.json();
       })
       .then(function (json) {
+        if (!json || (!json.current && !json.hourly)) throw new Error("Weather response empty");
         showWeatherData(lat, lon, json);
       })
+      .catch(function () {
+        return fetchWeatherWttrFallback(lat, lon);
+      })
       .catch(function (err) {
-        showWeatherError(err.message || "Could not load weather.");
+        var msg = (err && err.message) ? err.message : "Could not load weather.";
+        if (/Failed to fetch|NetworkError|Load failed|CORS|access control|blocked by cors/i.test(msg)) {
+          msg =
+            "Weather data could not be reached (Open-Meteo and backup both failed). " +
+            "If Open-Meteo returns 502, the browser may show a CORS error for that request.";
+        } else if (/Backup weather/i.test(msg)) {
+          msg = "Could not load weather from Open-Meteo or wttr.in backup. Check your network or try again later.";
+        }
+        showWeatherError(msg);
       });
   }
 
@@ -1320,13 +1332,6 @@
     url.searchParams.set("lat", lat.toFixed(6));
     url.searchParams.set("lon", lon.toFixed(6));
     url.searchParams.set("height", Math.round(height));
-    try {
-      if (window.floodConfig && typeof window.floodConfig.getViewSourceKey === "function") {
-        const lk = window.floodConfig.getViewSourceKey();
-        if (lk != null && lk !== "") url.searchParams.set("layout", lk);
-        else url.searchParams.delete("layout");
-      }
-    } catch (e) { /* ignore */ }
     return url.toString();
   }
 
@@ -1483,13 +1488,6 @@
       try { if (window.gridManager && typeof window.gridManager.init === 'function') window.gridManager.init(viewer); } catch (e) { /* ignore */ }
       renderZoneGrid();
       try {
-        if (window.floodConfig && typeof window.floodConfig.setViewSourceKey === "function") {
-          const p = new URLSearchParams(window.location.search);
-          const ly = p.get("layout");
-          if (ly != null && ly !== "") window.floodConfig.setViewSourceKey(ly);
-        }
-      } catch (e) { /* ignore */ }
-      try {
         if (window.floodConfig && typeof window.floodConfig.pullFromSupabase === 'function') {
           window.floodConfig.pullFromSupabase(function (ok) {
             if (ok) {
@@ -1515,8 +1513,8 @@
     initTimeSlider();
     // Flood controls in the coords/weather panel
     try { initFloodControls(); } catch (e) { /* ignore */ }
-    try { initFloodMapSourceUI(); } catch (e) { /* ignore */ }
     try { initViewerSessionSync(); } catch (e) { /* ignore */ }
+    try { startSharedFloodZonesPolling(); } catch (e) { /* ignore */ }
     setTimeout(function () { try { applyAdminDeepLink(); } catch (e) { /* ignore */ } }, 500);
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("lat") == null || urlParams.get("lon") == null) {

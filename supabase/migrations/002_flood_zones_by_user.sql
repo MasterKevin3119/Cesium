@@ -1,4 +1,8 @@
--- Per-admin zones: each authenticated user has their own zone set.
+-- OPTIONAL — not used by the current app. All admins edit one shared row in `flood_zones` (see 001).
+-- This table was for per-user zone layouts; you can skip this migration entirely.
+-- If you already ran it, it is harmless to leave in place.
+--
+-- Legacy description: per-user zone sets (deprecated for this codebase).
 -- Run in Supabase → SQL Editor after 001_flood_zones.sql.
 -- Requires Supabase Auth (Authentication → Providers → Email enabled).
 

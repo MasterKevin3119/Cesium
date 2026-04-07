@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Flood Simulator</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path fill='%2338bdf8' d='M16 4c-2 4-8 10-8 16a8 8 0 0 0 16 0c0-6-6-12-8-16z'/></svg>" type="image/svg+xml" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="favicon.ico" sizes="any" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
@@ -672,8 +673,8 @@
                 <a href="#mission">Mission</a>
             </nav>
             <div class="site-header__actions">
-                <button type="button" id="landingAuthBtn" class="site-header__auth site-header__auth--primary" title="Sign in or create an account">Sign in</button>
-                <button type="button" id="landingAdminBtn" class="site-header__auth" title="Zone editor (admin) — opens simulator">Admin</button>
+                <button type="button" id="landingAuthBtn" class="site-header__auth site-header__auth--primary" title="Sign in to your account">Sign in</button>
+                <button type="button" id="landingSignUpBtn" class="site-header__auth" title="Create an account">Sign up</button>
             </div>
         </div>
     </header>
@@ -840,7 +841,7 @@
     <script src="js/supabaseConfig.js?v=202604022"></script>
     <script src="js/supabaseAuth.js?v=202604024"></script>
     <script src="js/userAvatar.js?v=202604024"></script>
-    <script src="js/authUi.js?v=202604024"></script>
+    <script src="js/authUi.js?v=202604076"></script>
     <script>
         (function () {
             var hero = document.querySelector("section.hero");

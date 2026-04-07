@@ -22,4 +22,11 @@ const CONFIG = {
     lon: { min: -180, max: 180 },
     height: { min: 100, max: 10000000 },
   },
+  /**
+   * Open-Meteo forecast endpoint (same path/query shape as the public API).
+   * If this host errors (e.g. 502), the viewer falls back to wttr.in JSON (3-hourly).
+   * Override if you use your own proxy.
+   * @see https://open-meteo.com/en/docs
+   */
+  OPEN_METEO_FORECAST: "https://api.open-meteo.com/v1/forecast",
 };
