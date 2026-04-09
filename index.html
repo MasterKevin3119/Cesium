@@ -155,6 +155,23 @@
         .site-header__auth-label {
             min-width: 0;
         }
+        .site-header__profile {
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.45rem 0.7rem;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(30, 41, 59, 0.65);
+            color: rgba(226, 232, 240, 0.95);
+            cursor: pointer;
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+        .site-header__profile:hover {
+            background: rgba(51, 65, 85, 0.9);
+            border-color: rgba(56, 189, 248, 0.45);
+            color: #fff;
+        }
         .avatar-picker {
             margin-bottom: 14px;
             padding-bottom: 14px;
@@ -261,6 +278,73 @@
         .auth-modal__context { margin: -6px 0 12px 0; font-size: 12px; line-height: 1.45; color: rgba(148, 163, 184, 0.95); padding-right: 36px; }
         .auth-modal__context[hidden] { display: none !important; }
         .auth-modal .auth-panel { margin-bottom: 0; }
+        .auth-panel__profile-link {
+            display: block;
+            width: 100%;
+            margin-top: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 6px;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            background: rgba(14, 165, 233, 0.12);
+            color: #bae6fd;
+            font-weight: 600;
+        }
+        .auth-panel__profile-link:hover {
+            background: rgba(14, 165, 233, 0.2);
+        }
+        .profile-settings-modal .auth-modal__dialog {
+            max-width: 420px;
+            max-height: min(92vh, 720px);
+            overflow-y: auto;
+            padding-bottom: 20px;
+        }
+        .profile-section {
+            margin-bottom: 16px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        }
+        .profile-section:last-of-type {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .profile-section__title {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(226, 232, 240, 0.95);
+            margin: 0 0 10px 0;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .profile-detail {
+            font-size: 13px;
+            color: rgba(226, 232, 240, 0.9);
+            margin: 0 0 6px 0;
+            word-break: break-all;
+        }
+        .profile-detail__label {
+            display: block;
+            font-size: 10px;
+            color: rgba(148, 163, 184, 0.85);
+            margin-bottom: 2px;
+        }
+        .profile-settings__hint {
+            font-size: 10px;
+            color: rgba(148, 163, 184, 0.8);
+            margin: 0 0 8px 0;
+            line-height: 1.4;
+        }
+        .profile-settings__success {
+            font-size: 12px;
+            color: #86efac;
+            margin-top: 8px;
+            display: none;
+        }
+        .profile-settings__btn {
+            margin-top: 8px;
+        }
         @media (max-width: 520px) {
             .site-header { padding: 0.75rem 1rem; }
             .site-header nav { gap: 0; }
@@ -673,6 +757,7 @@
                 <a href="#mission">Mission</a>
             </nav>
             <div class="site-header__actions">
+                <button type="button" id="landingProfileBtn" class="site-header__profile" hidden title="Profile settings">Profile</button>
                 <button type="button" id="landingAuthBtn" class="site-header__auth site-header__auth--primary" title="Sign in to your account">Sign in</button>
                 <button type="button" id="landingSignUpBtn" class="site-header__auth" title="Create an account">Sign up</button>
             </div>
@@ -744,7 +829,7 @@
         <section id="mission">
             <h2>Mission</h2>
             <p style="margin-bottom: 1.5rem;">
-                Open a mission to read what you will do, then tap <strong>Play</strong> to start in the simulator. When you finish, you can continue to the next mission or return here.
+                <strong>Sign in or create an account</strong> to open the flood map and play missions. Open a mission to read what you will do, then tap <strong>Play</strong> to start in the simulator. When you finish, you can continue to the next mission or return here.
                 When you <strong>create an account</strong>, you choose an <strong>explorer avatar</strong> — the same face follows you on mission pages and in the simulator after you sign in.
             </p>
             <div class="mission-cards">
@@ -826,6 +911,7 @@
                     </div>
                 </div>
                 <div id="authLoggedIn" style="display:none;">
+                    <button type="button" id="authOpenProfile" class="auth-panel__profile-link">Profile settings</button>
                     <div class="auth-panel__row">
                         <span id="authUserEmail" class="auth-panel__user"></span>
                         <button type="button" id="authSignOut">Log out</button>
@@ -836,12 +922,56 @@
         </div>
     </div>
 
+    <div id="profileSettingsModal" class="auth-modal profile-settings-modal" hidden role="dialog" aria-modal="true" aria-labelledby="profileSettingsModalTitle">
+        <div class="auth-modal__backdrop" id="profileSettingsModalBackdrop"></div>
+        <div class="auth-modal__dialog">
+            <button type="button" class="auth-modal__close" id="profileSettingsModalClose" aria-label="Close dialog">×</button>
+            <h2 id="profileSettingsModalTitle" class="auth-modal__title">Profile settings</h2>
+            <div class="auth-panel" style="margin-bottom: 0;">
+                <div class="profile-section">
+                    <div class="profile-section__title">Explorer avatar</div>
+                    <div class="avatar-picker" style="border-bottom: none; padding-bottom: 0; margin-bottom: 0;">
+                        <p class="avatar-picker__hint" style="margin-top: 0;">Style and shuffle apply to your account immediately.</p>
+                        <div class="avatar-picker__preview"><img id="profileAvatarPreview" width="72" height="72" alt="" /></div>
+                        <div class="avatar-picker__styles" id="profileAvatarStyleChips"></div>
+                        <button type="button" id="profileAvatarShuffle" class="avatar-picker__shuffle">Shuffle look</button>
+                    </div>
+                </div>
+                <div class="profile-section">
+                    <div class="profile-section__title">Account</div>
+                    <p class="profile-detail"><span class="profile-detail__label">Username</span><span id="profileAccountUsername">—</span></p>
+                    <p class="profile-detail"><span class="profile-detail__label">Sign-in email</span><span id="profileAccountEmail">—</span></p>
+                </div>
+                <div class="profile-section" id="profileUsernameChangeSection" hidden>
+                    <div class="profile-section__title">Change username</div>
+                    <p class="profile-settings__hint">Only accounts using the built-in username format can be renamed here. If your project requires email confirmation, Supabase may send a confirmation link.</p>
+                    <div class="auth-panel__row">
+                        <input type="text" id="profileNewUsername" placeholder="New username" autocomplete="username" maxlength="32" />
+                    </div>
+                    <button type="button" class="profile-settings__btn" id="profileSaveUsername">Update username</button>
+                </div>
+                <div class="profile-section">
+                    <div class="profile-section__title">Change PIN</div>
+                    <p class="profile-settings__hint">Your PIN is your password (4 digits). You stay signed in on this device after changing it.</p>
+                    <div class="auth-panel__row">
+                        <input type="password" id="profileNewPin" placeholder="New PIN (4 digits)" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password" />
+                        <input type="password" id="profileConfirmPin" placeholder="Confirm PIN" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password" />
+                    </div>
+                    <button type="button" class="profile-settings__btn" id="profileSavePin">Update PIN</button>
+                </div>
+                <div id="profileSettingsError" class="auth-panel__error" style="display:none;margin-top:10px;"></div>
+                <p id="profileSettingsOk" class="profile-settings__success" style="display:none;"></p>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/config.js?v=202604022"></script>
     <script src="js/supabaseConfig.js?v=202604022"></script>
-    <script src="js/supabaseAuth.js?v=202604024"></script>
-    <script src="js/userAvatar.js?v=202604024"></script>
-    <script src="js/authUi.js?v=202604076"></script>
+    <script src="js/supabaseAuth.js?v=202604083"></script>
+    <script src="js/userAvatar.js?v=202604083"></script>
+    <script src="js/authUi.js?v=202604083"></script>
+    <script src="js/profileSettings.js?v=202604083"></script>
     <script>
         (function () {
             var hero = document.querySelector("section.hero");

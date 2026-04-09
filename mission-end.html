@@ -12,6 +12,10 @@
   <link rel="stylesheet" href="mission-pages.css" />
 </head>
 <body>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabaseConfig.js?v=202604023"></script>
+  <script src="js/supabaseAuth.js?v=202604025"></script>
+  <script src="js/requireAuthGate.js?v=202604081"></script>
   <div class="mission-shell">
     <header class="mission-shell__header">
       <a class="logo" href="index.html">Flood Simulator</a>
@@ -25,6 +29,7 @@
       <span class="mission-shell__badge">Complete</span>
       <h1 class="mission-shell__title mission-end__title" id="endTitle">Mission complete</h1>
       <p class="mission-end__sub" id="endSub"></p>
+      <div class="mission-shell__card mission-end-summary" id="missionFirstTrySummary" hidden aria-live="polite"></div>
       <div class="mission-actions">
         <a class="btn btn-primary" id="btnNextMission" href="index.html#mission">Next</a>
         <a class="btn btn-secondary" id="btnMissionHub" href="index.html#mission">Back to missions</a>
@@ -73,6 +78,20 @@
       if (btnHub) {
         btnHub.textContent = "Back to missions";
         btnHub.href = "index.html#mission";
+      }
+
+      var missionLabel = idx >= 0 && ORDER[idx] ? ORDER[idx].label : "";
+      window.__MISSION_END_COMPLETED__ = completed;
+      window.__MISSION_END_LABEL__ = missionLabel;
+    })();
+  </script>
+  <script src="js/missionEndSummary.js?v=202604081"></script>
+  <script>
+    (function () {
+      var id = window.__MISSION_END_COMPLETED__ || "";
+      var label = window.__MISSION_END_LABEL__ || "";
+      if (window.missionEndSummary && typeof window.missionEndSummary.run === "function") {
+        window.missionEndSummary.run(id, label);
       }
     })();
   </script>

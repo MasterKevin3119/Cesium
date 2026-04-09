@@ -161,11 +161,12 @@
     }
   }
 
-  function initPicker(modalRoot) {
-    if (!modalRoot) return;
-    var preview = document.getElementById('avatarPreview');
-    var chipsWrap = document.getElementById('avatarStyleChips');
-    var shuffleBtn = document.getElementById('avatarShuffle');
+  /**
+   * @param {HTMLImageElement} preview
+   * @param {HTMLElement} chipsWrap
+   * @param {HTMLButtonElement|null} shuffleBtn
+   */
+  function bindAvatarPicker(preview, chipsWrap, shuffleBtn) {
     if (!preview || !chipsWrap) return;
 
     var state = getPrefs();
@@ -214,6 +215,25 @@
     });
   }
 
+  function initPicker(modalRoot) {
+    if (!modalRoot) return;
+    var preview = document.getElementById('avatarPreview');
+    var chipsWrap = document.getElementById('avatarStyleChips');
+    var shuffleBtn = document.getElementById('avatarShuffle');
+    bindAvatarPicker(preview, chipsWrap, shuffleBtn);
+  }
+
+  var profilePickerBound = false;
+  function initProfilePicker() {
+    if (profilePickerBound) return;
+    var preview = document.getElementById('profileAvatarPreview');
+    var chipsWrap = document.getElementById('profileAvatarStyleChips');
+    var shuffleBtn = document.getElementById('profileAvatarShuffle');
+    if (!preview || !chipsWrap) return;
+    profilePickerBound = true;
+    bindAvatarPicker(preview, chipsWrap, shuffleBtn);
+  }
+
   function refreshFromSession() {
     try {
       window.dispatchEvent(new CustomEvent('floodAvatar:changed', { detail: getPrefs() }));
@@ -238,6 +258,7 @@
     refreshSignInButton: refreshSignInButton,
     refreshFromSession: refreshFromSession,
     initPicker: initPicker,
+    initProfilePicker: initProfilePicker,
     mergeSignupMetadataInto: mergeSignupMetadataInto,
   };
 })();

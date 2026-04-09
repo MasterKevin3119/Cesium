@@ -12,6 +12,8 @@
     var signUpBtnId = opts.signUpBtnId || 'landingSignUpBtn';
     var userAuthBtnId = opts.userAuthBtnId || 'landingAuthBtn';
 
+    var landingProfileBtn = document.getElementById('landingProfileBtn');
+
     var panel = document.getElementById('authPanel');
     var modal = document.getElementById('authModal');
     var userAuthBtn = document.getElementById(userAuthBtnId);
@@ -31,6 +33,7 @@
     if (!panel || !window.supabaseAuth || !window.supabaseAuth.isReady()) {
       if (userAuthBtn) userAuthBtn.style.display = 'none';
       if (landingSignUpBtn) landingSignUpBtn.style.display = 'none';
+      if (landingProfileBtn) landingProfileBtn.hidden = true;
       return;
     }
 
@@ -158,8 +161,17 @@
       if (!raw || typeof raw !== 'string') return null;
       var s = raw.trim();
       try { s = decodeURIComponent(s); } catch (e) { /* ignore */ }
-      if (!/^viewer\.html([?#].*)?$/i.test(s)) return null;
-      return s;
+      if (s.indexOf('..') !== -1) return null;
+      if (/^https?:\/\//i.test(s)) return null;
+      var patterns = [
+        /^viewer\.html([?#].*)?$/i,
+        /^mission-(read-water|flooded-areas|decision-making)\.html([?#].*)?$/i,
+        /^mission-end\.html([?#].*)?$/i,
+      ];
+      for (var i = 0; i < patterns.length; i++) {
+        if (patterns[i].test(s)) return s;
+      }
+      return null;
     }
 
     function maybeRedirectAfterAuth() {
@@ -195,9 +207,14 @@
           return;
         }
         try { window._floodAuthNext = next; } catch (e) { /* ignore */ }
-        var ctx = next.indexOf('admin=1') !== -1
-          ? 'Sign in with an admin account to open the zone editor (admins see it automatically after sign-in).'
-          : 'Sign in to continue to the simulator.';
+        var ctx;
+        if (next.indexOf('admin=1') !== -1) {
+          ctx = 'Sign in with an admin account to open the zone editor (admins see it automatically after sign-in).';
+        } else if (/^mission-.*\.html/i.test(next)) {
+          ctx = 'Sign in or create an account to open missions and the flood map.';
+        } else {
+          ctx = 'Sign in or create an account to use the simulator and missions.';
+        }
         openAuthModal(ctx);
       });
     }
@@ -210,6 +227,10 @@
       if (user) {
         if (loggedOut) loggedOut.style.display = 'none';
         if (loggedIn) loggedIn.style.display = 'block';
+        if (landingProfileBtn) {
+          landingProfileBtn.hidden = false;
+          landingProfileBtn.removeAttribute('hidden');
+        }
         if (authUserEmail) {
           var nm = accountDisplayName(user);
           authUserEmail.textContent = user.isAdmin ? (nm + ' · Admin') : nm;
@@ -231,6 +252,10 @@
       } else {
         if (loggedOut) loggedOut.style.display = 'block';
         if (loggedIn) loggedIn.style.display = 'none';
+        if (landingProfileBtn) {
+          landingProfileBtn.hidden = true;
+          landingProfileBtn.setAttribute('hidden', '');
+        }
         if (authUserEmail) authUserEmail.textContent = '';
         if (userAuthBtn) {
           try {
@@ -321,6 +346,14 @@
         showError('');
         window.supabaseAuth.signOut();
         closeAuthModal();
+      });
+    }
+
+    var authOpenProfile = document.getElementById('authOpenProfile');
+    if (authOpenProfile) {
+      authOpenProfile.addEventListener('click', function () {
+        closeAuthModal();
+        if (typeof window.openFloodProfileModal === 'function') window.openFloodProfileModal();
       });
     }
 

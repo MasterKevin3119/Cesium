@@ -194,4 +194,41 @@ body {
   margin: 0 0 1.75rem;
   font-size: 1rem;
 }
+.mission-end-summary {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+.mission-end-summary[hidden] {
+  display: none !important;
+}
+.mission-end-summary__heading {
+  font-family: "Oswald", sans-serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+  color: var(--white);
+}
+.mission-end-summary__text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.mission-end-summary__lead {
+  margin-bottom: 0.85rem;
+}
+.mission-end-summary__list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+.mission-end-summary__item {
+  margin-bottom: 0.5rem;
+}
+.mission-end-summary__item strong {
+  color: var(--text);
+  font-weight: 600;
+}
 [hidden] { display: none !important; }

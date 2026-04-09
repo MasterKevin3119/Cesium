@@ -191,6 +191,58 @@
       });
   }
 
+  /**
+   * Set account password (4-digit PIN is mapped to a string password at sign-in).
+   * @param {string} newPassword - raw password string for Supabase (e.g. from pinToSupabasePassword)
+   * @param {function(string|null)} done - err message or null
+   */
+  function updatePassword(newPassword, done) {
+    var c = getClient();
+    if (!c) {
+      if (done) done('Supabase not configured');
+      return;
+    }
+    if (!newPassword || typeof newPassword !== 'string') {
+      if (done) done('Invalid password');
+      return;
+    }
+    c.auth.updateUser({ password: newPassword })
+      .then(function (r) {
+        var err = r.error ? (r.error.message || 'Could not update PIN') : null;
+        if (done) done(err);
+      })
+      .catch(function (e) {
+        if (done) done(e.message || e);
+      });
+  }
+
+  /**
+   * Change sign-in email (for @flood-app.local accounts this is how "username" is changed).
+   * @param {string} newEmail
+   * @param {function(string|null)} done
+   */
+  function updateEmail(newEmail, done) {
+    var c = getClient();
+    if (!c) {
+      if (done) done('Supabase not configured');
+      return;
+    }
+    if (!newEmail || typeof newEmail !== 'string') {
+      if (done) done('Invalid email');
+      return;
+    }
+    c.auth.updateUser({ email: newEmail.trim() })
+      .then(function (r) {
+        var err = r.error ? (r.error.message || 'Could not update email') : null;
+        if (!err && r.data && r.data.user) cachedUser = userFromSupabaseUser(r.data.user);
+        if (!err && authCallback) authCallback();
+        if (done) done(err);
+      })
+      .catch(function (e) {
+        if (done) done(e.message || e);
+      });
+  }
+
   window.supabaseAuth = {
     /** Same Supabase client as auth (for RLS-scoped inserts). */
     getSupabaseClient: getClient,
@@ -201,6 +253,8 @@
     signOut: signOut,
     onAuthChange: onAuthChange,
     updateUserMetadata: updateUserMetadata,
+    updatePassword: updatePassword,
+    updateEmail: updateEmail,
     isReady: function () { return getClient() !== null; },
     isFloodAdmin: function () {
       var u = getCurrentUser();

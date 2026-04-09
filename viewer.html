@@ -1150,6 +1150,10 @@
     </script>
 </head>
 <body>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabaseConfig.js?v=202604023"></script>
+    <script src="js/supabaseAuth.js?v=202604025"></script>
+    <script src="js/requireAuthGate.js?v=202604081"></script>
     <div id="readTheWaterOverlay" class="read-the-water" hidden aria-hidden="true">
         <header class="read-the-water__header">
             <h1 class="read-the-water__title">Read The Water</h1>
@@ -1321,11 +1325,8 @@
         <p><strong>postMessage (iframe/parent):</strong> <code>{ type: 'cesiumFlyTo', lat, lon, height?, addMarker? }</code></p>
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Bump ?v= when local JS changes (avoids stale cache on localhost). -->
     <script src="js/config.js?v=202604072"></script>
-    <script src="js/supabaseConfig.js?v=202604023"></script>
-    <script src="js/supabaseAuth.js?v=202604025"></script>
     <script src="js/missionFirstAnswers.js?v=202604025"></script>
     <script src="js/userAvatar.js?v=202604023"></script>
     <script src="js/floodConfig.js?v=202604077"></script>
