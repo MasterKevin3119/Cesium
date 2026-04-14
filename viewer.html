@@ -1295,21 +1295,47 @@
                     </div>
                 </div>
 
-                <!-- Admin mode: define which grid cells are 0.5 m or 1 m flood zones -->
+                <!-- Admin mode: flood grid and/or 3D houses & roads -->
                 <div id="adminControls" style="margin-top:12px; display:none; border-top:1px dashed rgba(255,255,255,0.06); padding-top:8px;">
-                    <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Zone editor (admin accounts only): pick a level, click grid cells, then Save (one level per cell). Use <strong>Exit admin</strong> for the normal map view; <strong>Edit zones</strong> in the toolbar brings this back.</div>
-                    <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Pale blue = 0.1 mm · Light blue = 0.5 mm · Dark blue = 1 mm · Light green = 0.5 m · Dark green = 1 m · Amber = pending</div>
-                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="30" checked> 0.1 mm</label>
-                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="60"> 0.5 mm</label>
-                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="100"> 1 mm</label>
-                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="0.5"> 0.5 m</label>
-                        <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="1"> 1 m</label>
-                        <button id="btnAdminClearTemp">Clear Temp</button>
-                        <button id="btnAdminSave">Save</button>
-                        <button id="btnExitAdmin">Exit Admin</button>
+                    <div style="font-size:12px; margin-bottom:8px; color:rgba(255,255,255,0.85);">
+                        <strong>Edit mode:</strong>
+                        <label style="margin-left:8px;"><input type="radio" name="adminEditTarget" value="flood" checked> Flood grid</label>
+                        <label style="margin-left:8px;"><input type="radio" name="adminEditTarget" value="scene"> Houses &amp; roads</label>
                     </div>
-                    <div style="font-size:12px; margin-top:8px; color:rgba(255,255,255,0.8);">Click grid cells to toggle selection for the chosen level, then <strong>Save</strong>.</div>
+                    <div id="adminFloodTools">
+                        <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Zone editor (admin accounts only): pick a level, click grid cells, then Save (one level per cell). Use <strong>Exit admin</strong> for the normal map view; <strong>Edit zones</strong> in the toolbar brings this back.</div>
+                        <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Pale blue = 0.1 mm · Light blue = 0.5 mm · Dark blue = 1 mm · Light green = 0.5 m · Dark green = 1 m · Amber = pending</div>
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="30" checked> 0.1 mm</label>
+                            <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="60"> 0.5 mm</label>
+                            <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="100"> 1 mm</label>
+                            <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="0.5"> 0.5 m</label>
+                            <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="1"> 1 m</label>
+                            <button id="btnAdminClearTemp" type="button">Clear Temp</button>
+                            <button id="btnAdminSave" type="button">Save</button>
+                        </div>
+                        <div style="font-size:12px; margin-top:8px; color:rgba(255,255,255,0.8);">Click grid cells to toggle selection for the chosen level, then <strong>Save</strong>.</div>
+                    </div>
+                    <div id="adminSceneTools" style="display:none; margin-top:8px;">
+                        <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.88);">Place simple 3D boxes (houses) and grey corridors (roads) on the map. All viewers load the same scene for this map. Use <strong>Save scene</strong> to sync to the server.</div>
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
+                            <label style="font-size:13px;">Tool:
+                                <select id="adminSceneTool" style="margin-left:4px;">
+                                    <option value="none">—</option>
+                                    <option value="house">Place house</option>
+                                    <option value="road">Draw road (clicks)</option>
+                                    <option value="delete">Delete (click object)</option>
+                                </select>
+                            </label>
+                            <button id="btnAdminRoadFinish" type="button">Finish road</button>
+                            <button id="btnAdminSceneSave" type="button">Save scene</button>
+                            <button id="btnAdminSceneClear" type="button">Clear all</button>
+                        </div>
+                        <div style="font-size:11px; color:rgba(255,255,255,0.65);">Road: click points along the path, then <strong>Finish road</strong>. Houses use a fixed size (edit in code later if needed).</div>
+                    </div>
+                    <div style="margin-top:10px;">
+                        <button id="btnExitAdmin" type="button">Exit Admin</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1333,7 +1359,8 @@
     <script src="js/gridManager.js?v=202604023"></script>
     <script src="js/floodState.js?v=202604023"></script>
     <script src="js/adminMode.js?v=202604075"></script>
-    <script src="js/app.js?v=202604077"></script>
+    <script src="js/mapScene.js?v=202604143"></script>
+    <script src="js/app.js?v=202604142"></script>
     <script src="js/readTheWater.js?v=202604023"></script>
     <script src="js/identifyFlood.js?v=202604023"></script>
     <script src="js/decisionMaking.js?v=202604023"></script>

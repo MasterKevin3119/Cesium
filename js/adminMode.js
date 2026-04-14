@@ -61,6 +61,7 @@
       else adminPanel.style.display = enabled ? 'block' : 'none';
     }
     syncToolbarAdminBtn();
+    try { if (window.mapScene && window.mapScene.syncSceneToolsVisibility) window.mapScene.syncSceneToolsVisibility(); } catch (e) { /* ignore */ }
     try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
   }
 
@@ -207,6 +208,15 @@
     var handler = new Cesium.ScreenSpaceEventHandler(viewerRef.scene.canvas);
     handler.setInputAction(function (click) {
       if (!enabled) return;
+      if (window.mapScene && typeof window.mapScene.isSceneEditActive === 'function' && window.mapScene.isSceneEditActive()) {
+        var sceneTool = document.getElementById('adminSceneTool');
+        var st = sceneTool ? String(sceneTool.value || 'none') : 'none';
+        if (st !== 'none') {
+          try { window.mapScene.handleAdminClick(click); } catch (e) { console.error(e); }
+          return;
+        }
+        return;
+      }
       var picked = viewerRef.scene.pick(click.position);
       if (!picked || !picked.id) return;
       var entity = picked.id;

@@ -244,30 +244,78 @@
             border-color: rgba(56, 189, 248, 0.55);
             background: rgba(56, 189, 248, 0.08);
         }
-        .auth-panel { margin-bottom: 12px; padding: 10px 12px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+        .auth-panel { margin-bottom: 12px; padding: 12px 14px 14px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
         .auth-panel__title { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.85); margin-bottom: 8px; }
         .auth-panel__row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+        .auth-panel__row--actions { justify-content: center; }
         .auth-panel__row:last-of-type { margin-bottom: 0; }
-        .auth-panel input[type="text"], .auth-panel input[type="password"] { flex: 1; min-width: 120px; padding: 8px 10px; font-size: 13px; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; background: rgba(0,0,0,0.35); color: #fff; }
-        .auth-panel button { padding: 8px 12px; font-size: 12px; cursor: pointer; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.15); color: #fff; }
-        .auth-panel button:hover { background: rgba(255,255,255,0.25); }
+        .auth-panel input[type="text"], .auth-panel input[type="password"] {
+            flex: 1;
+            min-width: 120px;
+            padding: 8px 10px;
+            font-size: 13px;
+            border: 1px solid rgba(255,255,255,0.28);
+            border-radius: 6px;
+            background: rgba(0,0,0,0.35);
+            color: #fff;
+            outline: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .auth-panel input[type="text"]:focus, .auth-panel input[type="password"]:focus {
+            border-color: rgba(255,255,255,0.45);
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.35);
+        }
+        .auth-panel input:-webkit-autofill,
+        .auth-panel input:-webkit-autofill:hover,
+        .auth-panel input:-webkit-autofill:focus {
+            -webkit-text-fill-color: #fff;
+            -webkit-box-shadow: 0 0 0 1000px rgba(0,0,0,0.35) inset;
+            box-shadow: 0 0 0 1000px rgba(0,0,0,0.35) inset;
+            transition: background-color 5000s ease-out 0s;
+            border: 1px solid rgba(255,255,255,0.28);
+        }
+        .auth-panel button:not(.auth-panel__link-btn):not(.auth-panel__profile-link):not(.avatar-picker__shuffle) {
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+        .auth-panel button:not(.auth-panel__link-btn):not(.auth-panel__profile-link):not(.avatar-picker__shuffle):hover {
+            background: rgba(255,255,255,0.25);
+        }
         .auth-panel__user { font-size: 12px; color: rgba(255,255,255,0.75); }
         .auth-panel__error { font-size: 12px; color: #f87171; margin-top: 4px; }
         .auth-panel__hint { font-size: 10px; color: rgba(255,255,255,0.45); margin: -2px 0 6px 0; line-height: 1.35; }
         .auth-panel__hint--tight { margin: 0 0 12px 0; }
-        .auth-panel__switch { font-size: 11px; color: rgba(148, 163, 184, 0.95); margin: 12px 0 0 0; text-align: center; }
+        .auth-panel__switch {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.35rem 0.5rem;
+            font-size: 11px;
+            line-height: 1.4;
+            color: rgba(148, 163, 184, 0.95);
+            margin: 10px 0 0 0;
+            text-align: left;
+        }
         .auth-panel__link-btn {
             font: inherit;
+            font-size: inherit;
             font-weight: 600;
             color: #7dd3fc;
             background: none;
             border: none;
             padding: 0;
+            margin: 0;
             cursor: pointer;
-            text-decoration: underline;
-            text-underline-offset: 2px;
+            text-decoration: none;
+            border-radius: 4px;
         }
-        .auth-panel__link-btn:hover { color: #bae6fd; }
+        .auth-panel__link-btn:hover { color: #bae6fd; text-decoration: underline; text-underline-offset: 2px; }
         .auth-modal { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
         .auth-modal[hidden] { display: none !important; }
         .auth-modal__backdrop { position: absolute; inset: 0; z-index: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
@@ -293,6 +341,17 @@
         }
         .auth-panel__profile-link:hover {
             background: rgba(14, 165, 233, 0.2);
+        }
+        .auth-panel__signed-in-as {
+            margin: 10px 0 0 0;
+            padding: 0;
+            text-align: center;
+            font-size: 12px;
+            line-height: 1.45;
+            word-break: break-word;
+        }
+        .auth-panel__signed-in-as .auth-panel__user {
+            color: rgba(226, 232, 240, 0.92);
         }
         .profile-settings-modal .auth-modal__dialog {
             max-width: 420px;
@@ -887,7 +946,7 @@
                     </div>
                     <div id="authModeLogin">
                         <p class="auth-panel__hint auth-panel__hint--tight">Use the same username and PIN you created at sign up.</p>
-                        <div class="auth-panel__row">
+                        <div class="auth-panel__row auth-panel__row--actions">
                             <button type="button" id="authSignIn">Log in</button>
                         </div>
                         <p class="auth-panel__switch">Need an account? <button type="button" class="auth-panel__link-btn" id="authSwitchToSignUp">Create an account</button></p>
@@ -904,7 +963,7 @@
                             <input type="password" id="authAdminCode" placeholder="Admin code (optional)" autocomplete="off" maxlength="16" aria-describedby="authAdminCodeHint" />
                         </div>
                         <p id="authAdminCodeHint" class="auth-panel__hint">Leave blank for a normal account. Enter the admin code only when creating an admin account.</p>
-                        <div class="auth-panel__row">
+                        <div class="auth-panel__row auth-panel__row--actions">
                             <button type="button" id="authSignUp">Sign up</button>
                         </div>
                         <p class="auth-panel__switch"><button type="button" class="auth-panel__link-btn" id="authSwitchToLogin">Back to log in</button></p>
@@ -912,8 +971,8 @@
                 </div>
                 <div id="authLoggedIn" style="display:none;">
                     <button type="button" id="authOpenProfile" class="auth-panel__profile-link">Profile settings</button>
-                    <div class="auth-panel__row">
-                        <span id="authUserEmail" class="auth-panel__user"></span>
+                    <p class="auth-panel__signed-in-as"><span id="authUserEmail" class="auth-panel__user"></span></p>
+                    <div class="auth-panel__row auth-panel__row--actions">
                         <button type="button" id="authSignOut">Log out</button>
                     </div>
                 </div>

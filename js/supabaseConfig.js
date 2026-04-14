@@ -1,6 +1,6 @@
 /**
  * Supabase: one shared zone map in `flood_zones` (see FLOOD_MAP_ID). Flood admins may POST updates;
- * signed-in users use auth mainly for mission answers (`mission_first_answers`).
+ * optional `map_scene` holds admin-placed houses/roads (migration 005). Signed-in users use auth mainly for mission answers (`mission_first_answers`).
  * 1. Run supabase/migrations/001_flood_zones.sql (and 004_mission_first_answers.sql if you use missions).
  * 2. Paste Project URL + anon key from Supabase → Settings → API.
  * Leave URL empty to use localStorage-only zones (no cross-device sync).

@@ -12,6 +12,7 @@
 3. (Optional) Skip **`002_flood_zones_by_user.sql`** — the app does **not** use per-user zone rows; all flood admins edit the same `flood_zones` row.
 4. (Optional) Run **`003_flood_zones_label.sql`** only if you maintain extra `flood_zones` rows with labels (not required for the default viewer).
 5. (Optional) Run **`supabase/migrations/004_mission_first_answers.sql`** so each signed-in user’s **first** answer per mission question is stored (retries are not saved again).
+6. (Optional) Run **`supabase/migrations/005_map_scene.sql`** so admins can place **shared 3D houses and roads** on the map (`map_scene` table, keyed by `map_id` like `flood_zones`).
 
 ## 3. Enable Email auth
 
@@ -43,6 +44,11 @@ Reload the app.
 - **Only flood admins** can **write** zones to Supabase (the app sends POST only when `flood_is_admin` is set on the user). Multiple admins are different people (PICs) editing the **same** layout; the last save wins for that row.
 - The viewer **re-pulls** periodically and when the tab becomes visible so admins see updates from others without a full reload.
 
+### Map scene (houses & roads)
+
+- After **`005_map_scene.sql`**, the viewer loads **`map_scene`** for the same `FLOOD_MAP_ID`. **Read** is public; **write** requires a signed-in flood admin (RLS checks `flood_is_admin` in JWT metadata).
+- In the simulator, open **Edit zones** → **Houses & roads**, choose a tool, then **Save scene** (or rely on auto-save after each edit when signed in as admin).
+
 ### Accounts
 
 - **Normal users:** sign in so mission flows can store answers (e.g. **`mission_first_answers`**) — not a separate zone layout per user.
@@ -55,4 +61,5 @@ Reload the app.
 ## Security
 
 - **`flood_zones`:** default demo RLS often allows anon read/write; for production, restrict **insert/update** to admins (service role, Edge Function, or policies on `auth.jwt()` claims).
+- **`map_scene`:** migration **005** restricts **writes** to authenticated users with `flood_is_admin` in JWT metadata; everyone can **read** the shared scene.
 - **`mission_first_answers`:** RLS allows each user to **insert** and **select** only their own rows.

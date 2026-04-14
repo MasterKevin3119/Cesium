@@ -447,15 +447,22 @@
     }
   }
 
-  /** Re-pull shared `flood_zones` so all admins see each other’s saves; refresh when tab becomes visible. */
+  /** Re-pull shared `flood_zones` and `map_scene` so all admins see each other’s saves; refresh when tab becomes visible. */
   const SHARED_ZONES_POLL_MS = 90000;
   function startSharedFloodZonesPolling() {
-    if (!window.floodConfig || typeof window.floodConfig.pullFromSupabase !== "function") return;
     function pullAndRedraw() {
-      window.floodConfig.pullFromSupabase(function () {
-        try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
-      });
+      if (window.floodConfig && typeof window.floodConfig.pullFromSupabase === "function") {
+        window.floodConfig.pullFromSupabase(function () {
+          try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
+        });
+      }
+      try {
+        if (window.mapScene && typeof window.mapScene.pullFromSupabase === "function") {
+          window.mapScene.pullFromSupabase(null);
+        }
+      } catch (e) { /* ignore */ }
     }
+    if (!window.floodConfig && !(window.mapScene && typeof window.mapScene.pullFromSupabase === "function")) return;
     setInterval(pullAndRedraw, SHARED_ZONES_POLL_MS);
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState === "visible") pullAndRedraw();
@@ -471,6 +478,11 @@
           window.floodConfig.pullFromSupabase(function () {
             try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
           });
+        }
+      } catch (e) { /* ignore */ }
+      try {
+        if (window.mapScene && typeof window.mapScene.pullFromSupabase === "function") {
+          window.mapScene.pullFromSupabase(null);
         }
       } catch (e) { /* ignore */ }
     }
@@ -1455,7 +1467,8 @@
       animation: false,
       baseLayerPicker: true,
       geocoder: false,
-      sceneModePicker: true,
+      /* 3D globe only: 2D/Columbus modes flatten the scene and fight terrain + flood height + map scene boxes/roads. */
+      sceneModePicker: false,
       navigationHelpButton: true,
       fullscreenButton: true,
       vrButton: false,
@@ -1478,6 +1491,7 @@
 
     viewer = new Cesium.Viewer("cesiumContainer", viewerOptions);
 
+    viewer.scene.mode = Cesium.SceneMode.SCENE3D;
     viewer.scene.globe.depthTestAgainstTerrain = true;
 
     // Initialize and render the flood zone grid (outline-only)
@@ -1500,6 +1514,7 @@
       try { if (window.floodState && typeof window.floodState.init === 'function') window.floodState.init(viewer); } catch (e) { /* ignore */ }
       // Expose utility to window for external calls if needed
       window.floodZonesByIds = floodZonesByIds;
+      try { if (window.mapScene && typeof window.mapScene.init === 'function') window.mapScene.init(viewer); } catch (e) { /* ignore */ }
       // Init adminMode after viewer and gridManager are ready
       try { if (window.adminMode && typeof window.adminMode.init === 'function') window.adminMode.init(viewer); } catch (e) { /* ignore */ }
     } catch (e) {
