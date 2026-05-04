@@ -421,9 +421,9 @@
         }
         .zone-color-legend__hint { font-size: 10px; color: rgba(255,255,255,0.45); margin-top: 6px; }
         /* Must match js/gridManager.js COLOR_30 / _60 / _100 / _05 / _1 (rectangle fill on map) */
-        .swatch-rain01 { background: rgba(224, 245, 255, 0.5); }
-        .swatch-rain05 { background: rgba(179, 230, 255, 0.55); }
-        .swatch-rain1 { background: rgba(0, 64, 179, 0.65); }
+        .swatch-rain01 { background: rgba(100, 190, 255, 0.75); }
+        .swatch-rain05 { background: rgba(25, 120, 235, 0.85); }
+        .swatch-rain1 { background: rgba(0, 35, 180, 0.95); }
         .swatch-depth05 { background: rgba(128, 242, 153, 0.55); }
         .swatch-depth1 { background: rgba(0, 153, 64, 0.65); }
         /* Solid, shared button look (toolbar + Master Control minimize) */
@@ -1137,6 +1137,41 @@
             align-self: flex-end;
         }
         .decision-making__modal-btn:hover { background: #fff; }
+
+        /* ── Scene gizmo overlay ───────────────────────────────────────── */
+        #sceneGizmo {
+            position: fixed;
+            display: none;
+            pointer-events: none;
+            z-index: 500;
+        }
+        .gizmo-btn {
+            position: absolute;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: grab;
+            pointer-events: all;
+            user-select: none;
+            font-size: 13px; font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+            transform: translate(-50%, -50%);
+            transition: background 0.1s;
+        }
+        .gizmo-btn:active { cursor: grabbing; }
+        .gizmo-arrow { background: rgba(255,200,0,0.9); color: #1a1000; }
+        .gizmo-arrow:hover { background: rgba(255,235,80,1); }
+        .gizmo-arrow:active { background: rgba(230,140,0,1); }
+        .gizmo-center {
+            width: 32px; height: 32px; font-size: 17px;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,200,0,0.75);
+            color: rgba(255,200,0,0.9);
+        }
+        .gizmo-center:hover { background: rgba(255,255,255,0.22); }
+        .gizmo-rot { background: rgba(80,200,255,0.9); color: #001a20; }
+        .gizmo-rot:hover { background: rgba(130,230,255,1); }
+        .gizmo-rot:active { background: rgba(30,160,220,1); }
     </style>
     <script>
         (function () {
@@ -1219,6 +1254,17 @@
 
     <div id="cesiumContainer"></div>
 
+    <!-- Scene gizmo: move / rotate handles for selected object (admin select mode) -->
+    <div id="sceneGizmo">
+        <div class="gizmo-btn gizmo-arrow" data-handle="N"      style="left:0;    top:-56px;" title="Move north (drag)">▲</div>
+        <div class="gizmo-btn gizmo-arrow" data-handle="S"      style="left:0;    top:56px;"  title="Move south (drag)">▼</div>
+        <div class="gizmo-btn gizmo-arrow" data-handle="W"      style="left:-56px;top:0;"     title="Move west (drag)">◄</div>
+        <div class="gizmo-btn gizmo-arrow" data-handle="E"      style="left:56px; top:0;"     title="Move east (drag)">►</div>
+        <div class="gizmo-btn gizmo-center"data-handle="center" style="left:0;    top:0;"     title="Drag to move freely">⊕</div>
+        <div class="gizmo-btn gizmo-rot"   data-handle="rotCCW" style="left:-32px;top:-56px;" title="Rotate CCW (drag)">↺</div>
+        <div class="gizmo-btn gizmo-rot"   data-handle="rotCW"  style="left:32px; top:-56px;" title="Rotate CW (drag)">↻</div>
+    </div>
+
     <div id="loadingOverlay" class="loading-overlay" aria-live="polite">
         <span>Loading globe…</span>
     </div>
@@ -1253,6 +1299,7 @@
                     <input type="range" id="timeSlider" min="0" max="23" value="0" step="1" aria-label="Select hour for rain within ±12 hours of now" />
                     <span id="timeSliderLabel">—</span>
                 </div>
+                <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-top:4px;">Current hour rain: <strong id="legendCurrentRain" style="color:rgba(255,255,255,0.9);">—</strong></div>
             </div>
             <div id="weatherResult" class="weather-result" aria-live="polite"></div>
 
@@ -1291,7 +1338,10 @@
                             <span class="zone-color-legend__swatch swatch-depth1" aria-hidden="true"></span>
                             <span><strong>1 m flood</strong> — dark green (Show 1 m)</span>
                         </div>
-                        <div id="legendRainHint" class="zone-color-legend__hint">Selected hour rain: <strong id="legendCurrentRain">—</strong>. Highlighted rows match colours visible on the map for that hour.</div>
+                        <div class="zone-color-legend__hint">Highlighted rows match colours visible on the map for that hour.</div>
+                    </div>
+                    <div style="font-size:11px; color:rgba(255,255,255,0.55); margin-top:8px; line-height:1.5;">
+                        <strong style="color:rgba(255,255,255,0.75);">Note:</strong> The rain thresholds (0.1 / 0.5 / 1 mm per hour) represent 30 / 60 / 120 mm/day rainfall events respectively. These scaled values let you simulate and explore flood scenarios without needing to wait for actual precipitation to occur.
                     </div>
                 </div>
 
@@ -1303,35 +1353,104 @@
                         <label style="margin-left:8px;"><input type="radio" name="adminEditTarget" value="scene"> Houses &amp; roads</label>
                     </div>
                     <div id="adminFloodTools">
-                        <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Zone editor (admin accounts only): pick a level, click grid cells, then Save (one level per cell). Use <strong>Exit admin</strong> for the normal map view; <strong>Edit zones</strong> in the toolbar brings this back.</div>
+                        <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Zone editor (admin accounts only): pick a level, click grid cells, then Save. Use <strong>Exit admin</strong> for the normal map view; <strong>Edit zones</strong> in the toolbar brings this back.</div>
                         <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Pale blue = 0.1 mm · Light blue = 0.5 mm · Dark blue = 1 mm · Light green = 0.5 m · Dark green = 1 m · Amber = pending</div>
+                        <div style="font-size:11px; margin-bottom:4px; color:rgba(255,255,255,0.6);">Show levels:</div>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+                            <label style="font-size:12px;"><input type="checkbox" id="adminShowLevel30" checked> 0.1 mm</label>
+                            <label style="font-size:12px;"><input type="checkbox" id="adminShowLevel60" checked> 0.5 mm</label>
+                            <label style="font-size:12px;"><input type="checkbox" id="adminShowLevel100" checked> 1 mm</label>
+                            <label style="font-size:12px;"><input type="checkbox" id="adminShowLevel05" checked> 0.5 m</label>
+                            <label style="font-size:12px;"><input type="checkbox" id="adminShowLevel1" checked> 1 m</label>
+                        </div>
+                        <div style="font-size:11px; margin-bottom:4px; color:rgba(255,255,255,0.6);">Edit level:</div>
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                             <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="30" checked> 0.1 mm</label>
                             <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="60"> 0.5 mm</label>
                             <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="100"> 1 mm</label>
                             <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="0.5"> 0.5 m</label>
                             <label style="font-size:13px;"><input type="radio" name="adminEditLevel" value="1"> 1 m</label>
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+                            <button id="btnAdminSelectAll" type="button">Select All</button>
                             <button id="btnAdminClearTemp" type="button">Clear Temp</button>
                             <button id="btnAdminSave" type="button">Save</button>
+                            <button id="btnAdminDelete" type="button" style="background:rgba(180,40,40,0.7);">Delete</button>
                         </div>
-                        <div style="font-size:12px; margin-top:8px; color:rgba(255,255,255,0.8);">Click grid cells to toggle selection for the chosen level, then <strong>Save</strong>.</div>
+                        <div style="font-size:12px; margin-top:8px; color:rgba(255,255,255,0.8);">Click grid cells to select (amber). <strong>Save</strong> adds them to the chosen level. <strong>Delete</strong> removes them from the chosen level.</div>
                     </div>
                     <div id="adminSceneTools" style="display:none; margin-top:8px;">
-                        <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.88);">Place simple 3D boxes (houses) and grey corridors (roads) on the map. All viewers load the same scene for this map. Use <strong>Save scene</strong> to sync to the server.</div>
-                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
-                            <label style="font-size:13px;">Tool:
-                                <select id="adminSceneTool" style="margin-left:4px;">
-                                    <option value="none">—</option>
-                                    <option value="house">Place house</option>
-                                    <option value="road">Draw road (clicks)</option>
-                                    <option value="delete">Delete (click object)</option>
-                                </select>
-                            </label>
-                            <button id="btnAdminRoadFinish" type="button">Finish road</button>
-                            <button id="btnAdminSceneSave" type="button">Save scene</button>
-                            <button id="btnAdminSceneClear" type="button">Clear all</button>
+                        <div style="font-size:12px; margin-bottom:8px; color:rgba(255,255,255,0.88);">Place and edit 3D houses and roads. All viewers share the same scene.</div>
+
+                        <!-- Tool selector -->
+                        <label style="font-size:12px; color:rgba(255,255,255,0.7);">Tool:
+                            <select id="adminSceneTool" style="margin-left:4px;">
+                                <option value="none">—</option>
+                                <option value="house">Place house</option>
+                                <option value="road">Draw road</option>
+                                <option value="select">Select / Edit</option>
+                                <option value="delete">Delete</option>
+                            </select>
+                        </label>
+
+                        <!-- Place house panel -->
+                        <div id="sceneToolHouse" style="display:none; margin-top:8px; background:rgba(255,255,255,0.05); border-radius:4px; padding:8px;">
+                            <div style="font-size:11px; color:rgba(255,255,255,0.55); margin-bottom:6px;">Set dimensions then click the map to place</div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                                <label style="font-size:12px; color:rgba(255,255,255,0.8);">Length (m)<br><input type="number" id="houseLength" value="14" min="1" max="200" style="width:100%; margin-top:2px;"></label>
+                                <label style="font-size:12px; color:rgba(255,255,255,0.8);">Width (m)<br><input type="number" id="houseWidth" value="10" min="1" max="200" style="width:100%; margin-top:2px;"></label>
+                                <label style="font-size:12px; color:rgba(255,255,255,0.8);">Height (m)<br><input type="number" id="houseHeight" value="9" min="1" max="100" style="width:100%; margin-top:2px;"></label>
+                                <label style="font-size:12px; color:rgba(255,255,255,0.8);">Heading (°)<br><input type="number" id="houseHeading" value="0" min="0" max="359" style="width:100%; margin-top:2px;"></label>
+                            </div>
                         </div>
-                        <div style="font-size:11px; color:rgba(255,255,255,0.65);">Road: click points along the path, then <strong>Finish road</strong>. Houses use a fixed size (edit in code later if needed).</div>
+
+                        <!-- Draw road panel -->
+                        <div id="sceneToolRoad" style="display:none; margin-top:8px; background:rgba(255,255,255,0.05); border-radius:4px; padding:8px;">
+                            <div style="font-size:11px; color:rgba(255,255,255,0.55); margin-bottom:6px;">Click map to add points along the road path</div>
+                            <div style="display:flex; align-items:flex-end; gap:10px; margin-bottom:8px;">
+                                <label style="font-size:12px; color:rgba(255,255,255,0.8);">Width (m)<br><input type="number" id="roadWidth" value="6" min="1" max="50" style="width:70px; margin-top:2px;"></label>
+                                <span style="font-size:11px; color:rgba(255,255,255,0.5); padding-bottom:4px;">Points: <strong id="roadDraftCount">0</strong></span>
+                            </div>
+                            <div style="display:flex; gap:6px;">
+                                <button id="btnAdminRoadFinish" type="button">Finish road</button>
+                                <button id="btnAdminRoadCancel" type="button">Cancel</button>
+                            </div>
+                        </div>
+
+                        <!-- Select / Edit panel -->
+                        <div id="sceneToolSelect" style="display:none; margin-top:8px; background:rgba(255,255,255,0.05); border-radius:4px; padding:8px;">
+                            <div id="sceneSelectHint" style="font-size:11px; color:rgba(255,255,255,0.55);">Click an object on the map to select it</div>
+                            <div id="sceneSelectPanel" style="display:none;">
+                                <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:6px;">Selected: <strong id="sceneSelectedType" style="color:rgba(255,255,255,0.9);">—</strong></div>
+                                <!-- House edit fields -->
+                                <div id="sceneEditHouse" style="display:none;">
+                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px;">
+                                        <label style="font-size:12px; color:rgba(255,255,255,0.8);">Length (m)<br><input type="number" id="editHouseLength" min="1" max="200" style="width:100%; margin-top:2px;"></label>
+                                        <label style="font-size:12px; color:rgba(255,255,255,0.8);">Width (m)<br><input type="number" id="editHouseWidth" min="1" max="200" style="width:100%; margin-top:2px;"></label>
+                                        <label style="font-size:12px; color:rgba(255,255,255,0.8);">Height (m)<br><input type="number" id="editHouseHeight" min="1" max="100" style="width:100%; margin-top:2px;"></label>
+                                        <label style="font-size:12px; color:rgba(255,255,255,0.8);">Heading (°)<br><input type="number" id="editHouseHeading" min="0" max="359" style="width:100%; margin-top:2px;"></label>
+                                    </div>
+                                </div>
+                                <!-- Road edit fields -->
+                                <div id="sceneEditRoad" style="display:none; margin-bottom:8px;">
+                                    <label style="font-size:12px; color:rgba(255,255,255,0.8);">Width (m)<br><input type="number" id="editRoadWidth" min="1" max="50" style="width:80px; margin-top:2px;"></label>
+                                </div>
+                                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                    <button id="btnSceneApply" type="button">Apply</button>
+                                    <button id="btnSceneMove" type="button">Move</button>
+                                    <button id="btnSceneDeleteSelected" type="button" style="background:rgba(180,40,40,0.7);">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Delete hint -->
+                        <div id="sceneToolDelete" style="display:none; margin-top:8px; font-size:11px; color:rgba(255,255,255,0.55);">Click an object on the map to delete it</div>
+
+                        <!-- Always-visible actions -->
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.08);">
+                            <button id="btnAdminSceneSave" type="button">Save scene</button>
+                            <button id="btnAdminSceneClear" type="button" style="background:rgba(180,40,40,0.7);">Clear all</button>
+                        </div>
                     </div>
                     <div style="margin-top:10px;">
                         <button id="btnExitAdmin" type="button">Exit Admin</button>

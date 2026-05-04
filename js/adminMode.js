@@ -137,6 +137,16 @@
     });
   }
 
+  function getSelectedEditLevel() {
+    var radios = document.getElementsByName('adminEditLevel');
+    for (var i = 0; i < radios.length; i++) if (radios[i].checked) return radios[i].value;
+    return '30';
+  }
+
+  function levelLabel(level) {
+    return level === '0.5' ? '0.5 m' : level === '1' ? '1 m' : level === '30' ? '0.1 mm' : level === '60' ? '0.5 mm' : level === '100' ? '1 mm' : level;
+  }
+
   function init(viewer) {
     viewerRef = viewer;
     adminChromeAllowed = false;
@@ -181,6 +191,13 @@
       });
     }
 
+    var selectAllBtn = document.getElementById('btnAdminSelectAll');
+    if (selectAllBtn) {
+      selectAllBtn.addEventListener('click', function () {
+        try { if (window.gridManager) window.gridManager.selectAll(getSelectedEditLevel()); } catch (e) { /* ignore */ }
+      });
+    }
+
     var clearBtn = document.getElementById('btnAdminClearTemp');
     var saveBtn = document.getElementById('btnAdminSave');
     if (clearBtn) {
@@ -190,16 +207,40 @@
     }
     if (saveBtn) {
       saveBtn.addEventListener('click', function () {
-        var radios = document.getElementsByName('adminEditLevel');
-        var level = '30';
-        for (var i = 0; i < radios.length; i++) if (radios[i].checked) { level = radios[i].value; break; }
+        var level = getSelectedEditLevel();
         try {
           if (window.gridManager) window.gridManager.saveSelection(level);
-          var label = level === '0.5' ? '0.5 m' : level === '1' ? '1 m' : level === '30' ? '0.1 mm' : level === '60' ? '0.5 mm' : level === '100' ? '1 mm' : level;
+          var label = levelLabel(level);
           alert('Saved selection for ' + label);
         } catch (e) { alert('Save failed'); }
       });
     }
+
+    var deleteBtn = document.getElementById('btnAdminDelete');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', function () {
+        var level = getSelectedEditLevel();
+        if (!confirm('Remove selected zones from ' + levelLabel(level) + '?')) return;
+        try {
+          if (window.gridManager) window.gridManager.deleteSelection(level);
+        } catch (e) { alert('Delete failed'); }
+      });
+    }
+
+    var visCheckboxes = [
+      { id: 'adminShowLevel30', level: '30' },
+      { id: 'adminShowLevel60', level: '60' },
+      { id: 'adminShowLevel100', level: '100' },
+      { id: 'adminShowLevel05', level: '0.5' },
+      { id: 'adminShowLevel1', level: '1' },
+    ];
+    visCheckboxes.forEach(function (item) {
+      var el = document.getElementById(item.id);
+      if (!el) return;
+      el.addEventListener('change', function () {
+        try { if (window.gridManager) window.gridManager.setAdminLevelVisibility(item.level, el.checked); } catch (e) { /* ignore */ }
+      });
+    });
   }
 
   function attachClick() {

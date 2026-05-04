@@ -96,11 +96,7 @@
 
   function setZones(level, ids) {
     const k = String(level);
-    const newIds = Array.isArray(ids) ? ids.map(Number).filter(function (n) { return !isNaN(n); }) : [];
-    LEVELS.forEach(function (key) {
-      if (key !== k) state[key] = (state[key] || []).filter(function (id) { return newIds.indexOf(id) === -1; });
-    });
-    state[k] = newIds;
+    state[k] = Array.isArray(ids) ? ids.map(Number).filter(function (n) { return !isNaN(n); }) : [];
     save();
   }
 
@@ -114,6 +110,15 @@
     save();
   }
 
+  function removeZonesFromLevel(level, ids) {
+    const k = String(level);
+    const removeIds = Array.isArray(ids) ? ids.map(Number) : [];
+    if (Array.isArray(state[k])) {
+      state[k] = state[k].filter(function (id) { return removeIds.indexOf(id) === -1; });
+    }
+    save();
+  }
+
   function isSelected(zoneId, level) {
     const k = String(level);
     return Array.isArray(state[k]) && state[k].indexOf(Number(zoneId)) !== -1;
@@ -122,11 +127,10 @@
   function setZoneLevel(zoneId, level) {
     zoneId = Number(zoneId);
     if (isNaN(zoneId)) return;
-    LEVELS.forEach(function (k) {
-      state[k] = (state[k] || []).filter(function (id) { return id !== zoneId; });
-    });
-    if (LEVELS.indexOf(String(level)) !== -1) {
-      state[String(level)].push(zoneId);
+    const k = String(level);
+    if (LEVELS.indexOf(k) !== -1) {
+      if (!Array.isArray(state[k])) state[k] = [];
+      if (state[k].indexOf(zoneId) === -1) state[k].push(zoneId);
     }
     save();
   }
@@ -175,6 +179,7 @@
     getZones: getZones,
     setZones: setZones,
     setZoneLevel: setZoneLevel,
+    removeZonesFromLevel: removeZonesFromLevel,
     toggle: toggle,
     isSelected: isSelected,
     pullFromSupabase: pullFromSupabase,
