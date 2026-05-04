@@ -636,16 +636,20 @@
           if (e.target.closest && e.target.closest('button')) return;
           e.preventDefault();
           const rect = coordsPanel.getBoundingClientRect();
+          const panelW = rect.width;
+          const panelH = rect.height;
           const startX = e.clientX - rect.left;
           const startY = e.clientY - rect.top;
+          const hdrH = (document.getElementById('topHeader') || {}).offsetHeight || 52;
+          coordsPanel.style.right = 'auto';
           coordsPanel.style.bottom = 'auto';
           coordsPanel.style.left = rect.left + 'px';
           coordsPanel.style.top = rect.top + 'px';
           function onMove(e2) {
-            const left = e2.clientX - startX;
-            const top = e2.clientY - startY;
-            coordsPanel.style.left = Math.max(0, left) + 'px';
-            coordsPanel.style.top = Math.max(0, top) + 'px';
+            const left = Math.max(0, Math.min(e2.clientX - startX, window.innerWidth - panelW));
+            const top = Math.max(hdrH, Math.min(e2.clientY - startY, window.innerHeight - panelH));
+            coordsPanel.style.left = left + 'px';
+            coordsPanel.style.top = top + 'px';
           }
           function onUp() {
             document.removeEventListener('mousemove', onMove);
