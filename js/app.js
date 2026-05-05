@@ -1494,6 +1494,7 @@
     }
 
     viewer = new Cesium.Viewer("cesiumContainer", viewerOptions);
+    window.cesiumViewer = viewer;
 
     viewer.scene.mode = Cesium.SceneMode.SCENE3D;
     viewer.scene.globe.depthTestAgainstTerrain = true;

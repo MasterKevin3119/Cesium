@@ -55,6 +55,53 @@
             height: 100%;
         }
 
+        /* ── CAMERA NAV PAD ───────────────────────────────────────────────────── */
+        #navPad {
+            position: fixed;
+            bottom: 28px;
+            left: 18px;
+            z-index: 900;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .navpad-btn {
+            width: 38px;
+            height: 38px;
+            background: rgba(15, 20, 40, 0.88);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 15px;
+            font-family: var(--font-body);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.12s, border-color 0.12s, color 0.12s;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
+            flex-shrink: 0;
+            padding: 0;
+            line-height: 1;
+        }
+        .navpad-btn:hover { background: rgba(56,189,248,0.15); border-color: rgba(56,189,248,0.5); color: #38bdf8; }
+        .navpad-btn:active { background: rgba(56,189,248,0.3); border-color: #38bdf8; color: #38bdf8; }
+        .navpad-row { display: flex; gap: 3px; }
+        .navpad-sep { height: 5px; }
+        .navpad-zoom-lbl, .navpad-pan-lbl {
+            font-size: 9px;
+            color: rgba(148,163,184,0.5);
+            letter-spacing: 0.05em;
+            font-family: var(--font-body);
+            text-align: center;
+            margin-bottom: 1px;
+        }
+        html.mission-only-mode #navPad { display: none !important; }
+
         /* Missions (?mission=read-water|flooded-areas|decision-making): no globe / flood load */
         html.mission-only-mode body {
             background: #060d18;
@@ -1337,6 +1384,22 @@
         <span>Initialising Globe…</span>
     </div>
 
+    <!-- Camera navigation pad -->
+    <div id="navPad" aria-label="Camera controls">
+        <div class="navpad-zoom-lbl">ZOOM</div>
+        <button id="navZoomIn"  class="navpad-btn" title="Zoom in"  aria-label="Zoom in">+</button>
+        <button id="navZoomOut" class="navpad-btn" title="Zoom out" aria-label="Zoom out">−</button>
+        <div class="navpad-sep"></div>
+        <div class="navpad-pan-lbl">PAN</div>
+        <button id="navPanN" class="navpad-btn" title="Pan north" aria-label="Pan north">▲</button>
+        <div class="navpad-row">
+            <button id="navPanW"  class="navpad-btn" title="Pan west"  aria-label="Pan west">◄</button>
+            <button id="navHome"  class="navpad-btn" title="Reset view" aria-label="Reset view" style="font-size:17px;">⌂</button>
+            <button id="navPanE"  class="navpad-btn" title="Pan east"  aria-label="Pan east">►</button>
+        </div>
+        <button id="navPanS" class="navpad-btn" title="Pan south" aria-label="Pan south">▼</button>
+    </div>
+
     <header id="topHeader">
         <div class="hdr-logo">
             <span class="hdr-logo__icon">◈</span>
@@ -1578,5 +1641,57 @@
     <script src="js/readTheWater.js?v=202604023"></script>
     <script src="js/identifyFlood.js?v=202604023"></script>
     <script src="js/decisionMaking.js?v=202604023"></script>
+
+    <!-- Camera nav pad logic -->
+    <script>
+    (function () {
+        var navTimer = null;
+
+        function camAmount() {
+            try {
+                var h = window.cesiumViewer.camera.positionCartographic.height;
+                return Math.max(20, h * 0.015);
+            } catch (e) { return 100; }
+        }
+
+        function startAction(fn) {
+            stopAction();
+            fn();
+            navTimer = setInterval(fn, 16);
+        }
+
+        function stopAction() {
+            if (navTimer !== null) { clearInterval(navTimer); navTimer = null; }
+        }
+
+        document.addEventListener('mouseup', stopAction);
+        document.addEventListener('touchend', stopAction);
+
+        function bind(id, fn) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('mousedown',  function (e) { e.preventDefault(); startAction(fn); });
+            el.addEventListener('touchstart', function (e) { e.preventDefault(); startAction(fn); }, { passive: false });
+            el.addEventListener('mouseup',    stopAction);
+            el.addEventListener('mouseleave', stopAction);
+            el.addEventListener('touchend',   stopAction);
+            el.addEventListener('touchcancel',stopAction);
+        }
+
+        bind('navZoomIn',  function () { try { window.cesiumViewer.camera.zoomIn(camAmount()); }     catch (e) {} });
+        bind('navZoomOut', function () { try { window.cesiumViewer.camera.zoomOut(camAmount()); }    catch (e) {} });
+        bind('navPanN',    function () { try { window.cesiumViewer.camera.moveForward(camAmount()); } catch (e) {} });
+        bind('navPanS',    function () { try { window.cesiumViewer.camera.moveBackward(camAmount()); }catch (e) {} });
+        bind('navPanW',    function () { try { window.cesiumViewer.camera.moveLeft(camAmount()); }   catch (e) {} });
+        bind('navPanE',    function () { try { window.cesiumViewer.camera.moveRight(camAmount()); }  catch (e) {} });
+
+        var homeEl = document.getElementById('navHome');
+        if (homeEl) {
+            homeEl.addEventListener('click', function () {
+                try { window.cesiumViewer.camera.flyHome(1.5); } catch (e) {}
+            });
+        }
+    })();
+    </script>
 </body>
 </html>
