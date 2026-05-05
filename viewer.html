@@ -92,6 +92,23 @@
         .navpad-btn:active { background: rgba(56,189,248,0.3); border-color: #38bdf8; color: #38bdf8; }
         .navpad-row { display: flex; gap: 3px; }
         .navpad-sep { height: 5px; }
+        #navControls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            overflow: hidden;
+            max-height: 300px;
+            opacity: 1;
+            margin-top: 3px;
+            transition: max-height 0.25s ease, opacity 0.2s ease, margin-top 0.25s ease;
+        }
+        #navControls.navpad-collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            pointer-events: none;
+        }
         .navpad-zoom-lbl, .navpad-pan-lbl {
             font-size: 9px;
             color: rgba(148,163,184,0.5);
@@ -1386,18 +1403,21 @@
 
     <!-- Camera navigation pad -->
     <div id="navPad" aria-label="Camera controls">
-        <div class="navpad-zoom-lbl">ZOOM</div>
-        <button id="navZoomIn"  class="navpad-btn" title="Zoom in"  aria-label="Zoom in">+</button>
-        <button id="navZoomOut" class="navpad-btn" title="Zoom out" aria-label="Zoom out">−</button>
-        <div class="navpad-sep"></div>
-        <div class="navpad-pan-lbl">PAN</div>
-        <button id="navPanN" class="navpad-btn" title="Pan north" aria-label="Pan north">▲</button>
-        <div class="navpad-row">
-            <button id="navPanW"  class="navpad-btn" title="Pan west"  aria-label="Pan west">◄</button>
-            <button id="navHome"  class="navpad-btn" title="Reset view" aria-label="Reset view" style="font-size:17px;">⌂</button>
-            <button id="navPanE"  class="navpad-btn" title="Pan east"  aria-label="Pan east">►</button>
+        <button id="navToggle" class="navpad-btn" title="Toggle controls" aria-label="Toggle navigation controls" style="font-size:13px;">✛</button>
+        <div id="navControls">
+            <div class="navpad-zoom-lbl">ZOOM</div>
+            <button id="navZoomIn"  class="navpad-btn" title="Zoom in"  aria-label="Zoom in">+</button>
+            <button id="navZoomOut" class="navpad-btn" title="Zoom out" aria-label="Zoom out">−</button>
+            <div class="navpad-sep"></div>
+            <div class="navpad-pan-lbl">PAN</div>
+            <button id="navPanN" class="navpad-btn" title="Pan north" aria-label="Pan north">▲</button>
+            <div class="navpad-row">
+                <button id="navPanW"  class="navpad-btn" title="Pan west"  aria-label="Pan west">◄</button>
+                <button id="navHome"  class="navpad-btn" title="Reset view" aria-label="Reset view" style="font-size:17px;">⌂</button>
+                <button id="navPanE"  class="navpad-btn" title="Pan east"  aria-label="Pan east">►</button>
+            </div>
+            <button id="navPanS" class="navpad-btn" title="Pan south" aria-label="Pan south">▼</button>
         </div>
-        <button id="navPanS" class="navpad-btn" title="Pan south" aria-label="Pan south">▼</button>
     </div>
 
     <header id="topHeader">
@@ -1436,22 +1456,7 @@
                 </div>
                 <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-top:4px;">Current hour rain: <strong id="legendCurrentRain" style="color:rgba(255,255,255,0.9);">—</strong></div>
             </div>
-            <div id="weatherResult" class="weather-result" aria-live="polite"></div>
-
-            <div id="floodControls" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
-                <h3 style="margin:0 0 8px 0; font-size:13px; color:#fff;">Flood Simulation</h3>
-                <!-- User: 0.5 m / 1 m by button; rain zones auto-show at 0.1 / 0.5 / 1 mm for that hour -->
-                <div id="userFloodView" style="margin-bottom:12px;">
-                    <div style="margin-bottom:6px; font-size:12px; color:rgba(255,255,255,0.85);">Rain zones (0.1 / 0.5 / 1 mm) show when hourly rain reaches that amount; use the time slider above after weather load.</div>
-                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        <button type="button" id="btnFlood05m">Show 0.5 m</button>
-                        <button type="button" id="btnFlood1m">Show 1 m</button>
-                        <button type="button" id="btnClearFlood">Clear</button>
-                    </div>
-                    <div style="display:flex; gap:8px; margin-top:8px;">
-                        <button type="button" id="btnToggleGrid">Hide grid lines</button>
-                    </div>
-                    <div id="zoneColorLegend" class="zone-color-legend" aria-label="Zone colour key">
+            <div id="zoneColorLegend" class="zone-color-legend" aria-label="Zone colour key">
                         <div class="zone-color-legend__title">Map colours (what you see)</div>
                         <div id="legendRowRain01" class="zone-color-legend__row" data-tier="rain01">
                             <span class="zone-color-legend__swatch swatch-rain01" aria-hidden="true"></span>
@@ -1474,6 +1479,21 @@
                             <span><strong>1 m flood</strong> — dark green (Show 1 m)</span>
                         </div>
                         <div class="zone-color-legend__hint">Highlighted rows match colours visible on the map for that hour.</div>
+                    </div>
+            <div id="weatherResult" class="weather-result" aria-live="polite"></div>
+
+            <div id="floodControls" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
+                <h3 style="margin:0 0 8px 0; font-size:13px; color:#fff;">Flood Simulation</h3>
+                <!-- User: 0.5 m / 1 m by button; rain zones auto-show at 0.1 / 0.5 / 1 mm for that hour -->
+                <div id="userFloodView" style="margin-bottom:12px;">
+                    <div style="margin-bottom:6px; font-size:12px; color:rgba(255,255,255,0.85);">Rain zones (0.1 / 0.5 / 1 mm) show when hourly rain reaches that amount; use the time slider above after weather load.</div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button type="button" id="btnFlood05m">Show 0.5 m</button>
+                        <button type="button" id="btnFlood1m">Show 1 m</button>
+                        <button type="button" id="btnClearFlood">Clear</button>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button type="button" id="btnToggleGrid">Show grid lines</button>
                     </div>
                     <div style="font-size:11px; color:rgba(255,255,255,0.55); margin-top:8px; line-height:1.5;">
                         <strong style="color:rgba(255,255,255,0.75);">Note:</strong> The rain thresholds (0.1 / 0.5 / 1 mm per hour) represent 30 / 60 / 120 mm/day rainfall events respectively. These scaled values let you simulate and explore flood scenarios without needing to wait for actual precipitation to occur.
@@ -1647,11 +1667,30 @@
     (function () {
         var navTimer = null;
 
-        function camAmount() {
+        /* metres to move per frame, scales with altitude */
+        function stepM() {
             try {
                 var h = window.cesiumViewer.camera.positionCartographic.height;
                 return Math.max(20, h * 0.015);
             } catch (e) { return 100; }
+        }
+
+        /* Move camera in true geographic N/S/E/W by shifting lat/lon */
+        function geoPan(dLatSign, dLonSign) {
+            try {
+                var cam = window.cesiumViewer.camera;
+                var pos = cam.positionCartographic;
+                var R   = 6371000;
+                var m   = stepM();
+                var dLatRad = (dLatSign * m) / R;
+                var cosLat  = Math.cos(pos.latitude);
+                var dLonRad = (dLonSign * m) / (R * Math.max(cosLat, 0.01));
+                cam.position = Cesium.Cartesian3.fromRadians(
+                    pos.longitude + dLonRad,
+                    pos.latitude  + dLatRad,
+                    pos.height
+                );
+            } catch (e) {}
         }
 
         function startAction(fn) {
@@ -1678,17 +1717,44 @@
             el.addEventListener('touchcancel',stopAction);
         }
 
-        bind('navZoomIn',  function () { try { window.cesiumViewer.camera.zoomIn(camAmount()); }     catch (e) {} });
-        bind('navZoomOut', function () { try { window.cesiumViewer.camera.zoomOut(camAmount()); }    catch (e) {} });
-        bind('navPanN',    function () { try { window.cesiumViewer.camera.moveForward(camAmount()); } catch (e) {} });
-        bind('navPanS',    function () { try { window.cesiumViewer.camera.moveBackward(camAmount()); }catch (e) {} });
-        bind('navPanW',    function () { try { window.cesiumViewer.camera.moveLeft(camAmount()); }   catch (e) {} });
-        bind('navPanE',    function () { try { window.cesiumViewer.camera.moveRight(camAmount()); }  catch (e) {} });
+        bind('navZoomIn',  function () { try { window.cesiumViewer.camera.zoomIn(stepM()); }  catch (e) {} });
+        bind('navZoomOut', function () { try { window.cesiumViewer.camera.zoomOut(stepM()); } catch (e) {} });
+        bind('navPanN',    function () { geoPan( 1,  0); });
+        bind('navPanS',    function () { geoPan(-1,  0); });
+        bind('navPanW',    function () { geoPan( 0, -1); });
+        bind('navPanE',    function () { geoPan( 0,  1); });
 
         var homeEl = document.getElementById('navHome');
         if (homeEl) {
             homeEl.addEventListener('click', function () {
                 try { window.cesiumViewer.camera.flyHome(1.5); } catch (e) {}
+            });
+        }
+
+        /* Collapse / expand */
+        var navControls = document.getElementById('navControls');
+        var navToggle   = document.getElementById('navToggle');
+        var navOpen = localStorage.getItem('navPadOpen') !== 'false';
+
+        function applyNavState() {
+            if (navOpen) {
+                navControls.classList.remove('navpad-collapsed');
+                navToggle.title = 'Hide controls';
+                navToggle.textContent = '×';
+            } else {
+                navControls.classList.add('navpad-collapsed');
+                navToggle.title = 'Show controls';
+                navToggle.textContent = '✛';
+            }
+        }
+
+        applyNavState();
+
+        if (navToggle) {
+            navToggle.addEventListener('click', function () {
+                navOpen = !navOpen;
+                localStorage.setItem('navPadOpen', navOpen);
+                applyNavState();
             });
         }
     })();

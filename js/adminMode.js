@@ -63,6 +63,7 @@
     syncToolbarAdminBtn();
     try { if (window.mapScene && window.mapScene.syncSceneToolsVisibility) window.mapScene.syncSceneToolsVisibility(); } catch (e) { /* ignore */ }
     try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
+    try { if (window.applyGridOutline) window.applyGridOutline(on); } catch (e) { /* ignore */ }
   }
 
   function hideAllAdminUi() {
