@@ -7,6 +7,7 @@
   const STORAGE_KEY = 'mapScene_v1';
   const DEFAULT_HOUSE = { lengthM: 14, widthM: 10, heightM: 9, headingDeg: 0 };
   const DEFAULT_ROAD_WIDTH_M = 6;
+  const DEFAULT_ROAD_HEIGHT_M = 0.5;   // metres above sampled terrain
 
   let viewer = null;
   /** @type {Cesium.Entity[]} */
@@ -14,6 +15,8 @@
   let roadDraft = [];
   let selectedId = '';   // entity string id of selected object (e.g. "mapscene-house-xxx")
   let movePending = false;
+  let reshapeMode = false;         // waypoint-edit mode for selected road
+  let selectedWaypointIdx = -1;    // index of the highlighted waypoint handle, -1 = none
   let gizmoDragState = null;        // active drag descriptor or null
   let postRenderUnsubscribe = null; // removes postRender listener when called
   let gizmoClientPos = { x: 0, y: 0 }; // cached client-space center of gizmo
@@ -21,6 +24,55 @@
   let state = { houses: [], roads: [] };
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+
+  /* N-dimensional Catmull-Rom spline — works for [lon,lat] and [lon,lat,h] */
+  function catmullRomSpline(pts, samples) {
+    if (pts.length < 3) return pts;
+    samples = samples || 8;
+    var dims = pts[0].length;
+    var out = [];
+    var p = [pts[0]].concat(pts).concat([pts[pts.length - 1]]);
+    for (var i = 1; i < p.length - 2; i++) {
+      var p0 = p[i-1], p1 = p[i], p2 = p[i+1], p3 = p[i+2];
+      for (var s = 0; s < samples; s++) {
+        var t = s / samples, t2 = t*t, t3 = t2*t;
+        var pt = [];
+        for (var d = 0; d < dims; d++) {
+          pt.push(0.5 * ((2*p1[d]) + (-p0[d]+p2[d])*t + (2*p0[d]-5*p1[d]+4*p2[d]-p3[d])*t2 + (-p0[d]+3*p1[d]-3*p2[d]+p3[d])*t3));
+        }
+        out.push(pt);
+      }
+    }
+    out.push(pts[pts.length - 1].slice());
+    return out;
+  }
+
+  function haversineM(lon1, lat1, lon2, lat2) {
+    var R = 6371000;
+    var dLat = Cesium.Math.toRadians(lat2 - lat1);
+    var dLon = Cesium.Math.toRadians(lon2 - lon1);
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(Cesium.Math.toRadians(lat1))*Math.cos(Cesium.Math.toRadians(lat2))*
+            Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function roadLengthM(positions) {
+    var total = 0;
+    for (var i = 1; i < positions.length; i++) {
+      total += haversineM(positions[i-1][0], positions[i-1][1], positions[i][0], positions[i][1]);
+    }
+    return total;
+  }
+
+  /* Returns ellipsoid-relative terrain height at a lon/lat, or 0 if tiles not loaded yet */
+  function getTerrainHeight(lon, lat) {
+    try {
+      var cart = Cesium.Cartographic.fromDegrees(lon, lat);
+      var h = viewer && viewer.scene.globe.getHeight(cart);
+      return (typeof h === 'number' && isFinite(h)) ? h : 0;
+    } catch (e) { return 0; }
+  }
 
   function mapId() {
     return String(window.FLOOD_MAP_ID || 'default').trim() || 'default';
@@ -187,43 +239,97 @@
 
     for (var r = 0; r < state.roads.length; r++) {
       var road = state.roads[r];
-      var flat = [];
+      var rawPts = [];
       for (var p = 0; p < road.positions.length; p++) {
         var pt = road.positions[p];
-        if (Array.isArray(pt) && pt.length >= 2) flat.push(pt[0], pt[1]);
+        if (Array.isArray(pt) && pt.length >= 2) rawPts.push(pt.slice(0, 3));
       }
-      if (flat.length < 4) continue;
+      if (rawPts.length < 2) continue;
+      var splinePts = rawPts.length >= 3 ? catmullRomSpline(rawPts, 20) : rawPts;
       var rwidth = typeof road.widthM === 'number' && road.widthM > 0 ? road.widthM : DEFAULT_ROAD_WIDTH_M;
+      var rheight = typeof road.heightM === 'number' && road.heightM > 0 ? road.heightM : DEFAULT_ROAD_HEIGHT_M;
       var reid = 'mapscene-road-' + road.id;
       var rSelected = reid === selectedId;
+
+      var has3D = rawPts[0].length >= 3;
+      var corridorPositions;
+      var corridorExtra = {};
+      if (has3D) {
+        /* New format: absolute 3D positions — no terrain clamping, bend is purely user-controlled */
+        var flat3 = [];
+        for (var sp = 0; sp < splinePts.length; sp++) {
+          flat3.push(splinePts[sp][0], splinePts[sp][1], (splinePts[sp][2] || 0) + rheight);
+        }
+        corridorPositions = Cesium.Cartesian3.fromDegreesArrayHeights(flat3);
+      } else {
+        /* Legacy 2D format: fall back to terrain clamping */
+        var flat2 = [];
+        for (var sp2 = 0; sp2 < splinePts.length; sp2++) { flat2.push(splinePts[sp2][0], splinePts[sp2][1]); }
+        corridorPositions = Cesium.Cartesian3.fromDegreesArray(flat2);
+        corridorExtra.height = rheight;
+        corridorExtra.heightReference = Cesium.HeightReference.CLAMP_TO_GROUND;
+      }
+
       var re = viewer.entities.add({
         id: reid,
         name: 'Road',
-        corridor: {
-          positions: Cesium.Cartesian3.fromDegreesArray(flat),
+        corridor: Object.assign({
+          positions: corridorPositions,
           width: rwidth,
-          height: 0.25,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           cornerType: Cesium.CornerType.ROUNDED,
           material: rSelected ? Cesium.Color.GOLD.withAlpha(0.9) : Cesium.Color.DIMGRAY.withAlpha(0.95),
           outline: true,
           outlineColor: rSelected ? Cesium.Color.YELLOW : Cesium.Color.BLACK,
-        },
+        }, corridorExtra),
       });
       entityList.push(re);
     }
 
+    /* Waypoint handles: shown when a road is in reshape mode */
+    if (reshapeMode && selectedId.indexOf('mapscene-road-') === 0) {
+      var rwid = selectedId.slice('mapscene-road-'.length);
+      for (var rr = 0; rr < state.roads.length; rr++) {
+        if (state.roads[rr].id !== rwid) continue;
+        var rwRoad = state.roads[rr];
+        for (var wi = 0; wi < rwRoad.positions.length; wi++) {
+          var wpt = rwRoad.positions[wi];
+          var wpEid = 'mapscene-wp-' + rwid + '-' + wi;
+          var isWpSel = wi === selectedWaypointIdx;
+          var wpBaseH = typeof wpt[2] === 'number' ? wpt[2] : getTerrainHeight(wpt[0], wpt[1]);
+          var wpe = viewer.entities.add({
+            id: wpEid,
+            position: Cesium.Cartesian3.fromDegrees(wpt[0], wpt[1], wpBaseH + DEFAULT_ROAD_HEIGHT_M + 4),
+            point: {
+              pixelSize: isWpSel ? 18 : 12,
+              color: isWpSel ? Cesium.Color.fromCssColorString('#ef4444') : Cesium.Color.fromCssColorString('#38bdf8'),
+              outlineColor: Cesium.Color.WHITE,
+              outlineWidth: 2,
+              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
+          });
+          entityList.push(wpe);
+        }
+        break;
+      }
+    }
+
     /* Draft road polyline preview */
     if (roadDraft.length >= 2) {
+      var dpts = roadDraft.map(function (p) { return [p.lon, p.lat, p.terrainH || 0]; });
+      var dspline = dpts.length >= 3 ? catmullRomSpline(dpts, 20) : dpts;
       var dflat = [];
-      for (var d = 0; d < roadDraft.length; d++) dflat.push(roadDraft[d].lon, roadDraft[d].lat);
+      var dHOffset = DEFAULT_ROAD_HEIGHT_M;
+      for (var d = 0; d < dspline.length; d++) {
+        dflat.push(dspline[d][0], dspline[d][1], (dspline[d][2] || 0) + dHOffset);
+      }
       var de = viewer.entities.add({
         id: 'mapscene-road-draft',
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(dflat),
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights(dflat),
           width: 3,
           material: Cesium.Color.YELLOW.withAlpha(0.85),
-          clampToGround: true,
+          clampToGround: false,
         },
       });
       entityList.push(de);
@@ -253,7 +359,7 @@
     if (!results || results.length === 0) return '';
     for (var i = 0; i < results.length; i++) {
       var sid = entityStringIdFromPickResult(results[i]);
-      if (sid.indexOf('mapscene-house-') === 0 || sid.indexOf('mapscene-road-') === 0) return sid;
+      if (sid.indexOf('mapscene-house-') === 0 || sid.indexOf('mapscene-road-') === 0 || sid.indexOf('mapscene-wp-') === 0) return sid;
     }
     return '';
   }
@@ -272,6 +378,12 @@
   function setSelected(entityStringId) {
     selectedId = entityStringId || '';
     movePending = false;
+    reshapeMode = false;
+    selectedWaypointIdx = -1;
+    var reshapeBtn = document.getElementById('btnSceneReshape');
+    if (reshapeBtn) { reshapeBtn.textContent = 'Reshape'; reshapeBtn.style.color = ''; }
+    var reshapeHint = document.getElementById('reshapeHint');
+    if (reshapeHint) reshapeHint.style.display = 'none';
     var moveBtn = document.getElementById('btnSceneMove');
     if (moveBtn) moveBtn.textContent = 'Move';
     if (selectedId) {
@@ -298,6 +410,8 @@
     if (hint) hint.style.display = 'none';
     if (panel) panel.style.display = 'block';
 
+    var reshapeBtn = document.getElementById('btnSceneReshape');
+
     if (entityStringId.indexOf('mapscene-house-') === 0) {
       var hid = entityStringId.slice('mapscene-house-'.length);
       var house = null;
@@ -306,6 +420,7 @@
       if (typeLabel) typeLabel.textContent = 'House';
       if (houseFields) houseFields.style.display = 'block';
       if (roadFields) roadFields.style.display = 'none';
+      if (reshapeBtn) reshapeBtn.style.display = 'none';
       var el;
       el = document.getElementById('editHouseLength'); if (el) el.value = house.lengthM || DEFAULT_HOUSE.lengthM;
       el = document.getElementById('editHouseWidth');  if (el) el.value = house.widthM  || DEFAULT_HOUSE.widthM;
@@ -319,7 +434,14 @@
       if (typeLabel) typeLabel.textContent = 'Road';
       if (houseFields) houseFields.style.display = 'none';
       if (roadFields) roadFields.style.display = 'block';
+      if (reshapeBtn) reshapeBtn.style.display = 'inline-block';
       var rw = document.getElementById('editRoadWidth'); if (rw) rw.value = road.widthM || DEFAULT_ROAD_WIDTH_M;
+      var rh = document.getElementById('editRoadHeight'); if (rh) rh.value = typeof road.heightM === 'number' && road.heightM > 0 ? road.heightM : DEFAULT_ROAD_HEIGHT_M;
+      var rl = document.getElementById('editRoadLength');
+      if (rl) {
+        var lenM = roadLengthM(road.positions);
+        rl.textContent = lenM >= 1000 ? (lenM / 1000).toFixed(2) + ' km' : Math.round(lenM) + ' m';
+      }
     }
   }
 
@@ -342,6 +464,9 @@
       for (var j = 0; j < state.roads.length; j++) {
         if (state.roads[j].id === rid) {
           state.roads[j].widthM = getNum('editRoadWidth', DEFAULT_ROAD_WIDTH_M);
+          var rhEl = document.getElementById('editRoadHeight');
+          var rhVal = rhEl ? parseFloat(rhEl.value) : NaN;
+          state.roads[j].heightM = isNaN(rhVal) ? DEFAULT_ROAD_HEIGHT_M : rhVal;
           break;
         }
       }
@@ -636,8 +761,55 @@
         if (mll) moveSelectedTo(mll);
         return true;
       }
-      var sid = findMapSceneEntityIdAtClick(click);
-      setSelected(sid);
+
+      var clickedId = findMapSceneEntityIdAtClick(click);
+
+      /* ── Reshape mode: waypoint selection and movement ── */
+      if (reshapeMode && selectedId.indexOf('mapscene-road-') === 0) {
+        if (clickedId.indexOf('mapscene-wp-') === 0) {
+          /* Click on a handle: select that waypoint */
+          var wpParts = clickedId.split('-');
+          selectedWaypointIdx = parseInt(wpParts[wpParts.length - 1], 10);
+          var reshapeHint = document.getElementById('reshapeHint');
+          if (reshapeHint) reshapeHint.textContent = 'Now click the map to move waypoint ' + (selectedWaypointIdx + 1);
+          render();
+          return true;
+        }
+        if (selectedWaypointIdx >= 0) {
+          /* Waypoint is selected: move it to clicked position, re-sample terrain height */
+          var wll = pickGlobeDegrees(click);
+          if (wll) {
+            var newTH = getTerrainHeight(wll.lon, wll.lat);
+            var rwid = selectedId.slice('mapscene-road-'.length);
+            for (var rj = 0; rj < state.roads.length; rj++) {
+              if (state.roads[rj].id === rwid) {
+                if (selectedWaypointIdx < state.roads[rj].positions.length) {
+                  state.roads[rj].positions[selectedWaypointIdx] = [wll.lon, wll.lat, newTH];
+                }
+                break;
+              }
+            }
+            selectedWaypointIdx = -1;
+            var rHint = document.getElementById('reshapeHint');
+            if (rHint) rHint.textContent = 'Click a blue dot to select a waypoint, then click the map to move it';
+            saveLocal(); saveRemote();
+            populateEditPanel(selectedId);
+          }
+          render();
+          return true;
+        }
+        /* Clicked blank terrain or different object: stay in reshape mode on same road */
+        if (!clickedId || clickedId === selectedId) { render(); return true; }
+        /* Clicked a different object: exit reshape and select it */
+        reshapeMode = false;
+        selectedWaypointIdx = -1;
+        var rb = document.getElementById('btnSceneReshape');
+        if (rb) { rb.textContent = 'Reshape'; rb.style.color = ''; }
+        var rh2 = document.getElementById('reshapeHint');
+        if (rh2) rh2.style.display = 'none';
+      }
+
+      setSelected(clickedId);
       return true;
     }
 
@@ -659,7 +831,24 @@
     }
 
     if (tool === 'road') {
-      roadDraft.push({ lon: ll.lon, lat: ll.lat });
+      /* Endpoint snapping: snap to existing road endpoint if within 5 m */
+      var SNAP_M = 5;
+      var snapped = false;
+      var snapTerrainH = null;
+      for (var ri = 0; ri < state.roads.length && !snapped; ri++) {
+        var rpos = state.roads[ri].positions;
+        var endpoints = [rpos[0], rpos[rpos.length - 1]];
+        for (var ei = 0; ei < endpoints.length && !snapped; ei++) {
+          var ep = endpoints[ei];
+          if (haversineM(ll.lon, ll.lat, ep[0], ep[1]) <= SNAP_M) {
+            ll = { lon: ep[0], lat: ep[1] };
+            snapTerrainH = typeof ep[2] === 'number' ? ep[2] : getTerrainHeight(ep[0], ep[1]);
+            snapped = true;
+          }
+        }
+      }
+      var terrainH = snapped ? snapTerrainH : getTerrainHeight(ll.lon, ll.lat);
+      roadDraft.push({ lon: ll.lon, lat: ll.lat, terrainH: terrainH });
       var countEl = document.getElementById('roadDraftCount');
       if (countEl) countEl.textContent = roadDraft.length;
       render();
@@ -673,10 +862,13 @@
 
   function finishRoadDraft() {
     if (roadDraft.length < 2) { roadDraft = []; render(); return; }
+    var rhEl = document.getElementById('roadHeight');
+    var rhVal = rhEl ? parseFloat(rhEl.value) : NaN;
     state.roads.push({
       id: newId('r'),
-      positions: roadDraft.map(function (p) { return [p.lon, p.lat]; }),
+      positions: roadDraft.map(function (p) { return [p.lon, p.lat, p.terrainH || 0]; }),
       widthM: getNum('roadWidth', DEFAULT_ROAD_WIDTH_M),
+      heightM: isNaN(rhVal) ? DEFAULT_ROAD_HEIGHT_M : rhVal,
     });
     roadDraft = [];
     var countEl = document.getElementById('roadDraftCount');
@@ -688,6 +880,30 @@
     roadDraft = [];
     var countEl = document.getElementById('roadDraftCount');
     if (countEl) countEl.textContent = '0';
+    render();
+  }
+
+  function undoRoadDraft() {
+    if (roadDraft.length === 0) return;
+    roadDraft.pop();
+    var countEl = document.getElementById('roadDraftCount');
+    if (countEl) countEl.textContent = roadDraft.length;
+    render();
+  }
+
+  function toggleReshapeMode() {
+    if (!selectedId || selectedId.indexOf('mapscene-road-') !== 0) return;
+    reshapeMode = !reshapeMode;
+    selectedWaypointIdx = -1;
+    var btn = document.getElementById('btnSceneReshape');
+    var hint = document.getElementById('reshapeHint');
+    if (reshapeMode) {
+      if (btn) { btn.textContent = 'Done'; btn.style.color = '#38bdf8'; }
+      if (hint) { hint.style.display = 'block'; hint.textContent = 'Click a blue dot to select a waypoint, then click the map to move it'; }
+    } else {
+      if (btn) { btn.textContent = 'Reshape'; btn.style.color = ''; }
+      if (hint) hint.style.display = 'none';
+    }
     render();
   }
 
@@ -777,6 +993,9 @@
     var finishBtn = document.getElementById('btnAdminRoadFinish');
     if (finishBtn) finishBtn.addEventListener('click', finishRoadDraft);
 
+    var undoBtn = document.getElementById('btnAdminRoadUndo');
+    if (undoBtn) undoBtn.addEventListener('click', undoRoadDraft);
+
     var cancelBtn = document.getElementById('btnAdminRoadCancel');
     if (cancelBtn) cancelBtn.addEventListener('click', cancelRoadDraft);
 
@@ -792,6 +1011,9 @@
         moveBtn.textContent = movePending ? 'Click map to place' : 'Move';
       });
     }
+
+    var reshapeBtn = document.getElementById('btnSceneReshape');
+    if (reshapeBtn) reshapeBtn.addEventListener('click', toggleReshapeMode);
 
     var delSelBtn = document.getElementById('btnSceneDeleteSelected');
     if (delSelBtn) {

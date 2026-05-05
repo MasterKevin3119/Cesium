@@ -1479,12 +1479,14 @@
                         <!-- Draw road panel -->
                         <div id="sceneToolRoad" style="display:none; margin-top:8px; background:rgba(255,255,255,0.05); border-radius:4px; padding:8px;">
                             <div style="font-size:11px; color:rgba(255,255,255,0.55); margin-bottom:6px;">Click map to add points along the road path</div>
-                            <div style="display:flex; align-items:flex-end; gap:10px; margin-bottom:8px;">
+                            <div style="display:flex; align-items:flex-end; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
                                 <label style="font-size:12px; color:rgba(255,255,255,0.8);">Width (m)<br><input type="number" id="roadWidth" value="6" min="1" max="50" style="width:70px; margin-top:2px;"></label>
+                                <label style="font-size:12px; color:rgba(255,255,255,0.8);">Height (m)<br><input type="number" id="roadHeight" value="0.25" min="0" max="100" step="0.1" style="width:70px; margin-top:2px;"></label>
                                 <span style="font-size:11px; color:rgba(255,255,255,0.5); padding-bottom:4px;">Points: <strong id="roadDraftCount">0</strong></span>
                             </div>
-                            <div style="display:flex; gap:6px;">
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
                                 <button id="btnAdminRoadFinish" type="button">Finish road</button>
+                                <button id="btnAdminRoadUndo" type="button">Undo last</button>
                                 <button id="btnAdminRoadCancel" type="button">Cancel</button>
                             </div>
                         </div>
@@ -1505,11 +1507,18 @@
                                 </div>
                                 <!-- Road edit fields -->
                                 <div id="sceneEditRoad" style="display:none; margin-bottom:8px;">
-                                    <label style="font-size:12px; color:rgba(255,255,255,0.8);">Width (m)<br><input type="number" id="editRoadWidth" min="1" max="50" style="width:80px; margin-top:2px;"></label>
+                                    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:6px;">
+                                        <label style="font-size:12px; color:rgba(255,255,255,0.8);">Width (m)<br><input type="number" id="editRoadWidth" min="1" max="50" style="width:70px; margin-top:2px;"></label>
+                                        <label style="font-size:12px; color:rgba(255,255,255,0.8);">Height offset (m)<br><input type="number" id="editRoadHeight" min="0" max="100" step="0.1" style="width:70px; margin-top:2px;"></label>
+                                    </div>
+                                    <div style="font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:8px;">Length: <strong id="editRoadLength" style="color:rgba(255,255,255,0.8);">—</strong></div>
+                                    <div id="reshapeHint" style="display:none; font-size:11px; color:#38bdf8; line-height:1.4; padding:4px 6px; background:rgba(56,189,248,0.1); border-radius:4px; margin-bottom:6px;"></div>
                                 </div>
+                                <!-- Shared action buttons -->
                                 <div style="display:flex; gap:6px; flex-wrap:wrap;">
                                     <button id="btnSceneApply" type="button">Apply</button>
                                     <button id="btnSceneMove" type="button">Move</button>
+                                    <button id="btnSceneReshape" type="button" style="display:none;">Reshape</button>
                                     <button id="btnSceneDeleteSelected" type="button">Delete</button>
                                 </div>
                             </div>
