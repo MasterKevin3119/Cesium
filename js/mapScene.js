@@ -5,41 +5,74 @@
   'use strict';
 
   const STORAGE_KEY = 'mapScene_v1';
-  const DEFAULT_HOUSE = { lengthM: 14, widthM: 10, heightM: 9, headingDeg: 0, colorHex: '#deb887' };
+  const DEFAULT_HOUSE = { lengthM: 14, widthM: 10, heightM: 9, headingDeg: 0 };
   const DEFAULT_ROAD_WIDTH_M = 6;
+  const DEFAULT_ROAD_HEIGHT_M = 0.5;   // metres above sampled terrain
 
   let viewer = null;
-  /** @type {string|null} */
-  let selectedHouseId = null;
-  /** While true, house form `input` handlers ignore updates (programmatic fill). */
-  let houseFormSkipLive = false;
-  /** @type {number|null} */
-  let liveRemoteTimer = null;
-  /** @type {Cesium.ScreenSpaceEventHandler|null} */
-  let houseRotateHandler = null;
-  let houseRotateDragging = false;
-  let houseRotateLastX = 0;
-  /** Saved camera flags while dragging rotate (restore on mouse up). */
-  let houseRotateCamSaved = null;
-  /** Visual transform mode from on-map toolbar: none | rotate | resize */
-  let manipMode = 'none';
-  const MANIP_NONE = 'none';
-  const MANIP_ROTATE = 'rotate';
-  const MANIP_RESIZE = 'resize';
-  let resizePointerDragging = false;
-  /** @type {string} 'len' | 'wid' | 'hgt' */
-  let resizeDragAxis = '';
-  let lastManipDragEndMs = 0;
-  /** Arc-style rotate: screen pivot + last pointer angle (rad), view-independent. */
-  let rotateArcValid = false;
-  let rotateArcCx = 0;
-  let rotateArcCy = 0;
-  let rotateLastAngleRad = 0;
   /** @type {Cesium.Entity[]} */
   const entityList = [];
   let roadDraft = [];
+  let selectedId = '';   // entity string id of selected object (e.g. "mapscene-house-xxx")
+  let movePending = false;
+  let reshapeMode = false;         // waypoint-edit mode for selected road
+  let selectedWaypointIdx = -1;    // index of the highlighted waypoint handle, -1 = none
+  let gizmoDragState = null;        // active drag descriptor or null
+  let postRenderUnsubscribe = null; // removes postRender listener when called
+  let gizmoClientPos = { x: 0, y: 0 }; // cached client-space center of gizmo
 
   let state = { houses: [], roads: [] };
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  /* N-dimensional Catmull-Rom spline — works for [lon,lat] and [lon,lat,h] */
+  function catmullRomSpline(pts, samples) {
+    if (pts.length < 3) return pts;
+    samples = samples || 8;
+    var dims = pts[0].length;
+    var out = [];
+    var p = [pts[0]].concat(pts).concat([pts[pts.length - 1]]);
+    for (var i = 1; i < p.length - 2; i++) {
+      var p0 = p[i-1], p1 = p[i], p2 = p[i+1], p3 = p[i+2];
+      for (var s = 0; s < samples; s++) {
+        var t = s / samples, t2 = t*t, t3 = t2*t;
+        var pt = [];
+        for (var d = 0; d < dims; d++) {
+          pt.push(0.5 * ((2*p1[d]) + (-p0[d]+p2[d])*t + (2*p0[d]-5*p1[d]+4*p2[d]-p3[d])*t2 + (-p0[d]+3*p1[d]-3*p2[d]+p3[d])*t3));
+        }
+        out.push(pt);
+      }
+    }
+    out.push(pts[pts.length - 1].slice());
+    return out;
+  }
+
+  function haversineM(lon1, lat1, lon2, lat2) {
+    var R = 6371000;
+    var dLat = Cesium.Math.toRadians(lat2 - lat1);
+    var dLon = Cesium.Math.toRadians(lon2 - lon1);
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(Cesium.Math.toRadians(lat1))*Math.cos(Cesium.Math.toRadians(lat2))*
+            Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function roadLengthM(positions) {
+    var total = 0;
+    for (var i = 1; i < positions.length; i++) {
+      total += haversineM(positions[i-1][0], positions[i-1][1], positions[i][0], positions[i][1]);
+    }
+    return total;
+  }
+
+  /* Returns ellipsoid-relative terrain height at a lon/lat, or 0 if tiles not loaded yet */
+  function getTerrainHeight(lon, lat) {
+    try {
+      var cart = Cesium.Cartographic.fromDegrees(lon, lat);
+      var h = viewer && viewer.scene.globe.getHeight(cart);
+      return (typeof h === 'number' && isFinite(h)) ? h : 0;
+    } catch (e) { return 0; }
+  }
 
   function mapId() {
     return String(window.FLOOD_MAP_ID || 'default').trim() || 'default';
@@ -55,6 +88,20 @@
     return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
   }
 
+  function getTool() {
+    const sel = document.getElementById('adminSceneTool');
+    return sel ? String(sel.value || 'none') : 'none';
+  }
+
+  function getNum(id, fallback) {
+    const el = document.getElementById(id);
+    if (!el) return fallback;
+    const v = parseFloat(el.value);
+    return isNaN(v) || v < 1 ? fallback : v;
+  }
+
+  // ── Persistence ────────────────────────────────────────────────────────────
+
   function loadLocal() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -68,283 +115,7 @@
   }
 
   function saveLocal() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (e) { /* ignore */ }
-  }
-
-  function clampNum(n, lo, hi, fallback) {
-    const x = Number(n);
-    if (isNaN(x)) return fallback;
-    return Math.min(hi, Math.max(lo, x));
-  }
-
-  function cesiumColorFromHex(hex) {
-    var h = typeof hex === 'string' ? hex.trim() : '';
-    if (!h || h[0] !== '#') return Cesium.Color.BURLYWOOD.withAlpha(0.92);
-    var m = h.slice(1);
-    if (m.length === 3) {
-      m = m[0] + m[0] + m[1] + m[1] + m[2] + m[2];
-    }
-    if (m.length !== 6 || /[^0-9a-f]/i.test(m)) return Cesium.Color.BURLYWOOD.withAlpha(0.92);
-    var r = parseInt(m.slice(0, 2), 16) / 255;
-    var g = parseInt(m.slice(2, 4), 16) / 255;
-    var b = parseInt(m.slice(4, 6), 16) / 255;
-    return new Cesium.Color(r, g, b, 0.92);
-  }
-
-  function outlineColorFromFill(c) {
-    return new Cesium.Color(c.red * 0.5, c.green * 0.42, c.blue * 0.35, 1);
-  }
-
-  function readHousePropsFromForm() {
-    var lenEl = document.getElementById('adminHouseLen');
-    var widEl = document.getElementById('adminHouseWid');
-    var hgtEl = document.getElementById('adminHouseHgt');
-    var headEl = document.getElementById('adminHouseHeading');
-    var colEl = document.getElementById('adminHouseColor');
-    return {
-      lengthM: clampNum(lenEl && lenEl.value, 0.5, 500, DEFAULT_HOUSE.lengthM),
-      widthM: clampNum(widEl && widEl.value, 0.5, 500, DEFAULT_HOUSE.widthM),
-      heightM: clampNum(hgtEl && hgtEl.value, 0.5, 500, DEFAULT_HOUSE.heightM),
-      headingDeg: clampNum(headEl && headEl.value, -720, 720, 0),
-      colorHex: (colEl && typeof colEl.value === 'string' && colEl.value[0] === '#') ? colEl.value : DEFAULT_HOUSE.colorHex,
-    };
-  }
-
-  function writeHousePropsToForm(h) {
-    houseFormSkipLive = true;
-    try {
-      var lenEl = document.getElementById('adminHouseLen');
-      var widEl = document.getElementById('adminHouseWid');
-      var hgtEl = document.getElementById('adminHouseHgt');
-      var headEl = document.getElementById('adminHouseHeading');
-      var colEl = document.getElementById('adminHouseColor');
-      var len = typeof h.lengthM === 'number' && h.lengthM > 0 ? h.lengthM : DEFAULT_HOUSE.lengthM;
-      var wid = typeof h.widthM === 'number' && h.widthM > 0 ? h.widthM : DEFAULT_HOUSE.widthM;
-      var height = typeof h.heightM === 'number' && h.heightM > 0 ? h.heightM : DEFAULT_HOUSE.heightM;
-      var heading = typeof h.headingDeg === 'number' ? h.headingDeg : DEFAULT_HOUSE.headingDeg;
-      var col = typeof h.colorHex === 'string' && h.colorHex[0] === '#' ? h.colorHex : DEFAULT_HOUSE.colorHex;
-      if (lenEl) lenEl.value = String(len);
-      if (widEl) widEl.value = String(wid);
-      if (hgtEl) hgtEl.value = String(height);
-      if (headEl) headEl.value = String(heading);
-      if (colEl) colEl.value = col;
-    } finally {
-      houseFormSkipLive = false;
-    }
-  }
-
-  function updateHouseSelectionHint() {
-    var el = document.getElementById('adminHouseSelectionHint');
-    if (!el) return;
-    if (!selectedHouseId) {
-      el.textContent = 'No house selected.';
-      return;
-    }
-    el.textContent = 'Selected: ' + selectedHouseId + ' — ↻ then drag the gold dot to rotate; bars → red/green/blue resize. ✓ Done deselects. Numbers = live; Apply = save.';
-  }
-
-  function getSelectedHouseObject() {
-    if (!selectedHouseId) return null;
-    return state.houses.find(function (x) { return x.id === selectedHouseId; }) || null;
-  }
-
-  function scheduleRemoteSave() {
-    if (liveRemoteTimer) clearTimeout(liveRemoteTimer);
-    liveRemoteTimer = setTimeout(function () {
-      liveRemoteTimer = null;
-      saveRemote();
-    }, 450);
-  }
-
-  function flushPendingRemoteSave() {
-    if (liveRemoteTimer) {
-      clearTimeout(liveRemoteTimer);
-      liveRemoteTimer = null;
-    }
-    saveRemote();
-  }
-
-  function liveApplySelectedHouseFromForm() {
-    if (houseFormSkipLive || !selectedHouseId) return;
-    var idx = state.houses.findIndex(function (x) { return x.id === selectedHouseId; });
-    if (idx === -1) {
-      clearHouseSelection();
-      return;
-    }
-    var p = readHousePropsFromForm();
-    var h = state.houses[idx];
-    h.lengthM = p.lengthM;
-    h.widthM = p.widthM;
-    h.heightM = p.heightM;
-    h.headingDeg = p.headingDeg;
-    h.colorHex = p.colorHex;
-    saveLocal();
-    render();
-    scheduleRemoteSave();
-  }
-
-  function canUseRotateDrag() {
-    if (!isSceneEditActive() || !selectedHouseId) return false;
-    if (getTool() !== 'edit_house') return false;
-    return manipMode === MANIP_ROTATE;
-  }
-
-  function canUseResizeManip() {
-    return !!(isSceneEditActive() && manipMode === MANIP_RESIZE && selectedHouseId);
-  }
-
-  function normalizeHeadingDegrees(deg) {
-    return Cesium.Math.toDegrees(Cesium.Math.negativePiToPi(Cesium.Math.toRadians(deg)));
-  }
-
-  function endHouseRotateDrag() {
-    var hadDrag = houseRotateDragging || resizePointerDragging;
-    houseRotateDragging = false;
-    resizePointerDragging = false;
-    resizeDragAxis = '';
-    rotateArcValid = false;
-    if (viewer && viewer.scene && viewer.scene.screenSpaceCameraController) {
-      var sscc = viewer.scene.screenSpaceCameraController;
-      if (houseRotateCamSaved) {
-        sscc.enableRotate = houseRotateCamSaved.rotate;
-        sscc.enableTranslate = houseRotateCamSaved.translate;
-        houseRotateCamSaved = null;
-      } else {
-        sscc.enableRotate = true;
-        sscc.enableTranslate = true;
-      }
-    }
-    if (hadDrag) lastManipDragEndMs = Date.now();
-    flushPendingRemoteSave();
-  }
-
-  function attachHouseRotateHandler() {
-    if (!viewer || houseRotateHandler) return;
-    houseRotateHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-
-    houseRotateHandler.setInputAction(function (click) {
-      var axis = findResizeHandlePick(click);
-      if (axis && canUseResizeManip()) {
-        var sscc0 = viewer.scene.screenSpaceCameraController;
-        if (!houseRotateCamSaved) {
-          houseRotateCamSaved = { rotate: sscc0.enableRotate, translate: sscc0.enableTranslate };
-        }
-        resizePointerDragging = true;
-        resizeDragAxis = axis;
-        houseRotateLastX = click.position.x;
-        sscc0.enableRotate = false;
-        sscc0.enableTranslate = false;
-        return;
-      }
-      if (!canUseRotateDrag()) return;
-      if (!getSelectedHouseObject()) return;
-      if (manipMode === MANIP_ROTATE && !findRotateHandleNubPick(click)) return;
-      var sscc = viewer.scene.screenSpaceCameraController;
-      if (!houseRotateCamSaved) {
-        houseRotateCamSaved = { rotate: sscc.enableRotate, translate: sscc.enableTranslate };
-      }
-      houseRotateDragging = true;
-      houseRotateLastX = click.position.x;
-      sscc.enableRotate = false;
-      sscc.enableTranslate = false;
-      rotateArcValid = false;
-      var h0 = getSelectedHouseObject();
-      if (h0) {
-        var hg0 = typeof h0.heightM === 'number' && h0.heightM > 0 ? h0.heightM : DEFAULT_HOUSE.heightM;
-        var cart0 = Cesium.Cartesian3.fromDegrees(h0.lon, h0.lat, hg0 / 2);
-        var wc0 = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cart0);
-        if (Cesium.defined(wc0)) {
-          rotateArcCx = wc0.x;
-          rotateArcCy = wc0.y;
-          rotateLastAngleRad = Math.atan2(click.position.y - rotateArcCy, click.position.x - rotateArcCx);
-          rotateArcValid = true;
-        }
-      }
-    }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
-
-    houseRotateHandler.setInputAction(function (movement) {
-      var pos = movement.endPosition || movement.startPosition;
-      if (!pos) return;
-      if (resizePointerDragging && resizeDragAxis) {
-        var hR = getSelectedHouseObject();
-        if (!hR || !canUseResizeManip()) {
-          endHouseRotateDrag();
-          return;
-        }
-        var dxR = pos.x - houseRotateLastX;
-        houseRotateLastX = pos.x;
-        var sens = 0.065;
-        if (resizeDragAxis === 'len') {
-          hR.lengthM = clampNum(hR.lengthM + dxR * sens, 0.5, 500, DEFAULT_HOUSE.lengthM);
-        } else if (resizeDragAxis === 'wid') {
-          hR.widthM = clampNum(hR.widthM + dxR * sens, 0.5, 500, DEFAULT_HOUSE.widthM);
-        } else if (resizeDragAxis === 'hgt') {
-          hR.heightM = clampNum(hR.heightM + dxR * sens, 0.5, 500, DEFAULT_HOUSE.heightM);
-        }
-        houseFormSkipLive = true;
-        try {
-          writeHousePropsToForm(hR);
-        } finally {
-          houseFormSkipLive = false;
-        }
-        saveLocal();
-        render();
-        scheduleRemoteSave();
-        return;
-      }
-      if (!houseRotateDragging || !canUseRotateDrag()) return;
-      var h = getSelectedHouseObject();
-      if (!h) {
-        endHouseRotateDrag();
-        return;
-      }
-      if (rotateArcValid) {
-        var ang = Math.atan2(pos.y - rotateArcCy, pos.x - rotateArcCx);
-        var d = ang - rotateLastAngleRad;
-        if (d > Math.PI) d -= 2 * Math.PI;
-        if (d < -Math.PI) d += 2 * Math.PI;
-        h.headingDeg = normalizeHeadingDegrees(h.headingDeg + Cesium.Math.toDegrees(d));
-        rotateLastAngleRad = ang;
-      } else {
-        var x = pos.x;
-        var dx = x - houseRotateLastX;
-        houseRotateLastX = x;
-        h.headingDeg = normalizeHeadingDegrees(h.headingDeg + dx * 0.22);
-      }
-      houseFormSkipLive = true;
-      try {
-        var headEl = document.getElementById('adminHouseHeading');
-        if (headEl) headEl.value = String(Math.round(h.headingDeg * 100) / 100);
-      } finally {
-        houseFormSkipLive = false;
-      }
-      saveLocal();
-      render();
-      scheduleRemoteSave();
-    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-    houseRotateHandler.setInputAction(function () {
-      if (houseRotateDragging || resizePointerDragging) endHouseRotateDrag();
-    }, Cesium.ScreenSpaceEventType.LEFT_UP);
-
-    if (!attachHouseRotateHandler._docMouseUp) {
-      attachHouseRotateHandler._docMouseUp = true;
-      document.addEventListener('mouseup', function () {
-        try {
-          if (houseRotateDragging || resizePointerDragging) endHouseRotateDrag();
-        } catch (e) { /* ignore */ }
-      });
-    }
-  }
-
-  function clearHouseSelection() {
-    endHouseRotateDrag();
-    selectedHouseId = null;
-    manipMode = MANIP_NONE;
-    syncManipToolbarButtons();
-    updateHouseSelectionHint();
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
   }
 
   function normalizeScene() {
@@ -354,471 +125,6 @@
     state.roads = (state.roads || []).filter(function (r) {
       return r && typeof r.id === 'string' && Array.isArray(r.positions) && r.positions.length >= 2;
     });
-  }
-
-  function clearEntities() {
-    if (!viewer) return;
-    for (let i = 0; i < entityList.length; i++) {
-      try { viewer.entities.remove(entityList[i]); } catch (e) { /* ignore */ }
-    }
-    entityList.length = 0;
-  }
-
-  function render() {
-    clearEntities();
-    if (!viewer) return;
-    normalizeScene();
-
-    for (let i = 0; i < state.houses.length; i++) {
-      const h = state.houses[i];
-      const len = typeof h.lengthM === 'number' && h.lengthM > 0 ? h.lengthM : DEFAULT_HOUSE.lengthM;
-      const wid = typeof h.widthM === 'number' && h.widthM > 0 ? h.widthM : DEFAULT_HOUSE.widthM;
-      const height = typeof h.heightM === 'number' && h.heightM > 0 ? h.heightM : DEFAULT_HOUSE.heightM;
-      const heading = typeof h.headingDeg === 'number' ? h.headingDeg : DEFAULT_HOUSE.headingDeg;
-      const fillColor = cesiumColorFromHex(typeof h.colorHex === 'string' ? h.colorHex : DEFAULT_HOUSE.colorHex);
-      const lineColor = outlineColorFromFill(fillColor);
-      const half = height / 2;
-      const cart = Cesium.Cartesian3.fromDegrees(h.lon, h.lat, half);
-      const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(heading), 0, 0);
-      const orientation = Cesium.Transforms.headingPitchRollQuaternion(cart, hpr);
-      const e = viewer.entities.add({
-        id: 'mapscene-house-' + h.id,
-        name: 'House',
-        position: new Cesium.ConstantPositionProperty(cart, undefined, Cesium.HeightReference.RELATIVE_TO_GROUND),
-        orientation: orientation,
-        box: {
-          dimensions: new Cesium.Cartesian3(len, wid, height),
-          fill: true,
-          material: fillColor,
-          outline: true,
-          outlineColor: lineColor,
-        },
-      });
-      entityList.push(e);
-    }
-
-    for (let r = 0; r < state.roads.length; r++) {
-      const road = state.roads[r];
-      const flat = [];
-      for (let p = 0; p < road.positions.length; p++) {
-        const pt = road.positions[p];
-        if (Array.isArray(pt) && pt.length >= 2) {
-          flat.push(pt[0], pt[1]);
-        }
-      }
-      if (flat.length < 4) continue;
-      const width = typeof road.widthM === 'number' && road.widthM > 0 ? road.widthM : DEFAULT_ROAD_WIDTH_M;
-      const e = viewer.entities.add({
-        id: 'mapscene-road-' + road.id,
-        name: 'Road',
-        corridor: {
-          positions: Cesium.Cartesian3.fromDegreesArray(flat),
-          width: width,
-          height: 0.25,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          cornerType: Cesium.CornerType.ROUNDED,
-          material: Cesium.Color.DIMGRAY.withAlpha(0.95),
-          outline: true,
-          outlineColor: Cesium.Color.BLACK,
-        },
-      });
-      entityList.push(e);
-    }
-
-    /* Draft road polyline preview */
-    if (roadDraft.length >= 2) {
-      const flat = [];
-      for (let d = 0; d < roadDraft.length; d++) {
-        flat.push(roadDraft[d].lon, roadDraft[d].lat);
-      }
-      const e = viewer.entities.add({
-        id: 'mapscene-road-draft',
-        polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(flat),
-          width: 3,
-          material: Cesium.Color.YELLOW.withAlpha(0.85),
-          clampToGround: true,
-        },
-      });
-      entityList.push(e);
-    }
-
-    if (manipMode === MANIP_RESIZE && selectedHouseId) {
-      var selH = state.houses.find(function (z) { return z.id === selectedHouseId; });
-      if (selH) appendResizeHandlesForHouse(selH);
-    }
-    if (manipMode === MANIP_ROTATE && selectedHouseId) {
-      var selR = state.houses.find(function (z2) { return z2.id === selectedHouseId; });
-      if (selR) appendRotateHandleForHouse(selR);
-    }
-  }
-
-  function getTool() {
-    const sel = document.getElementById('adminSceneTool');
-    return sel ? String(sel.value || 'none') : 'none';
-  }
-
-  function isSceneTargetSelected() {
-    const radios = document.getElementsByName('adminEditTarget');
-    for (let i = 0; i < radios.length; i++) {
-      if (radios[i].checked && radios[i].value === 'scene') return true;
-    }
-    return false;
-  }
-
-  function isSceneEditActive() {
-    return !!(window.adminMode && window.adminMode.isEnabled && window.adminMode.isEnabled() &&
-      isSceneTargetSelected());
-  }
-
-  /**
-   * Resolve entity id from a pick or drillPick result (Entity API vs raw primitive).
-   */
-  function entityStringIdFromPickResult(picked) {
-    if (!picked) return '';
-    var e = picked.id;
-    if (e) {
-      if (typeof e.id === 'string') return e.id;
-      if (e.id != null) return String(e.id);
-    }
-    var prim = picked.primitive;
-    if (prim && prim.id) {
-      if (typeof prim.id === 'object' && prim.id !== null && prim.id.id != null) {
-        return String(prim.id.id);
-      }
-      if (typeof prim.id === 'string') return prim.id;
-    }
-    return '';
-  }
-
-  /**
-   * Flood zone rectangles and other overlays often sit in front of boxes/roads; pick() only sees the top layer.
-   */
-  function findMapSceneEntityIdAtClick(click) {
-    if (!viewer || !viewer.scene) return '';
-    var results = viewer.scene.drillPick(click.position, 48);
-    if (!results || results.length === 0) return '';
-    for (var i = 0; i < results.length; i++) {
-      var sid = entityStringIdFromPickResult(results[i]);
-      if (sid.indexOf('mapscene-house-') === 0 || sid.indexOf('mapscene-road-') === 0) return sid;
-    }
-    return '';
-  }
-
-  /** @returns {string} internal house id or '' (skips resize handles in front of the box) */
-  function findMapSceneHouseInternalIdAtClick(click) {
-    if (!viewer || !viewer.scene) return '';
-    var results = viewer.scene.drillPick(click.position, 48);
-    for (var i = 0; i < results.length; i++) {
-      var sid = entityStringIdFromPickResult(results[i]);
-      if (sid.indexOf('mapscene-handle-') === 0) continue;
-      if (sid.indexOf('mapscene-rotate-handle-') === 0) continue;
-      if (sid.indexOf('mapscene-house-') === 0) return sid.slice('mapscene-house-'.length);
-    }
-    return '';
-  }
-
-  /** @returns {'len'|'wid'|'hgt'|null} */
-  function findResizeHandlePick(click) {
-    if (!viewer || !viewer.scene || !selectedHouseId || manipMode !== MANIP_RESIZE) return null;
-    var results = viewer.scene.drillPick(click.position, 48);
-    for (var j = 0; j < results.length; j++) {
-      var sid = entityStringIdFromPickResult(results[j]);
-      if (sid.indexOf('mapscene-handle-') !== 0) continue;
-      var rest = sid.slice('mapscene-handle-'.length);
-      var lastDash = rest.lastIndexOf('-');
-      if (lastDash <= 0) continue;
-      var hid = rest.slice(0, lastDash);
-      var ax = rest.slice(lastDash + 1);
-      if (hid !== selectedHouseId) continue;
-      if (ax === 'len' || ax === 'wid' || ax === 'hgt') return ax;
-    }
-    return null;
-  }
-
-  function appendResizeHandlesForHouse(h) {
-    const len = typeof h.lengthM === 'number' && h.lengthM > 0 ? h.lengthM : DEFAULT_HOUSE.lengthM;
-    const wid = typeof h.widthM === 'number' && h.widthM > 0 ? h.widthM : DEFAULT_HOUSE.widthM;
-    const height = typeof h.heightM === 'number' && h.heightM > 0 ? h.heightM : DEFAULT_HOUSE.heightM;
-    const heading = typeof h.headingDeg === 'number' ? h.headingDeg : DEFAULT_HOUSE.headingDeg;
-    const half = height / 2;
-    const cart = Cesium.Cartesian3.fromDegrees(h.lon, h.lat, half);
-    const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(heading), 0, 0);
-    const q = Cesium.Transforms.headingPitchRollQuaternion(cart, hpr);
-    const rotM = Cesium.Matrix3.fromQuaternion(q);
-    const HANDLE_PAD = 1.5;
-    function axisWorldPos(unitLocal, halfDim) {
-      var scaled = Cesium.Cartesian3.multiplyByScalar(unitLocal, halfDim + HANDLE_PAD, new Cesium.Cartesian3());
-      Cesium.Matrix3.multiplyByVector(rotM, scaled, scaled);
-      return Cesium.Cartesian3.add(cart, scaled, new Cesium.Cartesian3());
-    }
-    const posLen = axisWorldPos(Cesium.Cartesian3.UNIT_X, len / 2);
-    const posWid = axisWorldPos(Cesium.Cartesian3.UNIT_Y, wid / 2);
-    const posHgt = axisWorldPos(Cesium.Cartesian3.UNIT_Z, height / 2);
-    function mk(pos, suffix, col) {
-      var ent = viewer.entities.add({
-        id: 'mapscene-handle-' + h.id + '-' + suffix,
-        position: pos,
-        point: {
-          pixelSize: 16,
-          color: col,
-          outlineColor: Cesium.Color.WHITE,
-          outlineWidth: 2,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-      });
-      entityList.push(ent);
-    }
-    mk(posLen, 'len', Cesium.Color.CRIMSON);
-    mk(posWid, 'wid', Cesium.Color.LIME);
-    mk(posHgt, 'hgt', Cesium.Color.DODGERBLUE);
-  }
-
-  /** Gold dot beside the house — drag this (not empty map) when using toolbar rotate mode. */
-  function appendRotateHandleForHouse(h) {
-    const len = typeof h.lengthM === 'number' && h.lengthM > 0 ? h.lengthM : DEFAULT_HOUSE.lengthM;
-    const wid = typeof h.widthM === 'number' && h.widthM > 0 ? h.widthM : DEFAULT_HOUSE.widthM;
-    const height = typeof h.heightM === 'number' && h.heightM > 0 ? h.heightM : DEFAULT_HOUSE.heightM;
-    const heading = typeof h.headingDeg === 'number' ? h.headingDeg : DEFAULT_HOUSE.headingDeg;
-    const half = height / 2;
-    const cart = Cesium.Cartesian3.fromDegrees(h.lon, h.lat, half);
-    const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(heading), 0, 0);
-    const q = Cesium.Transforms.headingPitchRollQuaternion(cart, hpr);
-    const rotM = Cesium.Matrix3.fromQuaternion(q);
-    const rad = Math.max(len, wid) / 2 + 2.8;
-    var off = Cesium.Cartesian3.multiplyByScalar(Cesium.Cartesian3.UNIT_Y, rad, new Cesium.Cartesian3());
-    Cesium.Matrix3.multiplyByVector(rotM, off, off);
-    const pos = Cesium.Cartesian3.add(cart, off, new Cesium.Cartesian3());
-    var ent = viewer.entities.add({
-      id: 'mapscene-rotate-handle-' + h.id,
-      position: pos,
-      point: {
-        pixelSize: 18,
-        color: Cesium.Color.GOLD,
-        outlineColor: Cesium.Color.SADDLEBROWN,
-        outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-    });
-    entityList.push(ent);
-  }
-
-  function findRotateHandleNubPick(click) {
-    if (!viewer || !viewer.scene || !selectedHouseId) return false;
-    var want = 'mapscene-rotate-handle-' + selectedHouseId;
-    var results = viewer.scene.drillPick(click.position, 48);
-    for (var k = 0; k < results.length; k++) {
-      if (entityStringIdFromPickResult(results[k]) === want) return true;
-    }
-    return false;
-  }
-
-  function syncManipToolbarButtons() {
-    var br = document.getElementById('mapSceneManipRotate');
-    var bs = document.getElementById('mapSceneManipResize');
-    if (br) br.classList.toggle('map-scene-manip-bar__btn--active', manipMode === MANIP_ROTATE);
-    if (bs) bs.classList.toggle('map-scene-manip-bar__btn--active', manipMode === MANIP_RESIZE);
-  }
-
-  function updateManipBarPosition() {
-    var bar = document.getElementById('mapSceneManipBar');
-    if (!bar || !viewer || !viewer.scene) return;
-    if (!selectedHouseId || !isSceneEditActive() || !isSceneTargetSelected()) {
-      bar.style.display = 'none';
-      return;
-    }
-    var h = getSelectedHouseObject();
-    if (!h) {
-      bar.style.display = 'none';
-      return;
-    }
-    var height = typeof h.heightM === 'number' && h.heightM > 0 ? h.heightM : DEFAULT_HOUSE.heightM;
-    var half = height / 2;
-    var cart = Cesium.Cartesian3.fromDegrees(h.lon, h.lat, half);
-    var win = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, cart);
-    if (!Cesium.defined(win)) {
-      bar.style.display = 'none';
-      return;
-    }
-    bar.style.display = 'flex';
-    bar.style.left = Math.round(win.x - 58) + 'px';
-    bar.style.top = Math.round(win.y - 78) + 'px';
-  }
-
-  function wireManipToolbar() {
-    if (!document.getElementById('mapSceneManipDone')) return;
-    if (wireManipToolbar._wired) return;
-    wireManipToolbar._wired = true;
-    var btnR = document.getElementById('mapSceneManipRotate');
-    var btnS = document.getElementById('mapSceneManipResize');
-    var btnD = document.getElementById('mapSceneManipDone');
-    if (btnR) {
-      btnR.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!selectedHouseId) {
-          alert('Pick a house on the map first (tool: Pick house to edit).');
-          return;
-        }
-        endHouseRotateDrag();
-        manipMode = manipMode === MANIP_ROTATE ? MANIP_NONE : MANIP_ROTATE;
-        syncManipToolbarButtons();
-        render();
-      });
-    }
-    if (btnS) {
-      btnS.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!selectedHouseId) {
-          alert('Pick a house on the map first (tool: Pick house to edit).');
-          return;
-        }
-        endHouseRotateDrag();
-        manipMode = manipMode === MANIP_RESIZE ? MANIP_NONE : MANIP_RESIZE;
-        syncManipToolbarButtons();
-        render();
-      });
-    }
-    if (btnD) {
-      btnD.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        clearHouseSelection();
-        try { render(); } catch (err) { /* ignore */ }
-        try { updateManipBarPosition(); } catch (err2) { /* ignore */ }
-      });
-    }
-  }
-
-  function pickGlobeDegrees(click) {
-    if (!viewer) return null;
-    const ray = viewer.camera.getPickRay(click.position);
-    const cartesian = viewer.scene.globe.pick(ray, viewer.scene);
-    if (!cartesian) return null;
-    const c = Cesium.Cartographic.fromCartesian(cartesian);
-    return {
-      lon: Cesium.Math.toDegrees(c.longitude),
-      lat: Cesium.Math.toDegrees(c.latitude),
-    };
-  }
-
-  function handleAdminClick(click) {
-    if (!isSceneEditActive()) return false;
-    const tool = getTool();
-    if (tool === 'none') return false;
-    if (tool === 'delete') {
-      const id = findMapSceneEntityIdAtClick(click);
-      if (id.indexOf('mapscene-house-') === 0) {
-        const hid = id.slice('mapscene-house-'.length);
-        state.houses = state.houses.filter(function (h) { return h.id !== hid; });
-        if (selectedHouseId === hid) clearHouseSelection();
-        saveLocal();
-        saveRemote();
-        render();
-        return true;
-      }
-      if (id.indexOf('mapscene-road-') === 0) {
-        const rid = id.slice('mapscene-road-'.length);
-        state.roads = state.roads.filter(function (r) { return r.id !== rid; });
-        saveLocal();
-        saveRemote();
-        render();
-        return true;
-      }
-      return true;
-    }
-
-    if (tool === 'edit_house') {
-      if (Date.now() - lastManipDragEndMs < 320) return true;
-      const hid = findMapSceneHouseInternalIdAtClick(click);
-      if (!hid) return true;
-      const house = state.houses.find(function (x) { return x.id === hid; });
-      if (!house) return true;
-      selectedHouseId = hid;
-      writeHousePropsToForm(house);
-      updateHouseSelectionHint();
-      return true;
-    }
-
-    const ll = pickGlobeDegrees(click);
-    if (!ll) return true;
-
-    if (tool === 'house') {
-      const p = readHousePropsFromForm();
-      state.houses.push({
-        id: newId('h'),
-        lon: ll.lon,
-        lat: ll.lat,
-        lengthM: p.lengthM,
-        widthM: p.widthM,
-        heightM: p.heightM,
-        headingDeg: p.headingDeg,
-        colorHex: p.colorHex,
-      });
-      saveLocal();
-      saveRemote();
-      render();
-      return true;
-    }
-
-    if (tool === 'road') {
-      roadDraft.push({ lon: ll.lon, lat: ll.lat });
-      render();
-      return true;
-    }
-
-    return false;
-  }
-
-  function finishRoadDraft() {
-    if (roadDraft.length < 2) {
-      roadDraft = [];
-      render();
-      return;
-    }
-    const positions = roadDraft.map(function (p) { return [p.lon, p.lat]; });
-    state.roads.push({
-      id: newId('r'),
-      positions: positions,
-      widthM: DEFAULT_ROAD_WIDTH_M,
-    });
-    roadDraft = [];
-    saveLocal();
-    saveRemote();
-    render();
-  }
-
-  function applyHousePropsToSelected() {
-    if (!selectedHouseId) {
-      alert('Pick a house first (tool: Pick house to edit), or place a new house with Place house.');
-      return;
-    }
-    var idx = state.houses.findIndex(function (x) { return x.id === selectedHouseId; });
-    if (idx === -1) {
-      clearHouseSelection();
-      return;
-    }
-    flushPendingRemoteSave();
-    var p = readHousePropsFromForm();
-    var h = state.houses[idx];
-    h.lengthM = p.lengthM;
-    h.widthM = p.widthM;
-    h.heightM = p.heightM;
-    h.headingDeg = p.headingDeg;
-    h.colorHex = p.colorHex;
-    saveLocal();
-    render();
-    saveRemote();
-  }
-
-  function clearAllScene() {
-    state = { houses: [], roads: [] };
-    roadDraft = [];
-    clearHouseSelection();
-    saveLocal();
-    saveRemote();
-    render();
   }
 
   function saveRemote() {
@@ -844,9 +150,7 @@
         .catch(function (err) { console.warn('[mapScene] Supabase save:', err.message || err); });
     };
     if (window.supabaseAuth && typeof window.supabaseAuth.getAuthForApi === 'function') {
-      window.supabaseAuth.getAuthForApi(function (auth) {
-        doSave(auth);
-      });
+      window.supabaseAuth.getAuthForApi(function (auth) { doSave(auth); });
     }
   }
 
@@ -889,6 +193,754 @@
     }
   }
 
+  // ── Rendering ──────────────────────────────────────────────────────────────
+
+  function clearEntities() {
+    if (!viewer) return;
+    for (var i = 0; i < entityList.length; i++) {
+      try { viewer.entities.remove(entityList[i]); } catch (e) { /* ignore */ }
+    }
+    entityList.length = 0;
+  }
+
+  function render() {
+    clearEntities();
+    if (!viewer) return;
+    normalizeScene();
+
+    for (var i = 0; i < state.houses.length; i++) {
+      var h = state.houses[i];
+      var len = typeof h.lengthM === 'number' && h.lengthM > 0 ? h.lengthM : DEFAULT_HOUSE.lengthM;
+      var wid = typeof h.widthM === 'number' && h.widthM > 0 ? h.widthM : DEFAULT_HOUSE.widthM;
+      var height = typeof h.heightM === 'number' && h.heightM > 0 ? h.heightM : DEFAULT_HOUSE.heightM;
+      var heading = typeof h.headingDeg === 'number' ? h.headingDeg : DEFAULT_HOUSE.headingDeg;
+      var half = height / 2;
+      var eid = 'mapscene-house-' + h.id;
+      var isSelected = eid === selectedId;
+      var cart = Cesium.Cartesian3.fromDegrees(h.lon, h.lat, half);
+      var hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(heading), 0, 0);
+      var orientation = Cesium.Transforms.headingPitchRollQuaternion(cart, hpr);
+      var e = viewer.entities.add({
+        id: eid,
+        name: 'House',
+        position: new Cesium.ConstantPositionProperty(cart, undefined, Cesium.HeightReference.RELATIVE_TO_GROUND),
+        orientation: orientation,
+        box: {
+          dimensions: new Cesium.Cartesian3(len, wid, height),
+          fill: true,
+          material: isSelected ? Cesium.Color.GOLD.withAlpha(0.92) : Cesium.Color.BURLYWOOD.withAlpha(0.92),
+          outline: true,
+          outlineColor: isSelected ? Cesium.Color.YELLOW : Cesium.Color.SADDLEBROWN,
+          outlineWidth: isSelected ? 3 : 1,
+        },
+      });
+      entityList.push(e);
+    }
+
+    for (var r = 0; r < state.roads.length; r++) {
+      var road = state.roads[r];
+      var rawPts = [];
+      for (var p = 0; p < road.positions.length; p++) {
+        var pt = road.positions[p];
+        if (Array.isArray(pt) && pt.length >= 2) rawPts.push(pt.slice(0, 3));
+      }
+      if (rawPts.length < 2) continue;
+      var splinePts = rawPts.length >= 3 ? catmullRomSpline(rawPts, 20) : rawPts;
+      var rwidth = typeof road.widthM === 'number' && road.widthM > 0 ? road.widthM : DEFAULT_ROAD_WIDTH_M;
+      var rheight = typeof road.heightM === 'number' && road.heightM > 0 ? road.heightM : DEFAULT_ROAD_HEIGHT_M;
+      var reid = 'mapscene-road-' + road.id;
+      var rSelected = reid === selectedId;
+
+      var has3D = rawPts[0].length >= 3;
+      var corridorPositions;
+      var corridorExtra = {};
+      if (has3D) {
+        /* New format: absolute 3D positions — no terrain clamping, bend is purely user-controlled */
+        var flat3 = [];
+        for (var sp = 0; sp < splinePts.length; sp++) {
+          flat3.push(splinePts[sp][0], splinePts[sp][1], (splinePts[sp][2] || 0) + rheight);
+        }
+        corridorPositions = Cesium.Cartesian3.fromDegreesArrayHeights(flat3);
+      } else {
+        /* Legacy 2D format: fall back to terrain clamping */
+        var flat2 = [];
+        for (var sp2 = 0; sp2 < splinePts.length; sp2++) { flat2.push(splinePts[sp2][0], splinePts[sp2][1]); }
+        corridorPositions = Cesium.Cartesian3.fromDegreesArray(flat2);
+        corridorExtra.height = rheight;
+        corridorExtra.heightReference = Cesium.HeightReference.CLAMP_TO_GROUND;
+      }
+
+      var re = viewer.entities.add({
+        id: reid,
+        name: 'Road',
+        corridor: Object.assign({
+          positions: corridorPositions,
+          width: rwidth,
+          cornerType: Cesium.CornerType.ROUNDED,
+          material: rSelected ? Cesium.Color.GOLD.withAlpha(0.9) : Cesium.Color.DIMGRAY.withAlpha(0.95),
+          outline: true,
+          outlineColor: rSelected ? Cesium.Color.YELLOW : Cesium.Color.BLACK,
+        }, corridorExtra),
+      });
+      entityList.push(re);
+    }
+
+    /* Waypoint handles: shown when a road is in reshape mode */
+    if (reshapeMode && selectedId.indexOf('mapscene-road-') === 0) {
+      var rwid = selectedId.slice('mapscene-road-'.length);
+      for (var rr = 0; rr < state.roads.length; rr++) {
+        if (state.roads[rr].id !== rwid) continue;
+        var rwRoad = state.roads[rr];
+        for (var wi = 0; wi < rwRoad.positions.length; wi++) {
+          var wpt = rwRoad.positions[wi];
+          var wpEid = 'mapscene-wp-' + rwid + '-' + wi;
+          var isWpSel = wi === selectedWaypointIdx;
+          var wpBaseH = typeof wpt[2] === 'number' ? wpt[2] : getTerrainHeight(wpt[0], wpt[1]);
+          var wpe = viewer.entities.add({
+            id: wpEid,
+            position: Cesium.Cartesian3.fromDegrees(wpt[0], wpt[1], wpBaseH + DEFAULT_ROAD_HEIGHT_M + 4),
+            point: {
+              pixelSize: isWpSel ? 18 : 12,
+              color: isWpSel ? Cesium.Color.fromCssColorString('#ef4444') : Cesium.Color.fromCssColorString('#38bdf8'),
+              outlineColor: Cesium.Color.WHITE,
+              outlineWidth: 2,
+              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
+          });
+          entityList.push(wpe);
+        }
+        break;
+      }
+    }
+
+    /* Draft road polyline preview */
+    if (roadDraft.length >= 2) {
+      var dpts = roadDraft.map(function (p) { return [p.lon, p.lat, p.terrainH || 0]; });
+      var dspline = dpts.length >= 3 ? catmullRomSpline(dpts, 20) : dpts;
+      var dflat = [];
+      var dHOffset = DEFAULT_ROAD_HEIGHT_M;
+      for (var d = 0; d < dspline.length; d++) {
+        dflat.push(dspline[d][0], dspline[d][1], (dspline[d][2] || 0) + dHOffset);
+      }
+      var de = viewer.entities.add({
+        id: 'mapscene-road-draft',
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights(dflat),
+          width: 3,
+          material: Cesium.Color.YELLOW.withAlpha(0.85),
+          clampToGround: false,
+        },
+      });
+      entityList.push(de);
+    }
+  }
+
+  // ── Picking helpers ────────────────────────────────────────────────────────
+
+  function entityStringIdFromPickResult(picked) {
+    if (!picked) return '';
+    var e = picked.id;
+    if (e) {
+      if (typeof e.id === 'string') return e.id;
+      if (e.id != null) return String(e.id);
+    }
+    var prim = picked.primitive;
+    if (prim && prim.id) {
+      if (typeof prim.id === 'object' && prim.id !== null && prim.id.id != null) return String(prim.id.id);
+      if (typeof prim.id === 'string') return prim.id;
+    }
+    return '';
+  }
+
+  function findMapSceneEntityIdAtClick(click) {
+    if (!viewer || !viewer.scene) return '';
+    var results = viewer.scene.drillPick(click.position, 48);
+    if (!results || results.length === 0) return '';
+    for (var i = 0; i < results.length; i++) {
+      var sid = entityStringIdFromPickResult(results[i]);
+      if (sid.indexOf('mapscene-house-') === 0 || sid.indexOf('mapscene-road-') === 0 || sid.indexOf('mapscene-wp-') === 0) return sid;
+    }
+    return '';
+  }
+
+  function pickGlobeDegrees(click) {
+    if (!viewer) return null;
+    var ray = viewer.camera.getPickRay(click.position);
+    var cartesian = viewer.scene.globe.pick(ray, viewer.scene);
+    if (!cartesian) return null;
+    var c = Cesium.Cartographic.fromCartesian(cartesian);
+    return { lon: Cesium.Math.toDegrees(c.longitude), lat: Cesium.Math.toDegrees(c.latitude) };
+  }
+
+  // ── Selection & editing ────────────────────────────────────────────────────
+
+  function setSelected(entityStringId) {
+    selectedId = entityStringId || '';
+    movePending = false;
+    reshapeMode = false;
+    selectedWaypointIdx = -1;
+    var reshapeBtn = document.getElementById('btnSceneReshape');
+    if (reshapeBtn) { reshapeBtn.textContent = 'Reshape'; reshapeBtn.style.color = ''; }
+    var reshapeHint = document.getElementById('reshapeHint');
+    if (reshapeHint) reshapeHint.style.display = 'none';
+    var moveBtn = document.getElementById('btnSceneMove');
+    if (moveBtn) moveBtn.textContent = 'Move';
+    if (selectedId) {
+      attachGizmoLoop();
+    } else {
+      hideGizmo();
+    }
+    populateEditPanel(selectedId);
+    render();
+  }
+
+  function populateEditPanel(entityStringId) {
+    var hint = document.getElementById('sceneSelectHint');
+    var panel = document.getElementById('sceneSelectPanel');
+    var typeLabel = document.getElementById('sceneSelectedType');
+    var houseFields = document.getElementById('sceneEditHouse');
+    var roadFields = document.getElementById('sceneEditRoad');
+
+    if (!entityStringId) {
+      if (hint) hint.style.display = 'block';
+      if (panel) panel.style.display = 'none';
+      return;
+    }
+    if (hint) hint.style.display = 'none';
+    if (panel) panel.style.display = 'block';
+
+    var reshapeBtn = document.getElementById('btnSceneReshape');
+
+    if (entityStringId.indexOf('mapscene-house-') === 0) {
+      var hid = entityStringId.slice('mapscene-house-'.length);
+      var house = null;
+      for (var i = 0; i < state.houses.length; i++) { if (state.houses[i].id === hid) { house = state.houses[i]; break; } }
+      if (!house) return;
+      if (typeLabel) typeLabel.textContent = 'House';
+      if (houseFields) houseFields.style.display = 'block';
+      if (roadFields) roadFields.style.display = 'none';
+      if (reshapeBtn) reshapeBtn.style.display = 'none';
+      var el;
+      el = document.getElementById('editHouseLength'); if (el) el.value = house.lengthM || DEFAULT_HOUSE.lengthM;
+      el = document.getElementById('editHouseWidth');  if (el) el.value = house.widthM  || DEFAULT_HOUSE.widthM;
+      el = document.getElementById('editHouseHeight'); if (el) el.value = house.heightM || DEFAULT_HOUSE.heightM;
+      el = document.getElementById('editHouseHeading'); if (el) el.value = house.headingDeg != null ? house.headingDeg : 0;
+    } else if (entityStringId.indexOf('mapscene-road-') === 0) {
+      var rid = entityStringId.slice('mapscene-road-'.length);
+      var road = null;
+      for (var j = 0; j < state.roads.length; j++) { if (state.roads[j].id === rid) { road = state.roads[j]; break; } }
+      if (!road) return;
+      if (typeLabel) typeLabel.textContent = 'Road';
+      if (houseFields) houseFields.style.display = 'none';
+      if (roadFields) roadFields.style.display = 'block';
+      if (reshapeBtn) reshapeBtn.style.display = 'inline-block';
+      var rw = document.getElementById('editRoadWidth'); if (rw) rw.value = road.widthM || DEFAULT_ROAD_WIDTH_M;
+      var rh = document.getElementById('editRoadHeight'); if (rh) rh.value = typeof road.heightM === 'number' && road.heightM > 0 ? road.heightM : DEFAULT_ROAD_HEIGHT_M;
+      var rl = document.getElementById('editRoadLength');
+      if (rl) {
+        var lenM = roadLengthM(road.positions);
+        rl.textContent = lenM >= 1000 ? (lenM / 1000).toFixed(2) + ' km' : Math.round(lenM) + ' m';
+      }
+    }
+  }
+
+  function applyEdit() {
+    if (!selectedId) return;
+    if (selectedId.indexOf('mapscene-house-') === 0) {
+      var hid = selectedId.slice('mapscene-house-'.length);
+      for (var i = 0; i < state.houses.length; i++) {
+        if (state.houses[i].id === hid) {
+          state.houses[i].lengthM  = getNum('editHouseLength',  DEFAULT_HOUSE.lengthM);
+          state.houses[i].widthM   = getNum('editHouseWidth',   DEFAULT_HOUSE.widthM);
+          state.houses[i].heightM  = getNum('editHouseHeight',  DEFAULT_HOUSE.heightM);
+          var hdg = parseFloat((document.getElementById('editHouseHeading') || {}).value);
+          state.houses[i].headingDeg = isNaN(hdg) ? 0 : hdg;
+          break;
+        }
+      }
+    } else if (selectedId.indexOf('mapscene-road-') === 0) {
+      var rid = selectedId.slice('mapscene-road-'.length);
+      for (var j = 0; j < state.roads.length; j++) {
+        if (state.roads[j].id === rid) {
+          state.roads[j].widthM = getNum('editRoadWidth', DEFAULT_ROAD_WIDTH_M);
+          var rhEl = document.getElementById('editRoadHeight');
+          var rhVal = rhEl ? parseFloat(rhEl.value) : NaN;
+          state.roads[j].heightM = isNaN(rhVal) ? DEFAULT_ROAD_HEIGHT_M : rhVal;
+          break;
+        }
+      }
+    }
+    saveLocal();
+    saveRemote();
+    render();
+  }
+
+  function moveSelectedTo(ll) {
+    if (!selectedId || !ll) return;
+    if (selectedId.indexOf('mapscene-house-') === 0) {
+      var hid = selectedId.slice('mapscene-house-'.length);
+      for (var i = 0; i < state.houses.length; i++) {
+        if (state.houses[i].id === hid) { state.houses[i].lon = ll.lon; state.houses[i].lat = ll.lat; break; }
+      }
+    } else if (selectedId.indexOf('mapscene-road-') === 0) {
+      var rid = selectedId.slice('mapscene-road-'.length);
+      for (var j = 0; j < state.roads.length; j++) {
+        if (state.roads[j].id === rid) {
+          var road = state.roads[j];
+          var sumLon = 0, sumLat = 0;
+          for (var p = 0; p < road.positions.length; p++) { sumLon += road.positions[p][0]; sumLat += road.positions[p][1]; }
+          var cLon = sumLon / road.positions.length;
+          var cLat = sumLat / road.positions.length;
+          var dLon = ll.lon - cLon, dLat = ll.lat - cLat;
+          road.positions = road.positions.map(function (pt) { return [pt[0] + dLon, pt[1] + dLat]; });
+          break;
+        }
+      }
+    }
+    movePending = false;
+    var moveBtn = document.getElementById('btnSceneMove');
+    if (moveBtn) moveBtn.textContent = 'Move';
+    saveLocal();
+    saveRemote();
+    render();
+  }
+
+  function deleteSelected() {
+    if (!selectedId) return;
+    if (selectedId.indexOf('mapscene-house-') === 0) {
+      var hid = selectedId.slice('mapscene-house-'.length);
+      state.houses = state.houses.filter(function (h) { return h.id !== hid; });
+    } else if (selectedId.indexOf('mapscene-road-') === 0) {
+      var rid = selectedId.slice('mapscene-road-'.length);
+      state.roads = state.roads.filter(function (r) { return r.id !== rid; });
+    }
+    selectedId = '';
+    movePending = false;
+    hideGizmo();
+    saveLocal();
+    saveRemote();
+    populateEditPanel('');
+    render();
+  }
+
+  // ── Gizmo: move / rotate handles ──────────────────────────────────────────
+
+  function getSelectedCenter() {
+    if (!selectedId) return null;
+    if (selectedId.indexOf('mapscene-house-') === 0) {
+      var hid = selectedId.slice('mapscene-house-'.length);
+      for (var i = 0; i < state.houses.length; i++) {
+        if (state.houses[i].id === hid) {
+          var h = state.houses[i];
+          return { lon: h.lon, lat: h.lat, heightM: h.heightM || DEFAULT_HOUSE.heightM, headingDeg: h.headingDeg || 0, type: 'house' };
+        }
+      }
+    }
+    if (selectedId.indexOf('mapscene-road-') === 0) {
+      var rid = selectedId.slice('mapscene-road-'.length);
+      for (var j = 0; j < state.roads.length; j++) {
+        if (state.roads[j].id === rid) {
+          var road = state.roads[j];
+          var sumLon = 0, sumLat = 0;
+          for (var p = 0; p < road.positions.length; p++) { sumLon += road.positions[p][0]; sumLat += road.positions[p][1]; }
+          return { lon: sumLon / road.positions.length, lat: sumLat / road.positions.length, heightM: 0, headingDeg: 0, type: 'road' };
+        }
+      }
+    }
+    return null;
+  }
+
+  function getMetersPerPixel() {
+    try {
+      var ht = viewer.camera.positionCartographic.height;
+      var fov = viewer.camera.frustum.fovy || 1.0;
+      var ph = viewer.canvas.clientHeight || viewer.canvas.height || 600;
+      return 2 * ht * Math.tan(fov / 2) / ph;
+    } catch (e) { return 1; }
+  }
+
+  function updateGizmoVisibility() {
+    var gizmo = document.getElementById('sceneGizmo');
+    if (!gizmo || !viewer || !viewer.scene) return;
+    if (!selectedId || getTool() !== 'select' || !isSceneEditActive()) {
+      gizmo.style.display = 'none';
+      return;
+    }
+    var obj = getSelectedCenter();
+    if (!obj) { gizmo.style.display = 'none'; return; }
+
+    var altM = obj.type === 'house' ? obj.heightM / 2 : 1;
+    var cart3 = Cesium.Cartesian3.fromDegrees(obj.lon, obj.lat, altM);
+    var canvasPos = viewer.scene.cartesianToCanvasCoordinates(cart3, new Cesium.Cartesian2());
+    if (!canvasPos) { gizmo.style.display = 'none'; return; }
+
+    var cr = viewer.canvas.getBoundingClientRect();
+    var cx = cr.left + canvasPos.x;
+    var cy = cr.top + canvasPos.y;
+    if (cx < -100 || cy < -100 || cx > window.innerWidth + 100 || cy > window.innerHeight + 100) {
+      gizmo.style.display = 'none';
+      return;
+    }
+
+    gizmo.style.left = Math.round(cx) + 'px';
+    gizmo.style.top = Math.round(cy) + 'px';
+    gizmo.style.display = 'block';
+    gizmoClientPos = { x: cx, y: cy };
+
+    var isHouse = selectedId.indexOf('mapscene-house-') === 0;
+    var rotEls = gizmo.querySelectorAll('.gizmo-rot');
+    for (var k = 0; k < rotEls.length; k++) {
+      rotEls[k].style.display = isHouse ? 'flex' : 'none';
+    }
+  }
+
+  function attachGizmoLoop() {
+    if (postRenderUnsubscribe || !viewer) return;
+    postRenderUnsubscribe = viewer.scene.postRender.addEventListener(updateGizmoVisibility);
+  }
+
+  function detachGizmoLoop() {
+    if (postRenderUnsubscribe) { postRenderUnsubscribe(); postRenderUnsubscribe = null; }
+  }
+
+  function hideGizmo() {
+    detachGizmoLoop();
+    var gizmo = document.getElementById('sceneGizmo');
+    if (gizmo) gizmo.style.display = 'none';
+  }
+
+  function startGizmoDrag(e, handle) {
+    e.preventDefault();
+    var obj = getSelectedCenter();
+    if (!obj) return;
+
+    var startPositions = null;
+    if (selectedId.indexOf('mapscene-road-') === 0) {
+      var rid = selectedId.slice('mapscene-road-'.length);
+      for (var j = 0; j < state.roads.length; j++) {
+        if (state.roads[j].id === rid) {
+          startPositions = state.roads[j].positions.map(function (pt) { return [pt[0], pt[1]]; });
+          break;
+        }
+      }
+    }
+
+    var startAngle = 0;
+    if (handle === 'rotCW' || handle === 'rotCCW') {
+      startAngle = Math.atan2(e.clientY - gizmoClientPos.y, e.clientX - gizmoClientPos.x) * (180 / Math.PI);
+    }
+
+    gizmoDragState = {
+      handle: handle,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      startLon: obj.lon,
+      startLat: obj.lat,
+      startHeading: obj.headingDeg,
+      startPositions: startPositions,
+      startAngle: startAngle,
+    };
+
+    if (viewer.scene.screenSpaceCameraController) {
+      viewer.scene.screenSpaceCameraController.enableRotate = false;
+      viewer.scene.screenSpaceCameraController.enableTranslate = false;
+      viewer.scene.screenSpaceCameraController.enableZoom = false;
+      viewer.scene.screenSpaceCameraController.enableTilt = false;
+    }
+  }
+
+  function moveGizmoDrag(e) {
+    if (!gizmoDragState) return;
+    var ds = gizmoDragState;
+    var dx = e.clientX - ds.startMouseX;
+    var dy = e.clientY - ds.startMouseY;
+
+    if (ds.handle === 'rotCW' || ds.handle === 'rotCCW') {
+      var curAngle = Math.atan2(e.clientY - gizmoClientPos.y, e.clientX - gizmoClientPos.x) * (180 / Math.PI);
+      var delta = curAngle - ds.startAngle;
+      var newHeading = ((ds.startHeading + delta) % 360 + 360) % 360;
+      applyGizmoRotation(newHeading);
+      return;
+    }
+
+    var mpp = getMetersPerPixel();
+    var cosLat = Math.cos(Cesium.Math.toRadians(ds.startLat));
+    var LAT_DEG = 1 / 111320;
+    var LON_DEG = cosLat > 0.01 ? 1 / (111320 * cosLat) : 1 / 111320;
+    var newLon = ds.startLon, newLat = ds.startLat;
+
+    if (ds.handle === 'center') {
+      newLon = ds.startLon + dx * mpp * LON_DEG;
+      newLat = ds.startLat - dy * mpp * LAT_DEG;
+    } else if (ds.handle === 'N' || ds.handle === 'S') {
+      newLat = ds.startLat - dy * mpp * LAT_DEG;
+    } else if (ds.handle === 'E' || ds.handle === 'W') {
+      newLon = ds.startLon + dx * mpp * LON_DEG;
+    }
+
+    applyGizmoPosition(newLon, newLat, ds.startPositions);
+    try { viewer.scene.requestRender(); } catch (ex) { /* ignore */ }
+  }
+
+  function endGizmoDrag() {
+    if (!gizmoDragState) return;
+    if (viewer && viewer.scene && viewer.scene.screenSpaceCameraController) {
+      viewer.scene.screenSpaceCameraController.enableRotate = true;
+      viewer.scene.screenSpaceCameraController.enableTranslate = true;
+      viewer.scene.screenSpaceCameraController.enableZoom = true;
+      viewer.scene.screenSpaceCameraController.enableTilt = true;
+    }
+    gizmoDragState = null;
+    saveLocal();
+    saveRemote();
+    populateEditPanel(selectedId);
+  }
+
+  function applyGizmoPosition(lon, lat, startPositions) {
+    if (!selectedId) return;
+    if (selectedId.indexOf('mapscene-house-') === 0) {
+      var hid = selectedId.slice('mapscene-house-'.length);
+      for (var i = 0; i < state.houses.length; i++) {
+        if (state.houses[i].id === hid) { state.houses[i].lon = lon; state.houses[i].lat = lat; break; }
+      }
+    } else if (selectedId.indexOf('mapscene-road-') === 0 && startPositions && gizmoDragState) {
+      var rid = selectedId.slice('mapscene-road-'.length);
+      var dLon = lon - gizmoDragState.startLon;
+      var dLat = lat - gizmoDragState.startLat;
+      for (var j = 0; j < state.roads.length; j++) {
+        if (state.roads[j].id === rid) {
+          state.roads[j].positions = startPositions.map(function (pt) { return [pt[0] + dLon, pt[1] + dLat]; });
+          break;
+        }
+      }
+    }
+    render();
+  }
+
+  function applyGizmoRotation(headingDeg) {
+    if (!selectedId || selectedId.indexOf('mapscene-house-') !== 0) return;
+    var hid = selectedId.slice('mapscene-house-'.length);
+    for (var i = 0; i < state.houses.length; i++) {
+      if (state.houses[i].id === hid) {
+        state.houses[i].headingDeg = headingDeg;
+        var hdgEl = document.getElementById('editHouseHeading');
+        if (hdgEl) hdgEl.value = Math.round(headingDeg);
+        break;
+      }
+    }
+    render();
+  }
+
+  // ── Click handler ──────────────────────────────────────────────────────────
+
+  function handleAdminClick(click) {
+    if (!isSceneEditActive()) return false;
+    var tool = getTool();
+    if (tool === 'none') return false;
+
+    if (tool === 'delete') {
+      var did = findMapSceneEntityIdAtClick(click);
+      if (did.indexOf('mapscene-house-') === 0) {
+        var dhid = did.slice('mapscene-house-'.length);
+        state.houses = state.houses.filter(function (h) { return h.id !== dhid; });
+        if (selectedId === did) { selectedId = ''; populateEditPanel(''); }
+        saveLocal(); saveRemote(); render();
+      } else if (did.indexOf('mapscene-road-') === 0) {
+        var drid = did.slice('mapscene-road-'.length);
+        state.roads = state.roads.filter(function (r) { return r.id !== drid; });
+        if (selectedId === did) { selectedId = ''; populateEditPanel(''); }
+        saveLocal(); saveRemote(); render();
+      }
+      return true;
+    }
+
+    if (tool === 'select') {
+      if (movePending) {
+        var mll = pickGlobeDegrees(click);
+        if (mll) moveSelectedTo(mll);
+        return true;
+      }
+
+      var clickedId = findMapSceneEntityIdAtClick(click);
+
+      /* ── Reshape mode: waypoint selection and movement ── */
+      if (reshapeMode && selectedId.indexOf('mapscene-road-') === 0) {
+        if (clickedId.indexOf('mapscene-wp-') === 0) {
+          /* Click on a handle: select that waypoint */
+          var wpParts = clickedId.split('-');
+          selectedWaypointIdx = parseInt(wpParts[wpParts.length - 1], 10);
+          var reshapeHint = document.getElementById('reshapeHint');
+          if (reshapeHint) reshapeHint.textContent = 'Now click the map to move waypoint ' + (selectedWaypointIdx + 1);
+          render();
+          return true;
+        }
+        if (selectedWaypointIdx >= 0) {
+          /* Waypoint is selected: move it to clicked position, re-sample terrain height */
+          var wll = pickGlobeDegrees(click);
+          if (wll) {
+            var newTH = getTerrainHeight(wll.lon, wll.lat);
+            var rwid = selectedId.slice('mapscene-road-'.length);
+            for (var rj = 0; rj < state.roads.length; rj++) {
+              if (state.roads[rj].id === rwid) {
+                if (selectedWaypointIdx < state.roads[rj].positions.length) {
+                  state.roads[rj].positions[selectedWaypointIdx] = [wll.lon, wll.lat, newTH];
+                }
+                break;
+              }
+            }
+            selectedWaypointIdx = -1;
+            var rHint = document.getElementById('reshapeHint');
+            if (rHint) rHint.textContent = 'Click a blue dot to select a waypoint, then click the map to move it';
+            saveLocal(); saveRemote();
+            populateEditPanel(selectedId);
+          }
+          render();
+          return true;
+        }
+        /* Clicked blank terrain or different object: stay in reshape mode on same road */
+        if (!clickedId || clickedId === selectedId) { render(); return true; }
+        /* Clicked a different object: exit reshape and select it */
+        reshapeMode = false;
+        selectedWaypointIdx = -1;
+        var rb = document.getElementById('btnSceneReshape');
+        if (rb) { rb.textContent = 'Reshape'; rb.style.color = ''; }
+        var rh2 = document.getElementById('reshapeHint');
+        if (rh2) rh2.style.display = 'none';
+      }
+
+      setSelected(clickedId);
+      return true;
+    }
+
+    var ll = pickGlobeDegrees(click);
+    if (!ll) return true;
+
+    if (tool === 'house') {
+      state.houses.push({
+        id: newId('h'),
+        lon: ll.lon,
+        lat: ll.lat,
+        lengthM:    getNum('houseLength',  DEFAULT_HOUSE.lengthM),
+        widthM:     getNum('houseWidth',   DEFAULT_HOUSE.widthM),
+        heightM:    getNum('houseHeight',  DEFAULT_HOUSE.heightM),
+        headingDeg: (function () { var v = parseFloat((document.getElementById('houseHeading') || {}).value); return isNaN(v) ? 0 : v; }()),
+      });
+      saveLocal(); saveRemote(); render();
+      return true;
+    }
+
+    if (tool === 'road') {
+      /* Endpoint snapping: snap to existing road endpoint if within 5 m */
+      var SNAP_M = 5;
+      var snapped = false;
+      var snapTerrainH = null;
+      for (var ri = 0; ri < state.roads.length && !snapped; ri++) {
+        var rpos = state.roads[ri].positions;
+        var endpoints = [rpos[0], rpos[rpos.length - 1]];
+        for (var ei = 0; ei < endpoints.length && !snapped; ei++) {
+          var ep = endpoints[ei];
+          if (haversineM(ll.lon, ll.lat, ep[0], ep[1]) <= SNAP_M) {
+            ll = { lon: ep[0], lat: ep[1] };
+            snapTerrainH = typeof ep[2] === 'number' ? ep[2] : getTerrainHeight(ep[0], ep[1]);
+            snapped = true;
+          }
+        }
+      }
+      var terrainH = snapped ? snapTerrainH : getTerrainHeight(ll.lon, ll.lat);
+      roadDraft.push({ lon: ll.lon, lat: ll.lat, terrainH: terrainH });
+      var countEl = document.getElementById('roadDraftCount');
+      if (countEl) countEl.textContent = roadDraft.length;
+      render();
+      return true;
+    }
+
+    return false;
+  }
+
+  // ── Road draft ─────────────────────────────────────────────────────────────
+
+  function finishRoadDraft() {
+    if (roadDraft.length < 2) { roadDraft = []; render(); return; }
+    var rhEl = document.getElementById('roadHeight');
+    var rhVal = rhEl ? parseFloat(rhEl.value) : NaN;
+    state.roads.push({
+      id: newId('r'),
+      positions: roadDraft.map(function (p) { return [p.lon, p.lat, p.terrainH || 0]; }),
+      widthM: getNum('roadWidth', DEFAULT_ROAD_WIDTH_M),
+      heightM: isNaN(rhVal) ? DEFAULT_ROAD_HEIGHT_M : rhVal,
+    });
+    roadDraft = [];
+    var countEl = document.getElementById('roadDraftCount');
+    if (countEl) countEl.textContent = '0';
+    saveLocal(); saveRemote(); render();
+  }
+
+  function cancelRoadDraft() {
+    roadDraft = [];
+    var countEl = document.getElementById('roadDraftCount');
+    if (countEl) countEl.textContent = '0';
+    render();
+  }
+
+  function undoRoadDraft() {
+    if (roadDraft.length === 0) return;
+    roadDraft.pop();
+    var countEl = document.getElementById('roadDraftCount');
+    if (countEl) countEl.textContent = roadDraft.length;
+    render();
+  }
+
+  function toggleReshapeMode() {
+    if (!selectedId || selectedId.indexOf('mapscene-road-') !== 0) return;
+    reshapeMode = !reshapeMode;
+    selectedWaypointIdx = -1;
+    var btn = document.getElementById('btnSceneReshape');
+    var hint = document.getElementById('reshapeHint');
+    if (reshapeMode) {
+      if (btn) { btn.textContent = 'Done'; btn.style.color = '#38bdf8'; }
+      if (hint) { hint.style.display = 'block'; hint.textContent = 'Click a blue dot to select a waypoint, then click the map to move it'; }
+    } else {
+      if (btn) { btn.textContent = 'Reshape'; btn.style.color = ''; }
+      if (hint) hint.style.display = 'none';
+    }
+    render();
+  }
+
+  // ── Scene-wide ops ─────────────────────────────────────────────────────────
+
+  function clearAllScene() {
+    state = { houses: [], roads: [] };
+    roadDraft = [];
+    selectedId = '';
+    movePending = false;
+    populateEditPanel('');
+    saveLocal(); saveRemote(); render();
+  }
+
+  // ── UI wiring ──────────────────────────────────────────────────────────────
+
+  function syncToolPanel() {
+    var tool = getTool();
+    var panels = { house: 'sceneToolHouse', road: 'sceneToolRoad', select: 'sceneToolSelect', delete: 'sceneToolDelete' };
+    Object.keys(panels).forEach(function (key) {
+      var el = document.getElementById(panels[key]);
+      if (el) el.style.display = (key === tool) ? 'block' : 'none';
+    });
+  }
+
+  function isSceneTargetSelected() {
+    var radios = document.getElementsByName('adminEditTarget');
+    for (var i = 0; i < radios.length; i++) {
+      if (radios[i].checked && radios[i].value === 'scene') return true;
+    }
+    return false;
+  }
+
+  function isSceneEditActive() {
+    return !!(window.adminMode && window.adminMode.isEnabled && window.adminMode.isEnabled() && isSceneTargetSelected());
+  }
+
   function syncSceneToolsVisibility() {
     var sceneBox = document.getElementById('adminSceneTools');
     var floodBox = document.getElementById('adminFloodTools');
@@ -896,69 +948,83 @@
     if (!adminOn) {
       if (sceneBox) sceneBox.style.display = 'none';
       if (floodBox) floodBox.style.display = 'none';
+      hideGizmo();
+      try { if (window.gridManager && window.gridManager.setSceneEditMode) window.gridManager.setSceneEditMode(false); } catch (e) { /* ignore */ }
       return;
     }
     var sceneOn = isSceneTargetSelected();
     if (sceneBox) sceneBox.style.display = sceneOn ? 'block' : 'none';
     if (floodBox) floodBox.style.display = sceneOn ? 'none' : 'block';
+    if (!sceneOn) hideGizmo();
+    try { if (window.gridManager && window.gridManager.setSceneEditMode) window.gridManager.setSceneEditMode(sceneOn); } catch (e) { /* ignore */ }
   }
 
   function wireUi() {
-    var floodRadios = document.getElementsByName('adminEditTarget');
-    for (var i = 0; i < floodRadios.length; i++) {
-      floodRadios[i].addEventListener('change', function () {
-        roadDraft = [];
+    /* Edit target radio (flood / scene) */
+    var targetRadios = document.getElementsByName('adminEditTarget');
+    for (var i = 0; i < targetRadios.length; i++) {
+      targetRadios[i].addEventListener('change', function () {
+        roadDraft = []; selectedId = ''; movePending = false;
+        hideGizmo();
         try { render(); } catch (e) { /* ignore */ }
         syncSceneToolsVisibility();
+        syncToolPanel();
         try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
       });
     }
+
+    /* Tool selector */
     var toolSel = document.getElementById('adminSceneTool');
     if (toolSel) {
       toolSel.addEventListener('change', function () {
-        roadDraft = [];
-        var t = String(toolSel.value || 'none');
-        if (t !== 'edit_house') endHouseRotateDrag();
-        if (t !== 'edit_house') clearHouseSelection();
-        else syncManipToolbarButtons();
+        roadDraft = []; selectedId = ''; movePending = false;
+        hideGizmo();
+        var countEl = document.getElementById('roadDraftCount');
+        if (countEl) countEl.textContent = '0';
+        var moveBtn = document.getElementById('btnSceneMove');
+        if (moveBtn) moveBtn.textContent = 'Move';
+        populateEditPanel('');
         render();
+        syncToolPanel();
       });
     }
-    var applyHouseBtn = document.getElementById('btnAdminHouseApply');
-    if (applyHouseBtn) {
-      applyHouseBtn.addEventListener('click', function () {
-        try {
-          if (window.adminMode && typeof window.adminMode.isFloodEditorAccount === 'function' && !window.adminMode.isFloodEditorAccount()) {
-            alert('Only admin accounts can edit the scene.');
-            return;
-          }
-        } catch (e) { /* ignore */ }
-        applyHousePropsToSelected();
-      });
-    }
-    var clearSelBtn = document.getElementById('btnAdminHouseClearSel');
-    if (clearSelBtn) {
-      clearSelBtn.addEventListener('click', function () {
-        clearHouseSelection();
-      });
-    }
-    var liveIds = ['adminHouseLen', 'adminHouseWid', 'adminHouseHgt', 'adminHouseHeading', 'adminHouseColor'];
-    for (var li = 0; li < liveIds.length; li++) {
-      var el = document.getElementById(liveIds[li]);
-      if (!el) continue;
-      el.addEventListener('input', function () {
-        liveApplySelectedHouseFromForm();
-      });
-      el.addEventListener('change', function () {
-        liveApplySelectedHouseFromForm();
-      });
-    }
+
+    /* Road buttons */
     var finishBtn = document.getElementById('btnAdminRoadFinish');
-    if (finishBtn) {
-      finishBtn.addEventListener('click', function () {
-        finishRoadDraft();
+    if (finishBtn) finishBtn.addEventListener('click', finishRoadDraft);
+
+    var undoBtn = document.getElementById('btnAdminRoadUndo');
+    if (undoBtn) undoBtn.addEventListener('click', undoRoadDraft);
+
+    var cancelBtn = document.getElementById('btnAdminRoadCancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', cancelRoadDraft);
+
+    /* Select / Edit buttons */
+    var applyBtn = document.getElementById('btnSceneApply');
+    if (applyBtn) applyBtn.addEventListener('click', applyEdit);
+
+    var moveBtn = document.getElementById('btnSceneMove');
+    if (moveBtn) {
+      moveBtn.addEventListener('click', function () {
+        if (!selectedId) return;
+        movePending = !movePending;
+        moveBtn.textContent = movePending ? 'Click map to place' : 'Move';
       });
     }
+
+    var reshapeBtn = document.getElementById('btnSceneReshape');
+    if (reshapeBtn) reshapeBtn.addEventListener('click', toggleReshapeMode);
+
+    var delSelBtn = document.getElementById('btnSceneDeleteSelected');
+    if (delSelBtn) {
+      delSelBtn.addEventListener('click', function () {
+        if (!selectedId) return;
+        if (!confirm('Delete this object?')) return;
+        deleteSelected();
+      });
+    }
+
+    /* Save / Clear */
     var saveBtn = document.getElementById('btnAdminSceneSave');
     if (saveBtn) {
       saveBtn.addEventListener('click', function () {
@@ -972,6 +1038,7 @@
         alert('Scene saved (houses & roads).');
       });
     }
+
     var clearBtn = document.getElementById('btnAdminSceneClear');
     if (clearBtn) {
       clearBtn.addEventListener('click', function () {
@@ -985,19 +1052,32 @@
         clearAllScene();
       });
     }
+
+    /* Gizmo: mousedown delegation on the overlay, move/up at document level */
+    var gizmoEl = document.getElementById('sceneGizmo');
+    if (gizmoEl) {
+      gizmoEl.addEventListener('mousedown', function (e) {
+        var target = e.target;
+        while (target && target !== gizmoEl) {
+          if (target.getAttribute && target.getAttribute('data-handle')) {
+            startGizmoDrag(e, target.getAttribute('data-handle'));
+            return;
+          }
+          target = target.parentElement;
+        }
+      });
+    }
+    document.addEventListener('mousemove', moveGizmoDrag);
+    document.addEventListener('mouseup', endGizmoDrag);
   }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
 
   function init(v) {
     viewer = v;
     loadLocal();
     wireUi();
-    wireManipToolbar();
-    attachHouseRotateHandler();
-    if (!init._mapScenePostRender) {
-      init._mapScenePostRender = true;
-      viewer.scene.postRender.addEventListener(updateManipBarPosition);
-    }
-    updateHouseSelectionHint();
+    syncToolPanel();
     render();
     pullFromSupabase(null);
   }

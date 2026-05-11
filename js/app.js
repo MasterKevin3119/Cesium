@@ -35,9 +35,9 @@
   // Grid configuration (make dynamic for future scaling)
   let GRID_ROWS = 32;
   let GRID_COLS = 32;
-  const GRID_BASE_HEIGHT = 75; // meters elevation for all grid boxes (reduced by 50%)
+  const GRID_BASE_HEIGHT = 5; // meters elevation for all grid boxes
   /** When false, zone rectangles stay (for live rain/flood colours); only the yellow cell outlines hide. */
-  let gridOutlineVisible = true;
+  let gridOutlineVisible = false;
 
   // Helper: compute rectangle degrees [west, south, east, north] around center
   function computeFloodBounds() {
@@ -114,7 +114,7 @@
           outline: gridOutlineVisible,
           outlineColor: Cesium.Color.YELLOW,
           outlineWidth: 3,
-          height: GRID_BASE_HEIGHT,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         },
       });
       // Apply admin selection visuals if any
@@ -151,16 +151,50 @@
    * Apply flood surface to given zone IDs with severity string.
    * zoneIds: array of numeric IDs (1-25). severity: "moderate"|"severe"|"none".
    */
-  // Animate a zone's flood surface to target delta (meters above GRID_BASE_HEIGHT)
-  // opts.level: '30'|'60'|'100' (rain) vs '0.5'|'1' (flood buttons) — same depth may differ in colour
+  // Animate a zone's flood surface to target delta (metres above the zone's terrain height)
+  // opts.level: '30'|'60'|'100' (rain) vs '0.5'|'1' (flood buttons)
   function animateZoneFlood(z, targetDelta, durationMs, opts) {
     if (!z) return;
     durationMs = typeof durationMs === 'number' ? durationMs : 800;
     opts = opts || {};
     const level = opts.level;
-    const targetHeight = GRID_BASE_HEIGHT + (Number(targetDelta) || 0);
+    const baseH = typeof z.terrainH === 'number' ? z.terrainH : GRID_BASE_HEIGHT;
     const mat = floodOverlayMaterialForLevel(level, targetDelta);
-    // Ensure floodEntity exists
+
+    // 0.5 m and 1 m flood: clamp to ground so it merges with the outline entity (single visible layer)
+    if (level === '0.5' || level === '1' || z._useGroundClamp) {
+      if (Number(targetDelta) <= 0) {
+        if (z.floodEntity) {
+          try { viewer.entities.remove(z.floodEntity); } catch (e) { /* ignore */ }
+          z.floodEntity = null;
+        }
+        z.currentFloodDelta = 0;
+        z._useGroundClamp = false;
+        return;
+      }
+      const rect = Cesium.Rectangle.fromDegrees(z.bounds.west, z.bounds.south, z.bounds.east, z.bounds.north);
+      if (!z.floodEntity) {
+        z.floodEntity = viewer.entities.add({
+          name: 'Flood overlay ' + z.id,
+          rectangle: {
+            coordinates: rect,
+            material: mat,
+            fill: true,
+            outline: false,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          },
+        });
+      } else {
+        try { if (z.floodEntity.rectangle) z.floodEntity.rectangle.material = mat; } catch (e) { /* ignore */ }
+      }
+      z.currentFloodDelta = Number(targetDelta);
+      z._useGroundClamp = true;
+      try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+      return;
+    }
+
+    // Standard absolute-height flood for 1 m and rain tiers
+    const targetHeight = baseH + (Number(targetDelta) || 0);
     if (!z.floodEntity) {
       const rect = Cesium.Rectangle.fromDegrees(z.bounds.west, z.bounds.south, z.bounds.east, z.bounds.north);
       z.floodEntity = viewer.entities.add({
@@ -170,7 +204,7 @@
           material: mat,
           fill: true,
           outline: false,
-          height: GRID_BASE_HEIGHT + (z.currentFloodDelta || 0),
+          height: baseH + (z.currentFloodDelta || 0),
         },
       });
     } else {
@@ -179,7 +213,7 @@
       } catch (e) { /* ignore */ }
     }
 
-    const startHeight = (z.floodEntity.rectangle && z.floodEntity.rectangle.height) || (GRID_BASE_HEIGHT + (z.currentFloodDelta || 0));
+    const startHeight = (z.floodEntity.rectangle && z.floodEntity.rectangle.height) || (baseH + (z.currentFloodDelta || 0));
     const start = performance.now();
     function step(now) {
       const t = Math.min(1, (now - start) / durationMs);
@@ -192,9 +226,7 @@
       if (t < 1) {
         requestAnimationFrame(step);
       } else {
-        // Finalize
-        z.currentFloodDelta = targetHeight - GRID_BASE_HEIGHT;
-        // If target delta is 0, remove floodEntity
+        z.currentFloodDelta = targetHeight - baseH;
         if (!z.currentFloodDelta) {
           try { viewer.entities.remove(z.floodEntity); } catch (e) { /* ignore */ }
           z.floodEntity = null;
@@ -205,6 +237,41 @@
   }
   // expose for other modules
   try { window.animateZoneFlood = animateZoneFlood; } catch (e) { /* ignore */ }
+
+  /**
+   * Batch-sample terrain height at each zone's centre and update entity heights.
+   * Called once after renderZoneGrid(). Falls back to GRID_BASE_HEIGHT on any error.
+   */
+  async function sampleTerrainForZones() {
+    if (!viewer || !viewer.terrainProvider) return;
+    try {
+      const positions = floodZones.map(function (z) {
+        return Cesium.Cartographic.fromDegrees(
+          (z.bounds.west  + z.bounds.east)  * 0.5,
+          (z.bounds.south + z.bounds.north) * 0.5
+        );
+      });
+      const sampled = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, positions);
+      let changed = false;
+      for (let i = 0; i < floodZones.length; i++) {
+        const raw = sampled[i] ? sampled[i].height : null;
+        const h = (typeof raw === 'number' && isFinite(raw)) ? raw : GRID_BASE_HEIGHT;
+        floodZones[i].terrainH = h;
+        // Re-seat any active flood overlay
+        const delta = floodZones[i].currentFloodDelta || 0;
+        if (delta > 0) {
+          try {
+            if (floodZones[i].floodEntity && floodZones[i].floodEntity.rectangle)
+              floodZones[i].floodEntity.rectangle.height = h + delta;
+          } catch (e) { /* ignore */ }
+        }
+        changed = true;
+      }
+      if (changed) try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+    } catch (e) {
+      console.warn('[floodZones] Terrain sampling failed, using GRID_BASE_HEIGHT:', e && (e.message || e));
+    }
+  }
 
   function findZoneContainingPoint(lat, lon) {
     if (!floodZones || !floodZones.length) return null;
@@ -558,8 +625,8 @@
     if (btnClear) btnClear.addEventListener('click', function () {
       try { if (window.floodState) window.floodState.clearAll(); } catch (e) { /* ignore */ }
     });
-    if (btnToggle) btnToggle.addEventListener('click', function () {
-      gridOutlineVisible = !gridOutlineVisible;
+    function applyGridOutline(val) {
+      gridOutlineVisible = !!val;
       floodZones.forEach(function (z) {
         if (z.outlineEntity && z.outlineEntity.rectangle) {
           try {
@@ -567,10 +634,16 @@
           } catch (e) { /* ignore */ }
         }
       });
-      if (btnToggle) btnToggle.textContent = gridOutlineVisible ? 'Hide grid lines' : 'Show grid lines';
+      var btn = document.getElementById('btnToggleGrid');
+      if (btn) btn.textContent = gridOutlineVisible ? 'Hide grid lines' : 'Show grid lines';
       try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+    }
+    window.applyGridOutline = applyGridOutline;
+
+    if (btnToggle) btnToggle.addEventListener('click', function () {
+      applyGridOutline(!gridOutlineVisible);
     });
-    if (btnToggle) btnToggle.textContent = gridOutlineVisible ? 'Hide grid lines' : 'Show grid lines';
+    applyGridOutline(gridOutlineVisible);
 
     // Minimize data table + Table/Graph tab (delegation)
     const weatherResultEl = document.getElementById('weatherResult');
@@ -636,16 +709,20 @@
           if (e.target.closest && e.target.closest('button')) return;
           e.preventDefault();
           const rect = coordsPanel.getBoundingClientRect();
+          const panelW = rect.width;
+          const panelH = rect.height;
           const startX = e.clientX - rect.left;
           const startY = e.clientY - rect.top;
+          const hdrH = (document.getElementById('topHeader') || {}).offsetHeight || 52;
+          coordsPanel.style.right = 'auto';
           coordsPanel.style.bottom = 'auto';
           coordsPanel.style.left = rect.left + 'px';
           coordsPanel.style.top = rect.top + 'px';
           function onMove(e2) {
-            const left = e2.clientX - startX;
-            const top = e2.clientY - startY;
-            coordsPanel.style.left = Math.max(0, left) + 'px';
-            coordsPanel.style.top = Math.max(0, top) + 'px';
+            const left = Math.max(0, Math.min(e2.clientX - startX, window.innerWidth - panelW));
+            const top = Math.max(hdrH, Math.min(e2.clientY - startY, window.innerHeight - panelH));
+            coordsPanel.style.left = left + 'px';
+            coordsPanel.style.top = top + 'px';
           }
           function onUp() {
             document.removeEventListener('mousemove', onMove);
@@ -1490,6 +1567,7 @@
     }
 
     viewer = new Cesium.Viewer("cesiumContainer", viewerOptions);
+    window.cesiumViewer = viewer;
 
     viewer.scene.mode = Cesium.SceneMode.SCENE3D;
     viewer.scene.globe.depthTestAgainstTerrain = true;
@@ -1501,6 +1579,7 @@
       window.floodZones = floodZones;
       try { if (window.gridManager && typeof window.gridManager.init === 'function') window.gridManager.init(viewer); } catch (e) { /* ignore */ }
       renderZoneGrid();
+      sampleTerrainForZones(); // async: updates zone heights from actual terrain once tiles load
       try {
         if (window.floodConfig && typeof window.floodConfig.pullFromSupabase === 'function') {
           window.floodConfig.pullFromSupabase(function (ok) {
