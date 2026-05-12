@@ -195,6 +195,120 @@
 
   // ── Rendering ──────────────────────────────────────────────────────────────
 
+  function renderHousePolygons(h, isSelected) {
+    var len    = typeof h.lengthM  === 'number' && h.lengthM  > 0 ? h.lengthM  : DEFAULT_HOUSE.lengthM;
+    var wid    = typeof h.widthM   === 'number' && h.widthM   > 0 ? h.widthM   : DEFAULT_HOUSE.widthM;
+    var height = (typeof h.heightM  === 'number' && h.heightM  > 0 ? h.heightM  : DEFAULT_HOUSE.heightM) - 1;
+    var heading = typeof h.headingDeg === 'number' ? h.headingDeg : DEFAULT_HOUSE.headingDeg;
+    var headingRad = Cesium.Math.toRadians(heading);
+    var cosH = Math.cos(headingRad), sinH = Math.sin(headingRad);
+    var halfLen = len / 2, halfWid = wid / 2;
+    var mPerDegLon = 111320 * Math.cos(Cesium.Math.toRadians(h.lat));
+    var eid = 'mapscene-house-' + h.id;
+    var th = getTerrainHeight(h.lon, h.lat);
+
+    function pt(xM, yM, zM) {
+      return Cesium.Cartesian3.fromDegrees(
+        h.lon + (xM * cosH + yM * sinH) / mPerDegLon,
+        h.lat + (-xM * sinH + yM * cosH) / 111320,
+        th + zM
+      );
+    }
+
+    var wallMat  = isSelected ? Cesium.Color.GOLD.withAlpha(1.0) : new Cesium.Color(0.918, 0.918, 0.902, 1.0); // #EAEAE6 soft white
+    var roofMat  = new Cesium.Color(0.486, 0.420, 0.353, 1.0); // #7C6B5A wood accent
+    var paneMat  = new Cesium.Color(0.55, 0.82, 1.0, 1.0);
+    var frameMat = new Cesium.Color(0.110, 0.110, 0.110, 1.0); // #1C1C1C charcoal trim
+    var rPeak = height + height / 3;
+    var winW  = Math.max(1.0, Math.min(wid * 0.22, 2.0));
+    var winH  = Math.max(1.0, Math.min(height * 0.28, 2.0));
+    var winCZ = height * 0.50;
+    var winY  = halfWid * 0.38;
+    var fT    = 0.12; // frame border thickness
+    var dT    = 0.07; // cross divider thickness
+    var doorW = Math.max(1.0, Math.min(len * 0.14, 1.6));
+    var doorH = Math.max(2.0, Math.min(height * 0.55, 2.8));
+    var doorMat = new Cesium.Color(0.659, 0.710, 0.627, 1.0); // #A8B5A0 sage green
+
+    // Generates frame + pane + cross dividers for one window at (xBase±offset, yCenter)
+    function winFaces(xBase, xSign, yCenter, pfx) {
+      var pF = xBase + xSign * 0.04; // frame layer
+      var pP = xBase + xSign * 0.06; // pane layer
+      var pD = xBase + xSign * 0.08; // divider layer
+      return [
+        { id: pfx + 'f', mat: frameMat, verts: [pt(pF, yCenter-(winW/2+fT), winCZ-(winH/2+fT)), pt(pF, yCenter+(winW/2+fT), winCZ-(winH/2+fT)), pt(pF, yCenter+(winW/2+fT), winCZ+(winH/2+fT)), pt(pF, yCenter-(winW/2+fT), winCZ+(winH/2+fT))] },
+        { id: pfx + 'p', mat: paneMat, verts: [pt(pP, yCenter-winW/2, winCZ-winH/2), pt(pP, yCenter+winW/2, winCZ-winH/2), pt(pP, yCenter+winW/2, winCZ+winH/2), pt(pP, yCenter-winW/2, winCZ+winH/2)] },
+        { id: pfx + 'h', mat: frameMat, verts: [pt(pD, yCenter-winW/2, winCZ-dT/2), pt(pD, yCenter+winW/2, winCZ-dT/2), pt(pD, yCenter+winW/2, winCZ+dT/2), pt(pD, yCenter-winW/2, winCZ+dT/2)] },
+        { id: pfx + 'v', mat: frameMat, verts: [pt(pD, yCenter-dT/2, winCZ-winH/2), pt(pD, yCenter+dT/2, winCZ-winH/2), pt(pD, yCenter+dT/2, winCZ+winH/2), pt(pD, yCenter-dT/2, winCZ+winH/2)] },
+      ];
+    }
+
+    var winXFront = halfLen * 0.50; // X offset of each front window from centre
+
+    // Frame + pane + cross dividers for a window on the front/back face at (xCenter, yBase)
+    function frontWinFaces(yBase, ySign, xCenter, pfx) {
+      var pF = yBase + ySign * 0.04;
+      var pP = yBase + ySign * 0.06;
+      var pD = yBase + ySign * 0.08;
+      return [
+        { id: pfx + 'f', mat: frameMat, verts: [pt(xCenter-(winW/2+fT), pF, winCZ-(winH/2+fT)), pt(xCenter+(winW/2+fT), pF, winCZ-(winH/2+fT)), pt(xCenter+(winW/2+fT), pF, winCZ+(winH/2+fT)), pt(xCenter-(winW/2+fT), pF, winCZ+(winH/2+fT))] },
+        { id: pfx + 'p', mat: paneMat,  verts: [pt(xCenter-winW/2, pP, winCZ-winH/2), pt(xCenter+winW/2, pP, winCZ-winH/2), pt(xCenter+winW/2, pP, winCZ+winH/2), pt(xCenter-winW/2, pP, winCZ+winH/2)] },
+        { id: pfx + 'h', mat: frameMat, verts: [pt(xCenter-winW/2, pD, winCZ-dT/2), pt(xCenter+winW/2, pD, winCZ-dT/2), pt(xCenter+winW/2, pD, winCZ+dT/2), pt(xCenter-winW/2, pD, winCZ+dT/2)] },
+        { id: pfx + 'v', mat: frameMat, verts: [pt(xCenter-dT/2, pD, winCZ-winH/2), pt(xCenter+dT/2, pD, winCZ-winH/2), pt(xCenter+dT/2, pD, winCZ+winH/2), pt(xCenter-dT/2, pD, winCZ+winH/2)] },
+      ];
+    }
+
+    // Generates frame + panel + horizontal rail for door centered at (xCenter, yBase)
+    function doorFaces(yBase, ySign, xCenter, pfx) {
+      var pF = yBase + ySign * 0.04;
+      var pP = yBase + ySign * 0.06;
+      var pD = yBase + ySign * 0.08;
+      return [
+        { id: pfx + 'f', mat: frameMat, verts: [pt(xCenter-(doorW/2+fT), pF, 0), pt(xCenter+(doorW/2+fT), pF, 0), pt(xCenter+(doorW/2+fT), pF, doorH+fT), pt(xCenter-(doorW/2+fT), pF, doorH+fT)] },
+        { id: pfx + 'p', mat: doorMat,  verts: [pt(xCenter-doorW/2, pP, 0), pt(xCenter+doorW/2, pP, 0), pt(xCenter+doorW/2, pP, doorH), pt(xCenter-doorW/2, pP, doorH)] },
+        { id: pfx + 'h', mat: frameMat, verts: [pt(xCenter-doorW/2, pD, doorH*0.62-dT/2), pt(xCenter+doorW/2, pD, doorH*0.62-dT/2), pt(xCenter+doorW/2, pD, doorH*0.62+dT/2), pt(xCenter-doorW/2, pD, doorH*0.62+dT/2)] },
+      ];
+    }
+
+    var faces = [
+      // 4 walls
+      { id: eid + '-wl-0', verts: [pt(-halfLen, -halfWid, 0), pt( halfLen, -halfWid, 0), pt( halfLen, -halfWid, height), pt(-halfLen, -halfWid, height)], mat: wallMat },
+      { id: eid + '-wl-1', verts: [pt( halfLen,  halfWid, 0), pt(-halfLen,  halfWid, 0), pt(-halfLen,  halfWid, height), pt( halfLen,  halfWid, height)], mat: wallMat },
+      { id: eid + '-wl-2', verts: [pt( halfLen, -halfWid, 0), pt( halfLen,  halfWid, 0), pt( halfLen,  halfWid, height), pt( halfLen, -halfWid, height)], mat: wallMat },
+      { id: eid + '-wl-3', verts: [pt(-halfLen,  halfWid, 0), pt(-halfLen, -halfWid, 0), pt(-halfLen, -halfWid, height), pt(-halfLen,  halfWid, height)], mat: wallMat },
+      // 4 roof triangles
+      { id: eid + '-rf-0', verts: [pt(-halfLen, -halfWid, height), pt( halfLen, -halfWid, height), pt(0, 0, rPeak)], mat: roofMat },
+      { id: eid + '-rf-1', verts: [pt( halfLen, -halfWid, height), pt( halfLen,  halfWid, height), pt(0, 0, rPeak)], mat: roofMat },
+      { id: eid + '-rf-2', verts: [pt( halfLen,  halfWid, height), pt(-halfLen,  halfWid, height), pt(0, 0, rPeak)], mat: roofMat },
+      { id: eid + '-rf-3', verts: [pt(-halfLen,  halfWid, height), pt(-halfLen, -halfWid, height), pt(0, 0, rPeak)], mat: roofMat },
+    ].concat(
+      // 2 windows on east face (X=+halfLen), 2 on west face (X=-halfLen)
+      winFaces( halfLen,  1, -winY, eid + '-we0'),
+      winFaces( halfLen,  1,  winY, eid + '-we1'),
+      winFaces(-halfLen, -1, -winY, eid + '-ww0'),
+      winFaces(-halfLen, -1,  winY, eid + '-ww1'),
+      doorFaces(-halfWid, -1, 0, eid + '-dr0'),
+      // 2 windows on front face flanking the door
+      frontWinFaces(-halfWid, -1, -winXFront, eid + '-wf0'),
+      frontWinFaces(-halfWid, -1,  winXFront, eid + '-wf1')
+    );
+
+    faces.forEach(function (f) {
+      entityList.push(viewer.entities.add({
+        id: f.id,
+        polygon: {
+          hierarchy: new Cesium.PolygonHierarchy(f.verts),
+          perPositionHeight: true,
+          material: f.mat,
+          fill: true,
+          outline: false,
+        },
+      }));
+    });
+
+    return th === 0;
+  }
+
   function clearEntities() {
     if (!viewer) return;
     for (var i = 0; i < entityList.length; i++) {
@@ -210,31 +324,12 @@
 
     for (var i = 0; i < state.houses.length; i++) {
       var h = state.houses[i];
-      var len = typeof h.lengthM === 'number' && h.lengthM > 0 ? h.lengthM : DEFAULT_HOUSE.lengthM;
-      var wid = typeof h.widthM === 'number' && h.widthM > 0 ? h.widthM : DEFAULT_HOUSE.widthM;
-      var height = typeof h.heightM === 'number' && h.heightM > 0 ? h.heightM : DEFAULT_HOUSE.heightM;
-      var heading = typeof h.headingDeg === 'number' ? h.headingDeg : DEFAULT_HOUSE.headingDeg;
-      var half = height / 2;
-      var eid = 'mapscene-house-' + h.id;
-      var isSelected = eid === selectedId;
-      var cart = Cesium.Cartesian3.fromDegrees(h.lon, h.lat, half);
-      var hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(heading), 0, 0);
-      var orientation = Cesium.Transforms.headingPitchRollQuaternion(cart, hpr);
-      var e = viewer.entities.add({
-        id: eid,
-        name: 'House',
-        position: new Cesium.ConstantPositionProperty(cart, undefined, Cesium.HeightReference.RELATIVE_TO_GROUND),
-        orientation: orientation,
-        box: {
-          dimensions: new Cesium.Cartesian3(len, wid, height),
-          fill: true,
-          material: isSelected ? Cesium.Color.GOLD.withAlpha(0.92) : Cesium.Color.BURLYWOOD.withAlpha(0.92),
-          outline: true,
-          outlineColor: isSelected ? Cesium.Color.YELLOW : Cesium.Color.SADDLEBROWN,
-          outlineWidth: isSelected ? 3 : 1,
-        },
-      });
-      entityList.push(e);
+      var isSelected = ('mapscene-house-' + h.id) === selectedId;
+      var needsRerender = renderHousePolygons(h, isSelected);
+      if (needsRerender && !render._rerenderPending) {
+        render._rerenderPending = true;
+        setTimeout(function () { render._rerenderPending = false; render(); }, 2000);
+      }
     }
 
     for (var r = 0; r < state.roads.length; r++) {
@@ -359,7 +454,12 @@
     if (!results || results.length === 0) return '';
     for (var i = 0; i < results.length; i++) {
       var sid = entityStringIdFromPickResult(results[i]);
-      if (sid.indexOf('mapscene-house-') === 0 || sid.indexOf('mapscene-road-') === 0 || sid.indexOf('mapscene-wp-') === 0) return sid;
+      if (sid.indexOf('mapscene-house-') === 0) {
+        var hpart = sid.slice('mapscene-house-'.length);
+        var hyphen = hpart.indexOf('-');
+        return hyphen === -1 ? sid : 'mapscene-house-' + hpart.slice(0, hyphen);
+      }
+      if (sid.indexOf('mapscene-road-') === 0 || sid.indexOf('mapscene-wp-') === 0) return sid;
     }
     return '';
   }
@@ -631,12 +731,28 @@
       startAngle = Math.atan2(e.clientY - gizmoClientPos.y, e.clientX - gizmoClientPos.x) * (180 / Math.PI);
     }
 
+    var startPickedLon = obj.lon, startPickedLat = obj.lat;
+    if (handle !== 'rotCW' && handle !== 'rotCCW') {
+      try {
+        var cr0 = viewer.canvas.getBoundingClientRect();
+        var ray0 = viewer.camera.getPickRay(new Cesium.Cartesian2(e.clientX - cr0.left, e.clientY - cr0.top));
+        var pick0 = viewer.scene.globe.pick(ray0, viewer.scene);
+        if (pick0) {
+          var pc0 = Cesium.Cartographic.fromCartesian(pick0);
+          startPickedLon = Cesium.Math.toDegrees(pc0.longitude);
+          startPickedLat = Cesium.Math.toDegrees(pc0.latitude);
+        }
+      } catch (ex) { /* ignore */ }
+    }
+
     gizmoDragState = {
       handle: handle,
       startMouseX: e.clientX,
       startMouseY: e.clientY,
       startLon: obj.lon,
       startLat: obj.lat,
+      startPickedLon: startPickedLon,
+      startPickedLat: startPickedLat,
       startHeading: obj.headingDeg,
       startPositions: startPositions,
       startAngle: startAngle,
@@ -653,8 +769,6 @@
   function moveGizmoDrag(e) {
     if (!gizmoDragState) return;
     var ds = gizmoDragState;
-    var dx = e.clientX - ds.startMouseX;
-    var dy = e.clientY - ds.startMouseY;
 
     if (ds.handle === 'rotCW' || ds.handle === 'rotCCW') {
       var curAngle = Math.atan2(e.clientY - gizmoClientPos.y, e.clientX - gizmoClientPos.x) * (180 / Math.PI);
@@ -664,23 +778,27 @@
       return;
     }
 
-    var mpp = getMetersPerPixel();
-    var cosLat = Math.cos(Cesium.Math.toRadians(ds.startLat));
-    var LAT_DEG = 1 / 111320;
-    var LON_DEG = cosLat > 0.01 ? 1 / (111320 * cosLat) : 1 / 111320;
-    var newLon = ds.startLon, newLat = ds.startLat;
-
-    if (ds.handle === 'center') {
-      newLon = ds.startLon + dx * mpp * LON_DEG;
-      newLat = ds.startLat - dy * mpp * LAT_DEG;
-    } else if (ds.handle === 'N' || ds.handle === 'S') {
-      newLat = ds.startLat - dy * mpp * LAT_DEG;
-    } else if (ds.handle === 'E' || ds.handle === 'W') {
-      newLon = ds.startLon + dx * mpp * LON_DEG;
-    }
-
-    applyGizmoPosition(newLon, newLat, ds.startPositions);
-    try { viewer.scene.requestRender(); } catch (ex) { /* ignore */ }
+    try {
+      var cr = viewer.canvas.getBoundingClientRect();
+      var ray = viewer.camera.getPickRay(new Cesium.Cartesian2(e.clientX - cr.left, e.clientY - cr.top));
+      var pickedPos = viewer.scene.globe.pick(ray, viewer.scene);
+      if (!pickedPos) return;
+      var pickedCart = Cesium.Cartographic.fromCartesian(pickedPos);
+      var pickedLon = Cesium.Math.toDegrees(pickedCart.longitude);
+      var pickedLat = Cesium.Math.toDegrees(pickedCart.latitude);
+      var dLon = pickedLon - ds.startPickedLon;
+      var dLat = pickedLat - ds.startPickedLat;
+      var newLon = ds.startLon, newLat = ds.startLat;
+      if (ds.handle === 'center') {
+        newLon = ds.startLon + dLon;
+        newLat = ds.startLat + dLat;
+      } else if (ds.handle === 'N' || ds.handle === 'S') {
+        newLat = ds.startLat + dLat;
+      } else if (ds.handle === 'E' || ds.handle === 'W') {
+        newLon = ds.startLon + dLon;
+      }
+      applyGizmoPosition(newLon, newLat, ds.startPositions);
+    } catch (ex) { /* ignore */ }
   }
 
   function endGizmoDrag() {
@@ -697,6 +815,28 @@
     populateEditPanel(selectedId);
   }
 
+  function rerenderHouse(houseId) {
+    var prefix = 'mapscene-house-' + houseId;
+    var kept = [];
+    for (var i = 0; i < entityList.length; i++) {
+      var eid = entityList[i] && entityList[i].id;
+      if (typeof eid === 'string' && eid.indexOf(prefix) === 0) {
+        try { viewer.entities.remove(entityList[i]); } catch (ex) { /* ignore */ }
+      } else {
+        kept.push(entityList[i]);
+      }
+    }
+    entityList.length = 0;
+    for (var j = 0; j < kept.length; j++) entityList.push(kept[j]);
+    for (var k = 0; k < state.houses.length; k++) {
+      if (state.houses[k].id === houseId) {
+        renderHousePolygons(state.houses[k], ('mapscene-house-' + houseId) === selectedId);
+        break;
+      }
+    }
+    try { viewer.scene.requestRender(); } catch (ex) { /* ignore */ }
+  }
+
   function applyGizmoPosition(lon, lat, startPositions) {
     if (!selectedId) return;
     if (selectedId.indexOf('mapscene-house-') === 0) {
@@ -704,6 +844,7 @@
       for (var i = 0; i < state.houses.length; i++) {
         if (state.houses[i].id === hid) { state.houses[i].lon = lon; state.houses[i].lat = lat; break; }
       }
+      if (gizmoDragState) { rerenderHouse(hid); return; }
     } else if (selectedId.indexOf('mapscene-road-') === 0 && startPositions && gizmoDragState) {
       var rid = selectedId.slice('mapscene-road-'.length);
       var dLon = lon - gizmoDragState.startLon;
@@ -729,7 +870,7 @@
         break;
       }
     }
-    render();
+    if (gizmoDragState) { rerenderHouse(hid); } else { render(); }
   }
 
   // ── Click handler ──────────────────────────────────────────────────────────
