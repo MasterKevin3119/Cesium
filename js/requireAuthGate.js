@@ -50,7 +50,17 @@
       return;
     }
     showOverlay();
+    var done = false;
+    var timer = setTimeout(function () {
+      if (done) return;
+      done = true;
+      var next = encodeURIComponent(buildNext());
+      window.location.replace('index.html?next=' + next);
+    }, 8000);
     window.supabaseAuth.getAuthForApi(function (auth) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
       if (auth && auth.userId) {
         removeOverlay();
         return;

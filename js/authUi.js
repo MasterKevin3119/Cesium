@@ -144,11 +144,25 @@
     function showError(msg) {
       if (authError) { authError.textContent = msg || ''; authError.style.display = msg ? 'block' : 'none'; }
     }
+    function formatNetworkError(s) {
+      if (/failed to fetch|networkerror|load failed|network request failed/i.test(s)) {
+        return 'Cannot reach the server. Your Supabase project may be paused — go to supabase.com, open your project, and click "Restore" if it shows as paused. Then try again.';
+      }
+      return null;
+    }
     function formatAuthSignupError(err) {
       var s = typeof err === 'string' ? err : ((err && err.message) ? String(err.message) : String(err || ''));
+      var net = formatNetworkError(s);
+      if (net) return net;
       if (/signup.*disabled|signups.*disabled|email signups/i.test(s)) {
-        return 'Supabase has signups disabled. In the Supabase Dashboard: Authentication → Settings → allow new users to sign up. See docs/SUPABASE_SETUP.md.';
+        return 'Supabase has signups disabled. In the Supabase Dashboard: Authentication → Settings → allow new users to sign up.';
       }
+      return s;
+    }
+    function formatAuthSignInError(err) {
+      var s = typeof err === 'string' ? err : ((err && err.message) ? String(err.message) : String(err || ''));
+      var net = formatNetworkError(s);
+      if (net) return net;
       return s;
     }
     function accountDisplayName(user) {
@@ -308,7 +322,7 @@
         if (!password) { showError('Enter exactly 4 digits for PIN'); return; }
         showError('');
         window.supabaseAuth.signIn(email, password, function (err) {
-          if (err) { showError(err); return; }
+          if (err) { showError(formatAuthSignInError(err)); return; }
           authRefreshUi();
           if (maybeRedirectAfterAuth()) return;
           closeAuthModal();

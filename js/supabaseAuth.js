@@ -128,9 +128,21 @@
     c.auth.signUp(payload)
       .then(function (r) {
         var err = r.error ? (r.error.message || 'Sign up failed') : null;
+        if (err) { if (done) done(err, null); return; }
+        var session = r.data && r.data.session;
         var u = r.data && r.data.user ? userFromSupabaseUser(r.data.user) : null;
-        if (done) done(err, err ? null : u);
-        if (!err && authCallback) authCallback();
+        if (!session) {
+          // Supabase created the account but email confirmation is required —
+          // @flood-app.local is a fake domain so confirmation can never be received.
+          if (done) done(
+            'Account created but email confirmation is required. ' +
+            'Go to your Supabase Dashboard → Authentication → Settings and turn off "Confirm email", then try signing up again.',
+            null
+          );
+          return;
+        }
+        if (done) done(null, u);
+        if (authCallback) authCallback();
       })
       .catch(function (e) {
         if (done) done(e.message || e, null);

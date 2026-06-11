@@ -29,8 +29,10 @@ def ensure_certs():
 
 def main():
     ensure_certs()
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(certfile=CERT_FILE, keyfile=KEY_FILE)
     server = http.server.HTTPServer(("0.0.0.0", PORT), http.server.SimpleHTTPRequestHandler)
-    server.socket = ssl.wrap_socket(server.socket, server_side=True, keyfile=KEY_FILE, certfile=CERT_FILE)
+    server.socket = ctx.wrap_socket(server.socket, server_side=True)
     print(f"Serving at https://localhost:{PORT}/")
     print("Accept the browser security warning for self-signed cert.")
     server.serve_forever()
