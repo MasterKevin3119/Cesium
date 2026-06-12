@@ -114,10 +114,72 @@
     } catch (e) { /* ignore */ }
   }
 
+  // Build an O(1) membership set for a saved zone level
+  function _buildZoneSet(level) {
+    const arr = getSavedZones(level);
+    const s = Object.create(null);
+    for (let i = 0; i < arr.length; i++) s[Number(arr[i])] = true;
+    return s;
+  }
+
+  // Return a pre-cached material for a single color, or create one for blends
+  function _pickMaterial(colors) {
+    if (colors.length === 0) return MATERIAL_BASE;
+    if (colors.length === 1) {
+      if (colors[0] === COLOR_100) return MATERIAL_100;
+      if (colors[0] === COLOR_60)  return MATERIAL_60;
+      if (colors[0] === COLOR_30)  return MATERIAL_30;
+      if (colors[0] === COLOR_1)   return MATERIAL_1;
+      if (colors[0] === COLOR_05)  return MATERIAL_05;
+      return materialProp(colors[0]);
+    }
+    return materialProp(blendColors(colors));
+  }
+
   function updateAllVisuals() {
-    try { if (window.floodConfig && typeof window.floodConfig.load === 'function') window.floodConfig.load(); } catch (e) { /* ignore */ }
     const zones = window.floodZones || [];
-    for (let i = 0; i < zones.length; i++) updateZoneVisual(zones[i]);
+    if (!zones.length) {
+      if (viewer && viewer.scene) try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+      return;
+    }
+    // Pre-build O(1) membership sets — avoids 5×1024 linear scans per call
+    const s30 = _buildZoneSet('30'), s60 = _buildZoneSet('60'), s100 = _buildZoneSet('100');
+    const s05 = _buildZoneSet('0.5'), s1 = _buildZoneSet('1');
+    const adminEnabled = !!(window.adminMode && window.adminMode.isEnabled && window.adminMode.isEnabled());
+
+    for (let i = 0; i < zones.length; i++) {
+      const z = zones[i];
+      if (!z || !z.outlineEntity) continue;
+      try {
+        if (sceneEditMode) {
+          z.outlineEntity.show = false;
+          if (z.floodEntity) z.floodEntity.show = false;
+          continue;
+        }
+        z.outlineEntity.show = true;
+        if (z.floodEntity) z.floodEntity.show = true;
+
+        const temp = isTempSelected(z.id);
+        if (adminEnabled) {
+          if (temp) { z.outlineEntity.rectangle.material = MATERIAL_TEMP; continue; }
+          var ac = [];
+          if (adminShowLevel100 && s100[z.id]) ac.push(COLOR_100);
+          if (adminShowLevel60  && s60[z.id])  ac.push(COLOR_60);
+          if (adminShowLevel30  && s30[z.id])  ac.push(COLOR_30);
+          if (adminShowLevel1   && s1[z.id])   ac.push(COLOR_1);
+          if (adminShowLevel05  && s05[z.id])  ac.push(COLOR_05);
+          z.outlineEntity.rectangle.material = _pickMaterial(ac);
+          continue;
+        }
+        var uc = [];
+        if (showLevel100 && s100[z.id]) uc.push(COLOR_100);
+        if (showLevel60  && s60[z.id])  uc.push(COLOR_60);
+        if (showLevel30  && s30[z.id])  uc.push(COLOR_30);
+        if (showLevel1   && s1[z.id])   uc.push(COLOR_1);
+        if (showLevel05  && s05[z.id])  uc.push(COLOR_05);
+        z.outlineEntity.rectangle.material = _pickMaterial(uc);
+      } catch (e) { /* ignore */ }
+    }
     if (viewer && viewer.scene) try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
   }
 

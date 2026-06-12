@@ -151,6 +151,31 @@
    * Apply flood surface to given zone IDs with severity string.
    * zoneIds: array of numeric IDs (1-25). severity: "moderate"|"severe"|"none".
    */
+  // Single shared RAF loop for all active zone flood animations
+  const _floodAnims = new Map(); // zoneId -> { z, startH, targetH, baseH, start, dur }
+  let _floodAnimRafId = null;
+  function _tickFloodAnims(now) {
+    _floodAnims.forEach(function (a, zid) {
+      const t = Math.min(1, (now - a.start) / a.dur);
+      const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      const h = a.startH + (a.targetH - a.startH) * ease;
+      try {
+        if (a.z.floodEntity && a.z.floodEntity.rectangle) a.z.floodEntity.rectangle.height = h;
+      } catch (e) { /* ignore */ }
+      if (t >= 1) {
+        a.z.currentFloodDelta = a.targetH - a.baseH;
+        if (!a.z.currentFloodDelta) {
+          try { viewer.entities.remove(a.z.floodEntity); } catch (e) { /* ignore */ }
+          a.z.floodEntity = null;
+        }
+        _floodAnims.delete(zid);
+      }
+    });
+    try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+    if (_floodAnims.size > 0) _floodAnimRafId = requestAnimationFrame(_tickFloodAnims);
+    else _floodAnimRafId = null;
+  }
+
   // Animate a zone's flood surface to target delta (metres above the zone's terrain height)
   // opts.level: '30'|'60'|'100' (rain) vs '0.5'|'1' (flood buttons)
   function animateZoneFlood(z, targetDelta, durationMs, opts) {
@@ -214,26 +239,8 @@
     }
 
     const startHeight = (z.floodEntity.rectangle && z.floodEntity.rectangle.height) || (baseH + (z.currentFloodDelta || 0));
-    const start = performance.now();
-    function step(now) {
-      const t = Math.min(1, (now - start) / durationMs);
-      const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // easeInOut
-      const current = startHeight + (targetHeight - startHeight) * ease;
-      try {
-        if (z.floodEntity && z.floodEntity.rectangle) z.floodEntity.rectangle.height = current;
-        viewer.scene.requestRender();
-      } catch (e) { /* ignore */ }
-      if (t < 1) {
-        requestAnimationFrame(step);
-      } else {
-        z.currentFloodDelta = targetHeight - baseH;
-        if (!z.currentFloodDelta) {
-          try { viewer.entities.remove(z.floodEntity); } catch (e) { /* ignore */ }
-          z.floodEntity = null;
-        }
-      }
-    }
-    requestAnimationFrame(step);
+    _floodAnims.set(z.id, { z: z, startH: startHeight, targetH: targetHeight, baseH: baseH, start: performance.now(), dur: durationMs });
+    if (!_floodAnimRafId) _floodAnimRafId = requestAnimationFrame(_tickFloodAnims);
   }
   // expose for other modules
   try { window.animateZoneFlood = animateZoneFlood; } catch (e) { /* ignore */ }
@@ -757,6 +764,7 @@
     if (rainParticleSystem) {
       viewer.scene.primitives.remove(rainParticleSystem);
       rainParticleSystem = null;
+      _stopParticleRenderLoop();
     }
     const precip = Number(precipitationMm);
     if (!viewer || isNaN(precip) || precip <= 0) return;
@@ -795,10 +803,26 @@
           updateCallback: rainUpdateCallback,
         })
       );
+      _startParticleRenderLoop();
       viewer.scene.requestRender();
     } catch (e) {
       console.error("Rain effect failed:", e);
     }
+  }
+
+  let _particleRenderHandle = null;
+  function _startParticleRenderLoop() {
+    if (_particleRenderHandle || !viewer) return;
+    _particleRenderHandle = viewer.scene.postRender.addEventListener(function () {
+      if (rainParticleSystem) {
+        try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+      } else {
+        _stopParticleRenderLoop();
+      }
+    });
+  }
+  function _stopParticleRenderLoop() {
+    if (_particleRenderHandle) { _particleRenderHandle(); _particleRenderHandle = null; }
   }
 
   function weatherCodeToText(code) {
@@ -1550,7 +1574,8 @@
       fullscreenButton: true,
       vrButton: false,
       useDefaultRenderLoop: true,
-      requestRenderMode: false,
+      requestRenderMode: true,
+      maximumRenderTimeChange: Infinity,
     };
 
     const bingKey = typeof CONFIG !== "undefined" && CONFIG.BING_MAPS_KEY && String(CONFIG.BING_MAPS_KEY).trim();
