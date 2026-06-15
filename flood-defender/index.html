@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flood Defender - Educational Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <!-- Header -->
+    <header>
+      <h1>🌊 Flood Defender</h1>
+      <p>Learn how green infrastructure reduces flood damage</p>
+    </header>
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <div id="phase-title">Loading...</div>
+      <div class="budget-info">
+        Budget: $<span id="budget-remaining">0</span> /
+        Maintenance: $<span id="maintenance-cost">0</span>
+      </div>
+      <div class="button-group" style="margin-left: auto;">
+        <button id="run-storm-btn" class="primary-btn">▶ Run Storm</button>
+        <button id="retry-btn" class="secondary-btn">🔄 Retry</button>
+        <button id="next-level-btn" class="success-btn">→ Next Level</button>
+        <button id="reset-btn" class="secondary-btn">⟲ Reset</button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+      <!-- Game Canvas & Info -->
+      <div class="main-section">
+        <!-- Canvas -->
+        <canvas id="game-canvas" width="640" height="640"></canvas>
+
+        <!-- Phase Info / Briefing -->
+        <div id="phase-briefing" class="phase-info">
+          Loading phase information...
+        </div>
+
+        <!-- Lesson Card (Results only) -->
+        <div id="lesson-card"></div>
+
+        <!-- Results Panel -->
+        <div id="results-panel"></div>
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <!-- Tile Selector (Build Phase) -->
+        <div id="tile-selector" class="panel">
+          <!-- Populated by renderer during build phase -->
+        </div>
+
+        <!-- Parameters Panel (Storm Phase) -->
+        <div id="parameters-panel" class="panel">
+          <h3>Parameters</h3>
+
+          <!-- Happiness Meter -->
+          <div class="meter">
+            <div class="meter-label">
+              <span>Happiness</span>
+              <span id="happiness-value" class="meter-text">100/100</span>
+            </div>
+            <div class="meter-bar">
+              <div id="happiness-meter" class="meter-fill" style="width: 100%;">
+                <span class="meter-text">100</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tree Health Meter -->
+          <div class="meter">
+            <div class="meter-label">
+              <span>Tree Health</span>
+              <span id="tree-value" class="meter-text">100/100</span>
+            </div>
+            <div class="meter-bar">
+              <div id="tree-health-meter" class="meter-fill" style="width: 100%; background: linear-gradient(90deg, #8bc34a, #689f38);">
+                <span class="meter-text">100</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- River Health Meter -->
+          <div class="meter">
+            <div class="meter-label">
+              <span>River Health</span>
+              <span id="river-value" class="meter-text">100/100</span>
+            </div>
+            <div class="meter-bar">
+              <div id="river-health-meter" class="meter-fill" style="width: 100%; background: linear-gradient(90deg, #0277bd, #0288d1);">
+                <span class="meter-text">100</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Damage Counter -->
+          <div id="damage-counter">Damage: 0</div>
+        </div>
+
+        <!-- Score Display (Results Phase) -->
+        <div id="score-display" class="panel" style="display: none; text-align: center;">
+          <div id="stars-display" class="stars">⭐⭐⭐</div>
+          <p id="final-score" style="font-size: 24px; font-weight: bold; color: #1976d2;"></p>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- Scripts in dependency order -->
+  <script src="config.js"></script>
+  <script src="sim.js"></script>
+  <script src="game.js"></script>
+  <script src="render.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
