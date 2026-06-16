@@ -43,7 +43,7 @@ const CONFIG = {
     tree: {
       name: 'Tree',
       placeable: true,
-      cost: 40, maintenance: 5,
+      cost: 30, maintenance: 4,
       absorbCapacity: 150, absorbRate: 4.0,
       blocksFlow: false, damageValue: 0,
       color: '#2e7d32',
@@ -53,7 +53,7 @@ const CONFIG = {
     raingarden: {
       name: 'Rain Garden',
       placeable: true,
-      cost: 35, maintenance: 4,
+      cost: 25, maintenance: 3,
       absorbCapacity: 90, absorbRate: 3.0,
       blocksFlow: false, damageValue: 0,
       color: '#8bc34a',
@@ -63,7 +63,7 @@ const CONFIG = {
     wetland: {
       name: 'Wetland',
       placeable: true,
-      cost: 60, maintenance: 8,
+      cost: 50, maintenance: 6,
       absorbCapacity: 250, absorbRate: 6.0,
       blocksFlow: false, damageValue: 0,
       color: '#00838f',
@@ -73,7 +73,7 @@ const CONFIG = {
     pond: {
       name: 'Retention Pond',
       placeable: true,
-      cost: 120, maintenance: 15,
+      cost: 100, maintenance: 12,
       absorbCapacity: 1000, absorbRate: 7.5,
       blocksFlow: false, damageValue: 0,
       color: '#0277bd',
@@ -83,7 +83,7 @@ const CONFIG = {
     permeable: {
       name: 'Permeable Paving',
       placeable: true,
-      cost: 70, maintenance: 10,
+      cost: 60, maintenance: 8,
       absorbCapacity: 100, absorbRate: 3.0,
       blocksFlow: false, damageValue: 0,
       color: '#a1887f',
@@ -93,7 +93,7 @@ const CONFIG = {
     levee: {
       name: 'Levee / Dam',
       placeable: true,
-      cost: 90, maintenance: 12,
+      cost: 80, maintenance: 10,
       absorbCapacity: 0, absorbRate: 0,
       blocksFlow: true, damageValue: 0,
       color: '#5d4037',
@@ -127,14 +127,11 @@ const CONFIG = {
   // ============================================================================
   SIM: {
     stormDurationTicks: 60,
-    floodThreshold: 0.5, // water depth above this causes damage
-    leveHeight: 1.5, // elevation threshold for levee overtopping
-    treeDeathThreshold: 3.0, // tree dies if submerged to this depth for too long
-    treeDeathDuration: 15, // ticks of deep submersion before tree dies
-    
-    // Derived from level (see LEVELS below)
-    rainRate: 0.2,
-    riverInflow: 0.5,
+    houseLossDepth: 0.05,  // metres — a house is "lost" the moment water exceeds this
+    metersPerUnit: 0.1,    // 1 sim water unit = 0.1 m  →  threshold = 0.05/0.1 = 0.5 sim units
+    leveHeight: 1.5,
+    treeDeathThreshold: 3.0,
+    treeDeathDuration: 15,
   },
 
   // ============================================================================
@@ -169,14 +166,14 @@ const CONFIG = {
       riverStartPos: { x: 16, y: 0 }, // top center
       
       // Storm & budget
-      budget: 800,
-      rainRate: 0.15,
-      riverInflow: 0.2,
-      rainRampUp: 10,    // ticks to reach peak
-      rainPeak: 20,      // ticks at peak
-      rainRampDown: 30,  // ticks to taper
-      
-      damageCapForPass: 4300,
+      budget: 1000,
+      rainRate: 0.10,
+      riverInflow: 0.15,
+      rainRampUp: 10,
+      rainPeak: 20,
+      rainRampDown: 30,
+
+      maxHousesLost: 0,  // must protect ALL houses to pass tutorial
 
       // Unlocks
       availableTiles: ['tree', 'raingarden', 'pond'],
@@ -209,14 +206,14 @@ const CONFIG = {
       numRiverCells: 5,
       riverStartPos: { x: 16, y: 0 },
 
-      budget: 900,
-      rainRate: 0.25,
-      riverInflow: 0.35,
+      budget: 1200,
+      rainRate: 0.18,
+      riverInflow: 0.25,
       rainRampUp: 8,
       rainPeak: 25,
       rainRampDown: 27,
 
-      damageCapForPass: 82100,
+      maxHousesLost: 2,
 
       availableTiles: ['tree', 'raingarden', 'pond', 'permeable', 'levee'],
       showTutorialHints: false,
@@ -248,14 +245,14 @@ const CONFIG = {
       numRiverCells: 6,
       riverStartPos: { x: 16, y: 0 },
 
-      budget: 950,
-      rainRate: 0.35,
-      riverInflow: 0.5,
+      budget: 1300,
+      rainRate: 0.25,
+      riverInflow: 0.35,
       rainRampUp: 7,
       rainPeak: 30,
       rainRampDown: 23,
 
-      damageCapForPass: 216500,
+      maxHousesLost: 4,
 
       availableTiles: ['tree', 'raingarden', 'pond', 'permeable', 'levee', 'wetland'],
       showTutorialHints: false,
@@ -286,14 +283,14 @@ const CONFIG = {
       numRiverCells: 7,
       riverStartPos: { x: 16, y: 0 },
 
-      budget: 1200,
-      rainRate: 0.45,
-      riverInflow: 0.65,
+      budget: 1600,
+      rainRate: 0.32,
+      riverInflow: 0.45,
       rainRampUp: 5,
       rainPeak: 35,
       rainRampDown: 20,
 
-      damageCapForPass: 375700,
+      maxHousesLost: 6,
 
       availableTiles: ['tree', 'raingarden', 'pond', 'permeable', 'levee', 'wetland', 'road'],
       showTutorialHints: false,
@@ -320,8 +317,33 @@ const CONFIG = {
   ],
 
   // ============================================================================
+  // DIFFICULTY SETTINGS
+  // ============================================================================
+  DIFFICULTY: {
+    current: 'normal',   // 'easy' | 'normal'  — change via UI toggle
+    easy: {
+      label: 'Easy',
+      budgetMultiplier: 1.5,   // budget × 1.5
+      rainMultiplier:   0.65,  // rainRate × 0.65
+      riverMultiplier:  0.65,  // riverInflow × 0.65
+    },
+    normal: {
+      label: 'Normal',
+      budgetMultiplier: 1.0,
+      rainMultiplier:   1.0,
+      riverMultiplier:  1.0,
+    },
+  },
+
+  // Home URL — shown on the "Main Page" button; update if your site path differs
+  HOME_URL: '../index.html',
+
+  // ============================================================================
   // UI / DISPLAY CONSTANTS
   // ============================================================================
+  UI: {
+    stormTickMs: 150,    // ms between storm ticks — lower = faster (was 100)
+  },
   WATER_OPACITY_SCALE: 0.15, // how much water depth increases overlay alpha
   ELEVATION_SHADE_INTENSITY: 0.05, // subtle elevation shading
 

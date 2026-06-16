@@ -6,7 +6,6 @@ let game;
 let renderer;
 let _rafId = null;
 let _lastStormTick = 0;
-const STORM_TICK_MS = 100;
 
 function initGame() {
   game = new Game(CONFIG);
@@ -26,12 +25,12 @@ function setupEventListeners() {
     }
 
     if (e.target.id === 'run-storm-btn') {
-      // Show confirm modal with current objective + spend summary
-      const ld = game.levelDef;
-      const el = (id) => document.getElementById(id);
-      const c = el('confirm-cap');    if (c) c.textContent = ld.damageCapForPass;
-      const s = el('confirm-spent');  if (s) s.textContent = '$' + (ld.budget - game.budgetRemaining);
-      const b = el('confirm-budget'); if (b) b.textContent = ld.budget;
+      const ld  = game.levelDef;
+      const eld = game.effectiveLevelDef || ld;
+      const el  = (id) => document.getElementById(id);
+      const c = el('confirm-cap');    if (c) c.textContent = ld.maxHousesLost;
+      const s = el('confirm-spent');  if (s) s.textContent = '$' + (eld.budget - game.budgetRemaining);
+      const b = el('confirm-budget'); if (b) b.textContent = eld.budget;
       const modal = el('storm-confirm');
       if (modal) modal.classList.remove('hidden');
     }
@@ -48,9 +47,23 @@ function setupEventListeners() {
       if (modal) modal.classList.add('hidden');
     }
 
-    if (e.target.id === 'retry-btn')      { game.retry();     renderer.render(); }
-    if (e.target.id === 'next-level-btn') { if (game.nextLevel()) renderer.render(); }
-    if (e.target.id === 'reset-btn')      { game.retry();     renderer.render(); }
+    if (e.target.id === 'retry-btn')      { game.retry();                        renderer.render(); }
+    if (e.target.id === 'next-level-btn') { if (game.nextLevel())                 renderer.render(); }
+    if (e.target.id === 'prev-level-btn') { if (game.prevLevel())                 renderer.render(); }
+    if (e.target.id === 'reset-btn')      { game.retry();                        renderer.render(); }
+    if (e.target.id === 'home-btn')       { window.location.href = CONFIG.HOME_URL; }
+
+    // Difficulty toggle
+    if (e.target.id === 'difficulty-easy-btn' || e.target.id === 'difficulty-normal-btn') {
+      const mode = e.target.id === 'difficulty-easy-btn' ? 'easy' : 'normal';
+      CONFIG.DIFFICULTY.current = mode;
+      document.getElementById('difficulty-easy-btn').classList.toggle('primary-btn',   mode === 'easy');
+      document.getElementById('difficulty-easy-btn').classList.toggle('secondary-btn', mode !== 'easy');
+      document.getElementById('difficulty-normal-btn').classList.toggle('primary-btn',   mode === 'normal');
+      document.getElementById('difficulty-normal-btn').classList.toggle('secondary-btn', mode !== 'normal');
+      game.retry();
+      renderer.render();
+    }
   });
 
   canvas.addEventListener('click', (e) => {
@@ -82,7 +95,8 @@ function startGameLoop() {
 
   function tick(now) {
     // Advance storm simulation at its own fixed cadence
-    if (game.isStormActive() && now - _lastStormTick >= STORM_TICK_MS) {
+    const _tickMs = (CONFIG.UI && CONFIG.UI.stormTickMs) ? CONFIG.UI.stormTickMs : 150;
+    if (game.isStormActive() && now - _lastStormTick >= _tickMs) {
       game.advanceStorm();
       _lastStormTick = now;
     }

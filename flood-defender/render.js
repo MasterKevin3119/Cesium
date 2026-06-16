@@ -21,12 +21,13 @@ class Renderer {
       runStormBtn:      document.getElementById('run-storm-btn'),
       retryBtn:         document.getElementById('retry-btn'),
       nextLevelBtn:     document.getElementById('next-level-btn'),
+      prevLevelBtn:     document.getElementById('prev-level-btn'),
       resetBtn:         document.getElementById('reset-btn'),
       tileSelector:     document.getElementById('tile-selector'),
       happinessMeter:   document.getElementById('happiness-meter'),
       treeHealthMeter:  document.getElementById('tree-health-meter'),
       riverHealthMeter: document.getElementById('river-health-meter'),
-      damageCounter:    document.getElementById('damage-counter'),
+      housesCounter:    document.getElementById('houses-counter'),
       resultsPanel:     document.getElementById('results-panel'),
       scoreDisplay:     document.getElementById('score-display'),
       starsDisplay:     document.getElementById('stars-display'),
@@ -34,10 +35,10 @@ class Renderer {
       parametersPanel:  document.getElementById('parameters-panel'),
     };
 
-    this.selectedTile      = null;
-    this.hoveredCell       = null;
-    this._mousePos         = null;
-    this._topDamagedCells  = [];
+    this.selectedTile     = null;
+    this.hoveredCell      = null;
+    this._mousePos        = null;
+    this._lostHouseCells  = [];
     this._images           = {};
     this._preloadImages();
 
@@ -96,8 +97,8 @@ class Renderer {
         <hr>
         <p style="font-weight:600;color:var(--accent);margin-bottom:6px">How to WIN this level:</p>
         <ul class="win-list">
-          <li>Total flood damage stays under <strong>${ld.damageCapForPass}</strong></li>
-          <li>Don't exceed your budget of <strong>$${ld.budget}</strong></li>
+          <li>Lose no more than <strong>${ld.maxHousesLost}</strong> house${ld.maxHousesLost === 1 ? '' : 's'} to flooding</li>
+          <li>Don't exceed your budget of <strong>$${this.game.effectiveLevelDef.budget}</strong></li>
         </ul>
         <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:10px">
           Ecology (happiness, trees, river) does <em>not</em> affect pass/fail — only your star rating.
@@ -105,7 +106,7 @@ class Renderer {
         <hr>
         <p style="font-weight:600;margin-bottom:5px">Star rating:</p>
         <ul class="star-tier-list">
-          <li>&#9733; Survive — damage under ${ld.damageCapForPass} and budget intact</li>
+          <li>&#9733; Survive — lose ≤ ${ld.maxHousesLost} houses and budget intact</li>
           <li>&#9733;&#9733; Survive with decent ecology and some budget left over</li>
           <li>&#9733;&#9733;&#9733; Survive with excellent ecology and efficient spending</li>
         </ul>
@@ -116,6 +117,9 @@ class Renderer {
       this.elements.retryBtn.style.display        = 'none';
       this.elements.nextLevelBtn.style.display    = 'none';
       this.elements.parametersPanel.style.display = 'none';
+      if (this.elements.prevLevelBtn) {
+        this.elements.prevLevelBtn.style.display  = this.game.currentLevelIndex > 0 ? 'block' : 'none';
+      }
     }
     this.drawGrid(null);
   }
@@ -219,7 +223,7 @@ class Renderer {
       this.updateMeter(this.elements.happinessMeter,   metrics.happiness);
       this.updateMeter(this.elements.treeHealthMeter,  metrics.treeHealth);
       this.updateMeter(this.elements.riverHealthMeter, metrics.riverHealth);
-      this._updateDamageBar(metrics.damage, this.game.levelDef.damageCapForPass);
+      this._updateHousesBar(metrics.housesLost, metrics.totalHouses, this.game.effectiveLevelDef.maxHousesLost);
     }
   }
 
@@ -235,17 +239,17 @@ class Renderer {
     this._stormHeaderSet   = false;
     this._showModelSol     = false;
     this._modelSolRunning  = false;
-    this._topDamagedCells  = this.game.getTopDamagedCells(5);
+    this._lostHouseCells   = this.game.getLostHouseCells();
 
     this.elements.phaseTitle.textContent = 'Results';
 
     const metrics  = this.game.getFinalMetrics();
-    const ld       = this.game.levelDef;
+    const ld       = this.game.effectiveLevelDef;
     const passed   = this.game.passed;
-    const dmgOver  = metrics.totalDamage > ld.damageCapForPass;
+    const housesOver = metrics.housesLost > ld.maxHousesLost;
     const spent    = ld.budget - this.game.budgetRemaining;
-    const dmgColor = dmgOver ? 'var(--danger)' : 'var(--success)';
-    const dmgMark  = dmgOver ? '✗' : '✓';
+    const dmgColor = housesOver ? 'var(--danger)' : 'var(--success)';
+    const dmgMark  = housesOver ? '✗' : '✓';
 
     const starLabels = [
       '',
@@ -255,7 +259,7 @@ class Renderer {
     ];
 
     const adviceHTML = !passed
-      ? `<div class="failure-advice">${this._buildFailureAdvice(metrics, this._topDamagedCells)}</div>`
+      ? `<div class="failure-advice">${this._buildFailureAdvice(metrics)}</div>`
       : '';
 
     // Model solution button (only if level has one)
@@ -267,7 +271,7 @@ class Renderer {
     this.elements.phaseBriefing.innerHTML = `
       <div class="result-banner ${passed ? 'pass-banner' : 'fail-banner'}">${passed ? '✓ LEVEL PASSED' : '✗ LEVEL FAILED'}</div>
       <div class="result-verdict">
-        <p><span style="color:${dmgColor}">${dmgMark}</span> Damage: <strong style="color:${dmgColor}">${Math.round(metrics.totalDamage)}</strong> / ${ld.damageCapForPass} cap</p>
+        <p><span style="color:${dmgColor}">${dmgMark}</span> Houses lost: <strong style="color:${dmgColor}">${metrics.housesLost} / ${metrics.totalHouses}</strong> (cap: ${ld.maxHousesLost})</p>
         <p><span style="color:var(--success)">✓</span> Budget: spent <strong>$${spent}</strong> of $${ld.budget} ($${this.game.budgetRemaining} left)</p>
       </div>
       <hr>
@@ -279,7 +283,7 @@ class Renderer {
         River ${Math.round(metrics.avgRiverHealth)}/100
       </p>
       ${adviceHTML}
-      ${!passed ? '' : '<ul class="star-tier-list" style="margin-top:10px"><li>&#9733; Survive — damage under cap</li><li>&#9733;&#9733; Survive + decent ecology &amp; budget</li><li>&#9733;&#9733;&#9733; Survive + excellent ecology &amp; efficient spending</li></ul>'}
+      ${!passed ? '' : '<ul class="star-tier-list" style="margin-top:10px"><li>&#9733; Survive — houses within cap</li><li>&#9733;&#9733; Survive + decent ecology &amp; budget</li><li>&#9733;&#9733;&#9733; Survive + excellent ecology &amp; efficient spending</li></ul>'}
       ${modelBtnHTML}
     `;
 
@@ -290,6 +294,9 @@ class Renderer {
     this.elements.runStormBtn.style.display     = 'none';
     this.elements.retryBtn.style.display        = 'block';
     this.elements.nextLevelBtn.style.display    = passed ? 'block' : 'none';
+    if (this.elements.prevLevelBtn) {
+      this.elements.prevLevelBtn.style.display  = this.game.currentLevelIndex > 0 ? 'block' : 'none';
+    }
     this.elements.tileSelector.innerHTML        = '';
     this.elements.parametersPanel.style.display = 'none';
 
@@ -332,43 +339,40 @@ class Renderer {
 
   _renderModelComparison(refResult) {
     if (!refResult) return;
-    const ld      = this.game.levelDef;
+    const ld      = this.game.effectiveLevelDef || this.game.levelDef;
     const metrics = this.game.getFinalMetrics();
     const spent   = ld.budget - this.game.budgetRemaining;
-    const passed  = this.game.passed;
 
-    const playerPassed = metrics.totalDamage <= ld.damageCapForPass;
-    const refPassed    = refResult.metrics.totalDamage <= ld.damageCapForPass;
+    const playerPassed = metrics.housesLost <= ld.maxHousesLost;
+    const refPassed    = refResult.metrics.housesLost <= ld.maxHousesLost;
 
     const pMark  = playerPassed ? '✓' : '✗';
     const pColor = playerPassed ? 'var(--success)' : 'var(--danger)';
     const rMark  = refPassed    ? '✓' : '✗';
     const rColor = refPassed    ? 'var(--success)' : 'var(--danger)';
 
-    const alsoValidNote = passed
-      ? `<p class="sol-also-valid">Your layout passed too — there are many valid solutions to this level.</p>`
+    const alsoValidNote = this.game.passed
+      ? `<p class="sol-also-valid">Your layout passed too — there are many valid ways to solve this level.</p>`
       : '';
 
+    const solExp = this.game.levelDef.solutionExplanation || '';
     this.elements.resultsPanel.innerHTML = `
       <div class="sol-compare">
         <div class="sol-col">
           <div class="sol-col-label">Your layout</div>
-          <div class="sol-stat"><span style="color:${pColor}">${pMark}</span> Damage: <strong>${Math.round(metrics.totalDamage)}</strong></div>
+          <div class="sol-stat"><span style="color:${pColor}">${pMark}</span> Houses lost: <strong>${metrics.housesLost} / ${metrics.totalHouses}</strong></div>
           <div class="sol-stat">Budget: <strong>$${spent}</strong> of $${ld.budget}</div>
         </div>
         <div class="sol-divider">vs</div>
         <div class="sol-col">
           <div class="sol-col-label">Model solution</div>
-          <div class="sol-stat"><span style="color:${rColor}">${rMark}</span> Damage: <strong>${Math.round(refResult.metrics.totalDamage)}</strong></div>
+          <div class="sol-stat"><span style="color:${rColor}">${rMark}</span> Houses lost: <strong>${refResult.metrics.housesLost} / ${refResult.metrics.totalHouses}</strong></div>
           <div class="sol-stat">Budget: <strong>$${refResult.spent}</strong> of $${ld.budget}</div>
         </div>
       </div>
       ${alsoValidNote}
-      <div class="sol-cap-note">Cap: ${ld.damageCapForPass}</div>
-      <div class="sol-explanation">
-        <strong>What makes this layout work:</strong><br>
-        ${ld.solutionExplanation}
-      </div>
+      <div class="sol-cap-note">Cap: ≤ ${ld.maxHousesLost} houses lost</div>
+      ${solExp ? `<div class="sol-explanation"><strong>What makes this layout work:</strong><br>${solExp}</div>` : ''}
     `;
   }
 
@@ -401,8 +405,8 @@ class Renderer {
 
   renderLessonCard(metrics) {
     let lesson;
-    if (metrics.totalDamage > 80) {
-      lesson = 'Green infrastructure like wetlands and retention ponds absorb and store water, reducing downstream flooding.';
+    if (metrics.housesLost > 0) {
+      lesson = 'Green infrastructure like rain gardens and wetlands absorb water before it reaches houses. Next time, place tiles on the low-elevation ground right beside the houses that flooded.';
     } else if (metrics.avgTreeHealth < 50) {
       lesson = 'Trees provide urban cooling and water absorption, but they need the right moisture level to survive.';
     } else if (metrics.avgRiverHealth < 50) {
@@ -516,14 +520,25 @@ class Renderer {
     ctx.lineWidth   = 1;
     ctx.stroke();
 
-    // Highlight most-damaged cells in results phase
-    if (this.game.phase === 'results' && this._topDamagedCells.length > 0) {
-      for (let i = 0; i < this._topDamagedCells.length; i++) {
-        const dc = this._topDamagedCells[i];
-        const alpha = i === 0 ? 1.0 : Math.max(0.4, 1 - i * 0.18);
-        ctx.strokeStyle = `rgba(248,113,113,${alpha})`;
-        ctx.lineWidth   = i === 0 ? 3 : 2;
-        ctx.strokeRect(dc.x * cs + 1.5, dc.y * cs + 1.5, cs - 3, cs - 3);
+    // Mark lost houses red in results phase; show flooding houses during storm
+    if (this.game.phase === 'results' && this._lostHouseCells.length > 0) {
+      for (const { x, y } of this._lostHouseCells) {
+        ctx.fillStyle   = 'rgba(239,68,68,0.45)';
+        ctx.fillRect(x * cs, y * cs, cs, cs);
+        ctx.strokeStyle = 'rgba(239,68,68,0.9)';
+        ctx.lineWidth   = 2;
+        ctx.strokeRect(x * cs + 1, y * cs + 1, cs - 2, cs - 2);
+      }
+    } else if (this.game.phase === 'storm' && gridState) {
+      const thr = this.config.SIM.houseLossDepth / this.config.SIM.metersPerUnit;
+      for (let y2 = 0; y2 < H; y2++) {
+        for (let x2 = 0; x2 < W; x2++) {
+          const c2 = gridState[y2][x2];
+          if (c2.type === 'house' && c2.water > thr) {
+            ctx.fillStyle = 'rgba(239,68,68,0.35)';
+            ctx.fillRect(x2 * cs, y2 * cs, cs, cs);
+          }
+        }
       }
     }
 
@@ -676,64 +691,48 @@ class Renderer {
 
   _updateObjectiveBar() {
     const ld  = this.game.levelDef;
+    const eld = this.game.effectiveLevelDef || ld;
     const cap = document.getElementById('obj-cap');
     const bud = document.getElementById('obj-budget');
-    if (cap) cap.textContent = ld.damageCapForPass;
-    if (bud) bud.textContent = ld.budget;
+    if (cap) cap.textContent = ld.maxHousesLost;
+    if (bud) bud.textContent = eld.budget;
   }
 
-  _updateDamageBar(damage, cap) {
-    const fill   = document.getElementById('damage-meter-fill');
-    const label  = document.getElementById('damage-value-label');
-    const status = document.getElementById('damage-status-text');
+  _updateHousesBar(housesLost, totalHouses, maxLost) {
+    const fill   = document.getElementById('houses-meter-fill');
+    const label  = document.getElementById('houses-value-label');
+    const status = document.getElementById('houses-status-text');
     if (!fill || !label) return;
 
-    const pct  = Math.min(100, (damage / cap) * 100);
-    const over = damage > cap;
+    const pct  = Math.min(100, (housesLost / Math.max(1, totalHouses)) * 100);
+    const over = housesLost > maxLost;
     fill.style.width = `${pct}%`;
-    label.textContent = `${Math.round(damage)} / ${cap} cap`;
+    label.textContent = `${housesLost} / ${totalHouses} (cap: ${maxLost})`;
     fill.classList.toggle('over-cap', over);
     if (status) {
       if (over) {
-        status.textContent  = 'OVER CAP — losing!';
-        status.style.color  = 'var(--danger)';
+        status.textContent = `${housesLost - maxLost} too many — failing!`;
+        status.style.color = 'var(--danger)';
       } else {
-        status.textContent  = `${Math.round(cap - damage)} under cap — winning!`;
-        status.style.color  = 'var(--success)';
+        const rem = maxLost - housesLost;
+        status.textContent = rem === 0
+          ? 'At the limit — barely passing!'
+          : `${rem} more allowed — winning!`;
+        status.style.color = 'var(--success)';
       }
     }
   }
 
-  _buildFailureAdvice(metrics, topCells) {
-    const ld  = this.game.levelDef;
-    const sim = this.game.simulation;
+  _buildFailureAdvice(metrics) {
+    const ld    = this.game.effectiveLevelDef || this.game.levelDef;
     const lines = [];
 
-    if (metrics.totalDamage > ld.damageCapForPass) {
-      const excess = Math.round(metrics.totalDamage - ld.damageCapForPass);
-      lines.push(`Flood damage exceeded the cap by <strong>${excess}</strong>.`);
-
-      // Check if worst damaged cells are near the river
-      let nearRiver = false;
-      if (sim && topCells.length > 0) {
-        outer: for (const dc of topCells.slice(0, 3)) {
-          for (let dy = -3; dy <= 3; dy++) {
-            for (let dx = -3; dx <= 3; dx++) {
-              const c = sim.getCell(dc.x + dx, dc.y + dy);
-              if (c && c.type === 'river') { nearRiver = true; break outer; }
-            }
-          }
-        }
-      }
-
-      if (nearRiver) {
-        lines.push('The worst flooding was near the river. Try placing <strong>wetlands or a levee</strong> between the river and the most-exposed houses, or a <strong>retention pond</strong> just downstream to absorb overflow.');
-      } else {
-        lines.push('Flooding was widespread. Spread more <strong>trees and retention ponds</strong> across the map to soak up rainfall, or use <strong>permeable pavement</strong> to slow runoff before it reaches houses.');
-      }
-
-      if (topCells.length > 0) {
-        lines.push('Red outlines on the map show the cells that took the most damage.');
+    if (metrics.housesLost > ld.maxHousesLost) {
+      const over = metrics.housesLost - ld.maxHousesLost;
+      lines.push(`<strong>${metrics.housesLost}</strong> house${metrics.housesLost !== 1 ? 's' : ''} flooded — ${over} over the cap.`);
+      lines.push('The red tiles on the map show which houses were lost. Place <strong>rain gardens or trees</strong> on the low-elevation cells right beside them — those basins are where water concentrates.');
+      if (metrics.housesLost === metrics.totalHouses) {
+        lines.push('Try placing tiles <em>before</em> the storm and use the full budget — even a few well-placed rain gardens make a big difference.');
       }
     }
 

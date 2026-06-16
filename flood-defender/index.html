@@ -21,7 +21,7 @@
 
     <!-- Persistent Objective Bar -->
     <div id="objective-bar">
-      <span id="obj-win-text">Win: Keep damage under <strong id="obj-cap">—</strong> &amp; stay within $<strong id="obj-budget">—</strong></span>
+      <span id="obj-win-text">Win: Lose ≤ <strong id="obj-cap">—</strong> houses &amp; stay within $<strong id="obj-budget">—</strong></span>
       <span id="obj-star-hint">Stars are a bonus — ecology &amp; budget efficiency only</span>
     </div>
 
@@ -33,20 +33,26 @@
         Maintenance: $<span id="maintenance-cost">0</span>
       </div>
       <div class="button-group" style="margin-left: auto;">
+        <button id="home-btn" class="secondary-btn">⌂ Home</button>
+        <button id="difficulty-easy-btn" class="secondary-btn">Easy</button>
+        <button id="difficulty-normal-btn" class="secondary-btn">Normal</button>
         <button id="run-storm-btn" class="primary-btn">▶ Run Storm</button>
-        <button id="retry-btn" class="secondary-btn">🔄 Retry</button>
+        <button id="retry-btn" class="secondary-btn">↺ Retry</button>
+        <button id="prev-level-btn" class="secondary-btn">← Prev</button>
         <button id="next-level-btn" class="success-btn">→ Next Level</button>
-        <button id="reset-btn" class="secondary-btn">⟲ Reset</button>
+        <button id="reset-btn" class="secondary-btn" style="display:none">⟲ Reset</button>
       </div>
     </div>
 
     <!-- Main Content -->
     <div class="container">
-      <!-- Game Canvas & Info -->
+      <!-- Left: Canvas only -->
       <div class="main-section">
-        <!-- Canvas -->
         <canvas id="game-canvas" width="640" height="640"></canvas>
+      </div>
 
+      <!-- Right: All information -->
+      <aside class="sidebar">
         <!-- Phase Info / Briefing -->
         <div id="phase-briefing" class="phase-info">
           Loading phase information...
@@ -57,10 +63,7 @@
 
         <!-- Results Panel -->
         <div id="results-panel"></div>
-      </div>
 
-      <!-- Sidebar -->
-      <aside class="sidebar">
         <!-- Tile Selector (Build Phase) -->
         <div id="tile-selector" class="panel">
           <!-- Populated by renderer during build phase -->
@@ -109,16 +112,16 @@
             </div>
           </div>
 
-          <!-- Damage Meter (live during storm) -->
-          <div class="meter" id="damage-counter">
+          <!-- Houses Lost Meter (live during storm) -->
+          <div class="meter" id="houses-counter">
             <div class="meter-label">
-              <span>Flood Damage</span>
-              <span id="damage-value-label">0 / — cap</span>
+              <span>Houses Lost</span>
+              <span id="houses-value-label">0 / 0</span>
             </div>
             <div class="meter-bar">
-              <div id="damage-meter-fill" class="meter-fill" style="width:0%"></div>
+              <div id="houses-meter-fill" class="meter-fill" style="width:0%"></div>
             </div>
-            <div id="damage-status-text" class="meter-status-text"></div>
+            <div id="houses-status-text" class="meter-status-text"></div>
           </div>
         </div>
 
@@ -135,7 +138,7 @@
   <div id="storm-confirm" class="modal-overlay hidden">
     <div class="modal-card">
       <div class="modal-title">Storm Incoming</div>
-      <p class="modal-line"><strong>Goal:</strong> Keep flood damage under <strong id="confirm-cap">—</strong></p>
+      <p class="modal-line"><strong>Goal:</strong> Lose no more than <strong id="confirm-cap">—</strong> houses</p>
       <p class="modal-line">You've spent <strong id="confirm-spent">$0</strong> of your $<strong id="confirm-budget">—</strong> budget</p>
       <p class="modal-note">Ecology (trees, river, happiness) affects your star rating only — it won't cause a fail.</p>
       <div class="modal-btns">
@@ -154,5 +157,6 @@
   <script src="game.js"></script>
   <script src="render.js"></script>
   <script src="main.js"></script>
+  <script src="admin.js"></script>
 </body>
 </html>

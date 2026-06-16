@@ -26,14 +26,17 @@ class Simulation {
     this.rainRate = levelDef.rainRate;
     this.riverInflow = levelDef.riverInflow;
 
+    // House-loss tracking (core metric)
+    this._lossThreshold = config.SIM.houseLossDepth / config.SIM.metersPerUnit; // 0.5 sim units
+    this.lostHouseKeys = new Set();   // "x,y" keys of houses that ever exceeded threshold
+    this.houseCount = 0;              // counted during generateMap
+
     // Accumulated metrics
-    this.totalDamage = 0;
     this.totalHappiness = 0;
-    this.totalTreeHealth = 0; // 0–100 per tree; average over time
+    this.totalTreeHealth = 0;
     this.totalRiverHealth = 0;
     this.treeCount = 0;
     this.riverCellCount = 0;
-    this.cellDamage = Object.create(null); // "x,y" → cumulative damage for results highlight
 
     // Transient tracking
     this.currentHappiness = 0;
@@ -74,16 +77,21 @@ class Simulation {
   }
 
   generateMap() {
-    // Simple seeded random for reproducibility
-    const seed = this.levelDef.gridSeed;
-    const rng = this.seededRandom(seed);
-
-    // Clear map
     this.grid = this.createEmptyGrid();
     this.treeCount = 0;
     this.riverCellCount = 0;
+    this.houseCount = 0;
 
-    // Place river
+    // Admin-designed or level-supplied custom grid takes priority
+    if (this.levelDef.customGrid) {
+      this._loadCustomGrid(this.levelDef.customGrid);
+      return;
+    }
+
+    // Seeded procedural generation
+    const seed = this.levelDef.gridSeed;
+    const rng = this.seededRandom(seed);
+
     const { x: riverX, y: riverY } = this.levelDef.riverStartPos;
     for (let i = 0; i < this.levelDef.numRiverCells; i++) {
       const y = riverY + i;
@@ -93,7 +101,6 @@ class Simulation {
       }
     }
 
-    // Place houses randomly (but not on river)
     let housesPlaced = 0;
     while (housesPlaced < this.levelDef.numHouses) {
       const x = Math.floor(rng() * this.width);
@@ -101,14 +108,25 @@ class Simulation {
       const cell = this.grid[y][x];
       if (cell.type === 'grass') {
         cell.type = 'house';
+        this.houseCount++;
         housesPlaced++;
       }
     }
 
-    // Vary elevation slightly for visual interest (but keep it subtle)
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
-        this.grid[y][x].elevation = Math.floor(rng() * 3); // 0–2
+        this.grid[y][x].elevation = Math.floor(rng() * 3);
+      }
+    }
+  }
+
+  _loadCustomGrid(cells) {
+    for (const c of cells) {
+      if (c.x >= 0 && c.x < this.width && c.y >= 0 && c.y < this.height) {
+        this.grid[c.y][c.x].type      = c.type      || 'grass';
+        this.grid[c.y][c.x].elevation = c.elevation !== undefined ? c.elevation : 1;
+        if (c.type === 'river') this.riverCellCount++;
+        if (c.type === 'house') this.houseCount++;
       }
     }
   }
@@ -188,8 +206,8 @@ class Simulation {
     // Swap grids
     [this.grid, this.nextGrid] = [this.nextGrid, this.grid];
 
-    // Step 5: Damage
-    this.computeDamage();
+    // Step 5: House-loss check
+    this.computeHouseLoss();
 
     // Update live parameters
     this.updateLiveParameters();
@@ -271,22 +289,15 @@ class Simulation {
     return false;
   }
 
-  computeDamage() {
-    let tickDamage = 0;
+  computeHouseLoss() {
+    const threshold = this._lossThreshold;
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const cell = this.grid[y][x];
-        const tileDef = this.config.TILES[cell.type];
 
-        // Only damageable tiles suffer
-        if (tileDef.damageValue === 0) continue;
-
-        if (cell.water > this.config.SIM.floodThreshold) {
-          const floodDepth = cell.water - this.config.SIM.floodThreshold;
-          const damage = floodDepth * tileDef.damageValue;
-          tickDamage += damage;
-          const ck = `${x},${y}`;
-          this.cellDamage[ck] = (this.cellDamage[ck] || 0) + damage;
+        // Mark house as lost the moment water exceeds threshold (stays lost)
+        if (cell.type === 'house' && cell.water > threshold) {
+          this.lostHouseKeys.add(`${x},${y}`);
         }
 
         // Trees die if deeply submerged for too long
@@ -294,18 +305,15 @@ class Simulation {
           if (cell.water > this.config.SIM.treeDeathThreshold) {
             cell.treeFloodDuration++;
             if (cell.treeFloodDuration > this.config.SIM.treeDeathDuration) {
-              // Tree dies, becomes grass
               cell.type = 'grass';
               cell.absorbed = 0;
-              cell.water = 0; // don't retain absorbed water
             }
           } else {
-            cell.treeFloodDuration = 0; // Reset timer if water recedes
+            cell.treeFloodDuration = 0;
           }
         }
       }
     }
-    this.totalDamage += tickDamage;
   }
 
   updateLiveParameters() {
@@ -332,9 +340,8 @@ class Simulation {
               }
             }
           }
-          happinessSum += Math.min(nearbyTrees * 10, 100); // Cap at 100
-          // Lose happiness if flooded
-          if (cell.water > this.config.SIM.floodThreshold) {
+          happinessSum += Math.min(nearbyTrees * 10, 100);
+          if (cell.water > this._lossThreshold) {
             happinessSum = Math.max(0, happinessSum - cell.water * 20);
           }
         }
@@ -377,8 +384,8 @@ class Simulation {
       }
     }
 
-    // Average parameters
-    this.currentHappiness = happinessSum / Math.max(1, this.levelDef.numHouses);
+    // Average parameters (use live houseCount so custom grids work correctly)
+    this.currentHappiness = happinessSum / Math.max(1, this.houseCount || this.levelDef.numHouses);
     this.currentTreeHealth = treeHealthSum / Math.max(1, treeCount);
     this.currentRiverHealth = riverHealthSum / Math.max(1, this.riverCellCount);
 
@@ -400,31 +407,34 @@ class Simulation {
    */
   getFinalMetrics() {
     const tickCount = this.tickCount;
+    const lostHouseCells = Array.from(this.lostHouseKeys).map(k => {
+      const [x, y] = k.split(',').map(Number);
+      return { x, y };
+    });
     return {
-      totalDamage: this.totalDamage,
-      avgHappiness: this.totalHappiness / Math.max(1, tickCount),
+      housesLost:     this.lostHouseKeys.size,
+      totalHouses:    this.houseCount || this.levelDef.numHouses,
+      lostHouseCells,
+      avgHappiness:  this.totalHappiness / Math.max(1, tickCount),
       avgTreeHealth: this.totalTreeHealth / Math.max(1, tickCount),
       avgRiverHealth: this.totalRiverHealth / Math.max(1, tickCount),
     };
   }
 
-  getTopDamagedCells(n) {
-    n = n || 5;
-    return Object.entries(this.cellDamage)
-      .sort(function(a, b) { return b[1] - a[1]; })
-      .slice(0, n)
-      .map(function(e) {
-        var p = e[0].split(',');
-        return { x: +p[0], y: +p[1], damage: e[1] };
-      });
+  getLostHouseCells() {
+    return Array.from(this.lostHouseKeys).map(k => {
+      const [x, y] = k.split(',').map(Number);
+      return { x, y };
+    });
   }
 
   getCurrentMetrics() {
     return {
-      happiness: Math.round(this.currentHappiness),
-      treeHealth: Math.round(this.currentTreeHealth),
+      housesLost:  this.lostHouseKeys.size,
+      totalHouses: this.houseCount || this.levelDef.numHouses,
+      happiness:   Math.round(this.currentHappiness),
+      treeHealth:  Math.round(this.currentTreeHealth),
       riverHealth: Math.round(this.currentRiverHealth),
-      damage: Math.round(this.totalDamage),
     };
   }
 

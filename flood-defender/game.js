@@ -16,22 +16,34 @@ class Game {
   reset() {
     const levelDef = this.config.LEVELS[this.currentLevelIndex];
     this.levelDef = levelDef;
-    
+
+    // Apply difficulty multipliers
+    const diffCfg = this.config.DIFFICULTY || {};
+    const diff = diffCfg[diffCfg.current || 'normal'] ||
+                 { budgetMultiplier: 1, rainMultiplier: 1, riverMultiplier: 1 };
+
+    this.effectiveLevelDef = Object.assign({}, levelDef, {
+      budget:      Math.round(levelDef.budget      * diff.budgetMultiplier),
+      rainRate:    levelDef.rainRate    * diff.rainMultiplier,
+      riverInflow: levelDef.riverInflow * diff.riverMultiplier,
+      customGrid:  this._adminCustomGrid || levelDef.customGrid || null,
+    });
+
     // Budget & placement
-    this.budgetRemaining = levelDef.budget;
+    this.budgetRemaining = this.effectiveLevelDef.budget;
     this.maintenanceCost = 0;
-    this.placements = {}; // { "x,y": tileType }
+    this.placements = {};
 
     // Simulation
     this.simulation = null;
 
     // Phase tracking
-    this.phase = 'briefing'; // 'briefing' | 'build' | 'storm' | 'results'
+    this.phase = 'briefing';
     this.score = 0;
     this.stars = 0;
     this.passed = false;
     this._elevationGrid = null;
-    this._refSolResult  = null; // cached reference-solution run
+    this._refSolResult  = null;
   }
 
   getCurrentLevel() {
@@ -106,15 +118,11 @@ class Game {
    * Transition to storm phase.
    */
   startStorm() {
-    // Create simulation
-    this.simulation = new Simulation(this.config, this.levelDef);
-
-    // Apply placements to grid
+    this.simulation = new Simulation(this.config, this.effectiveLevelDef);
     for (const [key, tileType] of Object.entries(this.placements)) {
       const [x, y] = key.split(',').map(Number);
       this.simulation.setCell(x, y, tileType);
     }
-
     this.phase = 'storm';
   }
 
@@ -141,51 +149,39 @@ class Game {
    * Compute final score and star rating.
    */
   computeScore() {
-    const metrics = this.simulation.getFinalMetrics();
-    const levelDef = this.levelDef;
+    const metrics  = this.simulation.getFinalMetrics();
+    const levelDef = this.effectiveLevelDef;
 
-    // Reference damage: no green infrastructure (only grass & houses)
-    const maxDamage = levelDef.numHouses * 100 * (this.config.SIM.stormDurationTicks / 10);
-    const damageAvoided = Math.max(0, maxDamage - metrics.totalDamage);
-    const propertyScore = Math.min(1, damageAvoided / maxDamage);
+    // Houses protected ratio (0–1)
+    const housesProtected = metrics.totalHouses - metrics.housesLost;
+    const propertyScore = housesProtected / Math.max(1, metrics.totalHouses);
 
     // Budget efficiency
-    const budgetUsed = levelDef.budget - this.budgetRemaining;
     const budgetScore = this.budgetRemaining / levelDef.budget;
 
-    // Ecological health (average of three metrics)
+    // Ecological health
     const ecoScore = (
-      (metrics.avgHappiness / 100) +
+      (metrics.avgHappiness  / 100) +
       (metrics.avgTreeHealth / 100) +
       (metrics.avgRiverHealth / 100)
     ) / 3;
 
-    // Weighted sum
     const weights = this.config.SCORING;
     const normalizedScore =
       propertyScore * weights.propertyProtectionWeight +
-      budgetScore * weights.budgetEfficiencyWeight +
-      ecoScore * weights.ecologicalHealthWeight;
+      budgetScore   * weights.budgetEfficiencyWeight +
+      ecoScore      * weights.ecologicalHealthWeight;
 
     this.score = Math.round(normalizedScore * 100);
 
-    // Star rating
-    if (normalizedScore >= weights.star3Threshold) {
-      this.stars = 3;
-    } else if (normalizedScore >= weights.star2Threshold) {
-      this.stars = 2;
-    } else if (normalizedScore >= weights.star1Threshold) {
-      this.stars = 1;
-    } else {
-      this.stars = 0;
-    }
+    if      (normalizedScore >= weights.star3Threshold) this.stars = 3;
+    else if (normalizedScore >= weights.star2Threshold) this.stars = 2;
+    else if (normalizedScore >= weights.star1Threshold) this.stars = 1;
+    else                                                this.stars = 0;
 
-    // Pass condition: damage under cap AND stayed within budget
-    const passedDamage = metrics.totalDamage <= levelDef.damageCapForPass;
-    const passedBudget = this.budgetRemaining >= 0;
-    this.passed = passedDamage && passedBudget;
+    // Pass: houses lost within cap AND budget not overspent
+    this.passed = metrics.housesLost <= levelDef.maxHousesLost && this.budgetRemaining >= 0;
 
-    // Unlock next level on pass
     if (this.passed && this.currentLevelIndex + 1 < this.config.LEVELS.length) {
       if (!this.unlockedLevels.includes(this.currentLevelIndex + 1)) {
         this.unlockedLevels.push(this.currentLevelIndex + 1);
@@ -198,10 +194,18 @@ class Game {
    */
   nextLevel() {
     if (!this.passed) return false;
-    if (this.currentLevelIndex + 1 >= this.config.LEVELS.length) {
-      return false; // No more levels
-    }
+    if (this.currentLevelIndex + 1 >= this.config.LEVELS.length) return false;
     this.currentLevelIndex++;
+    this.reset();
+    return true;
+  }
+
+  /**
+   * Move to previous level.
+   */
+  prevLevel() {
+    if (this.currentLevelIndex === 0) return false;
+    this.currentLevelIndex--;
     this.reset();
     return true;
   }
@@ -227,11 +231,11 @@ class Game {
 
   /**
    * Get the base map grid (elevation + tile types before placements).
-   * Used during briefing/build to show rivers, houses, and elevation.
+   * Uses effectiveLevelDef so custom/admin grids are reflected correctly.
    */
   getElevationGrid() {
     if (!this._elevationGrid) {
-      const tempSim = new Simulation(this.config, this.levelDef);
+      const tempSim = new Simulation(this.config, this.effectiveLevelDef);
       this._elevationGrid = tempSim.grid;
     }
     return this._elevationGrid;
@@ -261,9 +265,9 @@ class Game {
     return this.simulation.getFinalMetrics();
   }
 
-  getTopDamagedCells(n) {
+  getLostHouseCells() {
     if (!this.simulation) return [];
-    return this.simulation.getTopDamagedCells(n || 5);
+    return this.simulation.getLostHouseCells();
   }
 
   /**
@@ -281,8 +285,8 @@ class Game {
   runReferenceSolution() {
     if (this._refSolResult) return this._refSolResult;
 
-    const ld  = this.levelDef;
-    const sol = ld.referenceSolution;
+    const ld  = this.effectiveLevelDef;
+    const sol = ld.referenceSolution || this.levelDef.referenceSolution;
     if (!sol || sol.length === 0) return null;
 
     const sim = new Simulation(this.config, ld);
