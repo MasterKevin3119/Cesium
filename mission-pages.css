@@ -69,6 +69,9 @@ body {
   }
 }
 .mission-shell__header a.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   font-family: "Oswald", sans-serif;
   font-weight: 600;
   font-size: 1.15rem;
@@ -76,6 +79,7 @@ body {
   text-decoration: none;
 }
 .mission-shell__header a.logo:hover { opacity: 0.9; }
+.mission-shell__header a.logo .logo-icon { width: 26px; height: 26px; flex-shrink: 0; }
 .mission-shell__nav {
   display: flex;
   align-items: center;

@@ -14,7 +14,6 @@
     <!-- Header -->
     <header>
       <div class="header-left">
-        <a href="../viewer.html" class="back-link">&#8592; Map</a>
         <h1>🌊 Flood <span class="accent">Defender</span></h1>
       </div>
     </header>
@@ -150,6 +149,12 @@
 
   <!-- Cell hover tooltip -->
   <div id="cell-tooltip" class="hidden"></div>
+
+  <!-- Auth gate — must run before game scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabaseConfig.js"></script>
+  <script src="../js/supabaseAuth.js"></script>
+  <script src="requireAuthGate.js"></script>
 
   <!-- Scripts in dependency order -->
   <script src="config.js"></script>

@@ -181,6 +181,7 @@
         /^viewer\.html([?#].*)?$/i,
         /^mission-(read-water|flooded-areas|decision-making)\.html([?#].*)?$/i,
         /^mission-end\.html([?#].*)?$/i,
+        /^flood-defender\/index\.html([?#].*)?$/i,
       ];
       for (var i = 0; i < patterns.length; i++) {
         if (patterns[i].test(s)) return s;
@@ -224,6 +225,8 @@
         var ctx;
         if (next.indexOf('admin=1') !== -1) {
           ctx = 'Sign in with an admin account to open the zone editor (admins see it automatically after sign-in).';
+        } else if (/^flood-defender\//i.test(next)) {
+          ctx = 'Sign in or create an account to play Flood Defender.';
         } else if (/^mission-.*\.html/i.test(next)) {
           ctx = 'Sign in or create an account to open missions and the flood map.';
         } else {

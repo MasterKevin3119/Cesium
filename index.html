@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Flood Simulator</title>
+    <title>Flood Quest</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="favicon.ico" sizes="any" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -55,6 +55,9 @@
             box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
         }
         .site-header .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
             font-family: "Oswald", sans-serif;
             font-weight: 600;
             font-size: 1.25rem;
@@ -64,6 +67,7 @@
             transition: opacity 0.2s ease, transform 0.2s ease;
         }
         .site-header .logo:hover { color: var(--white); opacity: 0.92; transform: scale(1.02); }
+        .logo-icon { width: 28px; height: 28px; flex-shrink: 0; }
         .site-header nav {
             display: flex;
             align-items: center;
@@ -458,12 +462,19 @@
         .hero .hero-title {
             font-family: "Oswald", sans-serif;
             font-weight: 700;
-            font-size: clamp(3.25rem, 8vw, 4.5rem);
+            font-size: clamp(4.5rem, 12vw, 7rem);
             letter-spacing: 0.02em;
             color: var(--white);
             margin: 0 0 0.65rem;
             line-height: 1.08;
             text-shadow: 0 1px 2px rgba(0,0,0,0.8), 0 0 40px rgba(0,0,0,0.5);
+        }
+        .hero-logo {
+            width: clamp(64px, 12vw, 96px);
+            height: clamp(64px, 12vw, 96px);
+            margin: 0 auto 1rem;
+            display: block;
+            filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
         }
         .hero .hero-line {
             width: 80px;
@@ -638,14 +649,8 @@
             font-size: 0.875rem;
         }
         /* Mission mini-game / trivia cards — one row in .wrap; stack & center on small screens */
-        #mission > h2,
-        #mission > p:first-of-type {
-            text-align: center;
-        }
         #mission > p:first-of-type {
             max-width: 40em;
-            margin-left: auto;
-            margin-right: auto;
         }
         .mission-cards {
             display: grid;
@@ -766,6 +771,200 @@
             gap: 0.55rem;
             color: #7dd3fc;
         }
+        /* Flood Defender featured card */
+        a.fd-featured-card {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            text-decoration: none;
+            color: inherit;
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.8));
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 16px;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+            max-width: 720px;
+        }
+        a.fd-featured-card::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b);
+        }
+        a.fd-featured-card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse 70% 60% at 0% 50%, rgba(245,158,11,0.1), transparent 60%);
+            pointer-events: none;
+        }
+        a.fd-featured-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(245, 158, 11, 0.6);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(245,158,11,0.25);
+        }
+        .fd-featured-card__icon {
+            flex-shrink: 0;
+            width: 80px;
+            height: 80px;
+            position: relative;
+            z-index: 1;
+        }
+        .fd-featured-card__icon img {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
+        }
+        .fd-featured-card__body {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 1;
+        }
+        .fd-featured-card__badge {
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #fbbf24;
+            margin-bottom: 0.4rem;
+        }
+        a.fd-featured-card h3 {
+            font-family: "Oswald", sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text);
+            margin: 0 0 0.5rem;
+            line-height: 1.2;
+        }
+        a.fd-featured-card p {
+            color: var(--muted);
+            font-size: 0.875rem;
+            line-height: 1.6;
+            margin: 0 0 0.85rem;
+        }
+        .fd-featured-card__cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #f59e0b;
+            transition: gap 0.2s ease, color 0.2s ease;
+        }
+        a.fd-featured-card:hover .fd-featured-card__cta {
+            gap: 0.55rem;
+            color: #fbbf24;
+        }
+        @media (max-width: 600px) {
+            a.fd-featured-card {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            .fd-featured-card__icon { width: 60px; height: 60px; }
+        }
+        /* Flood Simulator featured card */
+        a.sim-featured-card {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            text-decoration: none;
+            color: inherit;
+            background: linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.8));
+            border: 1px solid rgba(56,189,248,0.25);
+            border-radius: 16px;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+            max-width: 720px;
+        }
+        a.sim-featured-card::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #0ea5e9, #38bdf8, #0ea5e9);
+        }
+        a.sim-featured-card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse 70% 60% at 0% 50%, rgba(14,165,233,0.1), transparent 60%);
+            pointer-events: none;
+        }
+        a.sim-featured-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(56,189,248,0.55);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(56,189,248,0.2);
+        }
+        .sim-featured-card__icon {
+            flex-shrink: 0;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(14,165,233,0.1);
+            border: 1px solid rgba(56,189,248,0.2);
+            border-radius: 50%;
+            position: relative;
+            z-index: 1;
+        }
+        .sim-featured-card__icon svg { width: 48px; height: 48px; }
+        .sim-featured-card__body {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 1;
+        }
+        .sim-featured-card__badge {
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #38bdf8;
+            margin-bottom: 0.4rem;
+        }
+        a.sim-featured-card h3 {
+            font-family: "Oswald", sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text);
+            margin: 0 0 0.5rem;
+            line-height: 1.2;
+        }
+        a.sim-featured-card p {
+            color: var(--muted);
+            font-size: 0.875rem;
+            line-height: 1.6;
+            margin: 0 0 0.85rem;
+        }
+        .sim-featured-card__cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #38bdf8;
+            transition: gap 0.2s ease, color 0.2s ease;
+        }
+        a.sim-featured-card:hover .sim-featured-card__cta {
+            gap: 0.55rem;
+            color: #7dd3fc;
+        }
+        @media (max-width: 600px) {
+            a.sim-featured-card {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            .sim-featured-card__icon { width: 60px; height: 60px; }
+        }
         .section-fig {
             margin: 1.25rem 0;
             border-radius: 12px;
@@ -803,14 +1002,17 @@
 </head>
 <body>
     <header class="site-header" id="site-header">
-        <a href="#" class="logo">Flood Simulator</a>
+        <a href="#" class="logo">
+            <img src="logo.svg" alt="" class="logo-icon" aria-hidden="true">
+            Flood Quest
+        </a>
         <div class="site-header__nav-wrap">
             <nav>
                 <a href="#">Home</a>
-                <a href="viewer.html">Simulation</a>
+                <a href="#simulation">Simulation</a>
                 <a href="#content">Introduction</a>
                 <a href="#mission">Mission</a>
-                <a href="flood-defender/index.html">Flood Defender</a>
+                <a href="#flood-defender">Flood Defender</a>
             </nav>
             <div class="site-header__actions">
                 <button type="button" id="landingProfileBtn" class="site-header__profile" hidden title="Profile settings">Profile</button>
@@ -825,7 +1027,8 @@
         <div class="hero-overlay" aria-hidden="true"></div>
         <section class="hero" aria-label="Introduction">
         <div class="hero-inner">
-            <h1 class="hero-title">Flood Simulator</h1>
+            <img src="logo.svg" alt="" class="hero-logo" aria-hidden="true">
+            <h1 class="hero-title">Flood Quest</h1>
             <div class="hero-line" aria-hidden="true"></div>
             <p class="hero-lead">
                 Floods are complex events where every decision matters. This simulation allows you to explore how different choices can influence flood impacts, helping build awareness and support better decision-making during flood events.
@@ -882,8 +1085,35 @@
             </p>
         </section>
 
+        <section id="simulation">
+            <h2>Flood Simulator</h2>
+            <p style="margin-bottom: 1.5rem;">
+                Explore the real study area in an interactive 3D environment. See how floodwater spreads across the terrain at different depths, view live environmental data, and understand flood risk before it happens.
+            </p>
+            <a class="sim-featured-card" href="viewer.html">
+                <div class="sim-featured-card__icon" aria-hidden="true">
+                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="24" cy="24" r="20" fill="none" stroke="#38bdf8" stroke-width="2"/>
+                        <ellipse cx="24" cy="24" rx="10" ry="20" fill="none" stroke="#38bdf8" stroke-width="1.5"/>
+                        <line x1="4" y1="24" x2="44" y2="24" stroke="#38bdf8" stroke-width="1.5"/>
+                        <line x1="7" y1="15" x2="41" y2="15" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
+                        <line x1="7" y1="33" x2="41" y2="33" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
+                        <path d="M10 30 Q16 26 22 30 Q28 34 34 30 Q38 27 42 29" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="sim-featured-card__body">
+                    <span class="sim-featured-card__badge">3D Interactive</span>
+                    <h3>3D Flood Simulator</h3>
+                    <p>Rotate, zoom, and tilt around the Kampung Asahan study area rendered with real elevation data. Visualise flood extents at <strong>0.5 m</strong> and <strong>1.0 m</strong> depths, track live precipitation and temperature data, and explore the results in both graph and table form.</p>
+                    <span class="sim-featured-card__cta">Open simulator <span aria-hidden="true">→</span></span>
+                </div>
+            </a>
+        </section>
+
+        <div class="section-divider"></div>
+
         <section id="mission">
-            <h2>Mission</h2>
+            <h2>Missions</h2>
             <p style="margin-bottom: 1.5rem;">
                 <strong>Sign in or create an account</strong> to open the flood map and play missions. Open a mission to read what you will do, then tap <strong>Play</strong> to start in the simulator. When you finish, you can continue to the next mission or return here.
                 When you <strong>create an account</strong>, you choose an <strong>explorer avatar</strong> — the same face follows you on mission pages and in the simulator after you sign in.
@@ -916,16 +1146,27 @@
                     <p>This mission teaches players to read flood flow, choose safe routes, and make critical decisions when evacuation is no longer possible.</p>
                     <span class="mission-card__cta">Open mission <span aria-hidden="true">→</span></span>
                 </a>
-                <a class="card mission-card" href="flood-defender/index.html">
-                    <span class="mission-card__icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8zm0 18c-3.35 0-6-2.57-6-6.2 0-2.34 1.95-5.44 6-9.14 4.05 3.7 6 6.79 6 9.14 0 3.63-2.65 6.2-6 6.2z"/></svg>
-                    </span>
-                    <span class="mission-card__badge">Educational Game</span>
-                    <h3>Flood Defender</h3>
-                    <p>Learn how green infrastructure like trees, wetlands, and ponds reduce flood damage. Design solutions to protect a town within budget.</p>
-                    <span class="mission-card__cta">Play game <span aria-hidden="true">→</span></span>
-                </a>
             </div>
+        </section>
+
+        <div class="section-divider"></div>
+
+        <section id="flood-defender">
+            <h2>Flood Defender</h2>
+            <p style="margin-bottom: 1.5rem;">
+                A standalone educational game where you design green infrastructure to protect a town from rising floodwaters. Place trees, wetlands, ponds, and levees — then run the storm and see how your choices perform across <strong>7 levels</strong> of increasing intensity.
+            </p>
+            <a class="fd-featured-card" href="flood-defender/index.html">
+                <div class="fd-featured-card__icon" aria-hidden="true">
+                    <img src="logo.svg" alt="">
+                </div>
+                <div class="fd-featured-card__body">
+                    <span class="fd-featured-card__badge">Educational Game</span>
+                    <h3>Flood Defender</h3>
+                    <p>Build green infrastructure — trees, wetlands, retention ponds, and levees — to protect homes from a simulated storm. Manage your budget, watch the flood unfold in real time, and compare your solution to the model answer.</p>
+                    <span class="fd-featured-card__cta">Play now <span aria-hidden="true">→</span></span>
+                </div>
+            </a>
         </section>
 
         <div class="section-divider"></div>
