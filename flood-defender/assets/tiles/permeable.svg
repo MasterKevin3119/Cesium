@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <!-- four pavement slabs -->
+  <rect width="20" height="20" fill="#bcaaa4"/>
+  <rect x="0.5" y="0.5" width="8.5" height="8.5" fill="#a1887f" rx="0.5"/>
+  <rect x="11"  y="0.5" width="8.5" height="8.5" fill="#a1887f" rx="0.5"/>
+  <rect x="0.5" y="11"  width="8.5" height="8.5" fill="#a1887f" rx="0.5"/>
+  <rect x="11"  y="11"  width="8.5" height="8.5" fill="#a1887f" rx="0.5"/>
+  <!-- permeable holes per slab -->
+  <circle cx="4.5"  cy="4.5"  r="1.5" fill="#6d4c41" opacity="0.7"/>
+  <circle cx="15.5" cy="4.5"  r="1.5" fill="#6d4c41" opacity="0.7"/>
+  <circle cx="4.5"  cy="15.5" r="1.5" fill="#6d4c41" opacity="0.7"/>
+  <circle cx="15.5" cy="15.5" r="1.5" fill="#6d4c41" opacity="0.7"/>
+  <!-- water droplet at center gap to show permeability -->
+  <path d="M9.5,8.5 Q9.5,7 10,7.5 Q10.5,7 10.5,8.5 Q10.5,10 10,10 Q9.5,10 9.5,8.5" fill="#29b6f6"/>
+</svg>

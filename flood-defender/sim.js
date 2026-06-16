@@ -22,7 +22,7 @@ class Simulation {
     this.generateMap();
 
     // Simulation state
-    this.tick = 0;
+    this.tickCount = 0;
     this.rainRate = levelDef.rainRate;
     this.riverInflow = levelDef.riverInflow;
 
@@ -33,6 +33,7 @@ class Simulation {
     this.totalRiverHealth = 0;
     this.treeCount = 0;
     this.riverCellCount = 0;
+    this.cellDamage = Object.create(null); // "x,y" → cumulative damage for results highlight
 
     // Transient tracking
     this.currentHappiness = 0;
@@ -125,7 +126,7 @@ class Simulation {
    * Order matters: rainfall → river inflow → absorption → flow → damage.
    */
   tick() {
-    this.tick++;
+    this.tickCount++;
 
     // Compute rain rate for this tick (ramp up, peak, ramp down)
     const rampUpEnd = this.levelDef.rainRampUp;
@@ -133,12 +134,12 @@ class Simulation {
     const peakRamp = peakEnd + this.levelDef.rainRampDown;
 
     let rainFactor = 1.0;
-    if (this.tick <= rampUpEnd) {
-      rainFactor = this.tick / rampUpEnd;
-    } else if (this.tick <= peakEnd) {
+    if (this.tickCount <= rampUpEnd) {
+      rainFactor = this.tickCount / rampUpEnd;
+    } else if (this.tickCount <= peakEnd) {
       rainFactor = 1.0;
-    } else if (this.tick <= peakRamp) {
-      rainFactor = 1.0 - ((this.tick - peakEnd) / this.levelDef.rainRampDown);
+    } else if (this.tickCount <= peakRamp) {
+      rainFactor = 1.0 - ((this.tickCount - peakEnd) / this.levelDef.rainRampDown);
     } else {
       rainFactor = 0;
     }
@@ -284,6 +285,8 @@ class Simulation {
           const floodDepth = cell.water - this.config.SIM.floodThreshold;
           const damage = floodDepth * tileDef.damageValue;
           tickDamage += damage;
+          const ck = `${x},${y}`;
+          this.cellDamage[ck] = (this.cellDamage[ck] || 0) + damage;
         }
 
         // Trees die if deeply submerged for too long
@@ -396,13 +399,24 @@ class Simulation {
    * Get final metrics after storm ends.
    */
   getFinalMetrics() {
-    const tickCount = this.tick;
+    const tickCount = this.tickCount;
     return {
       totalDamage: this.totalDamage,
       avgHappiness: this.totalHappiness / Math.max(1, tickCount),
       avgTreeHealth: this.totalTreeHealth / Math.max(1, tickCount),
       avgRiverHealth: this.totalRiverHealth / Math.max(1, tickCount),
     };
+  }
+
+  getTopDamagedCells(n) {
+    n = n || 5;
+    return Object.entries(this.cellDamage)
+      .sort(function(a, b) { return b[1] - a[1]; })
+      .slice(0, n)
+      .map(function(e) {
+        var p = e[0].split(',');
+        return { x: +p[0], y: +p[1], damage: e[1] };
+      });
   }
 
   getCurrentMetrics() {
@@ -415,7 +429,7 @@ class Simulation {
   }
 
   isComplete() {
-    return this.tick >= this.config.SIM.stormDurationTicks;
+    return this.tickCount >= this.config.SIM.stormDurationTicks;
   }
 }
 

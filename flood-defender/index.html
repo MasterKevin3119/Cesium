@@ -4,15 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Flood Defender - Educational Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main>
     <!-- Header -->
     <header>
-      <h1>🌊 Flood Defender</h1>
-      <p>Learn how green infrastructure reduces flood damage</p>
+      <div class="header-left">
+        <a href="../viewer.html" class="back-link">&#8592; Map</a>
+        <h1>🌊 Flood <span class="accent">Defender</span></h1>
+      </div>
     </header>
+
+    <!-- Persistent Objective Bar -->
+    <div id="objective-bar">
+      <span id="obj-win-text">Win: Keep damage under <strong id="obj-cap">—</strong> &amp; stay within $<strong id="obj-budget">—</strong></span>
+      <span id="obj-star-hint">Stars are a bonus — ecology &amp; budget efficiency only</span>
+    </div>
 
     <!-- Top Bar -->
     <div class="top-bar">
@@ -98,18 +109,44 @@
             </div>
           </div>
 
-          <!-- Damage Counter -->
-          <div id="damage-counter">Damage: 0</div>
+          <!-- Damage Meter (live during storm) -->
+          <div class="meter" id="damage-counter">
+            <div class="meter-label">
+              <span>Flood Damage</span>
+              <span id="damage-value-label">0 / — cap</span>
+            </div>
+            <div class="meter-bar">
+              <div id="damage-meter-fill" class="meter-fill" style="width:0%"></div>
+            </div>
+            <div id="damage-status-text" class="meter-status-text"></div>
+          </div>
         </div>
 
         <!-- Score Display (Results Phase) -->
         <div id="score-display" class="panel" style="display: none; text-align: center;">
           <div id="stars-display" class="stars">⭐⭐⭐</div>
-          <p id="final-score" style="font-size: 24px; font-weight: bold; color: #1976d2;"></p>
+          <p id="final-score"></p>
         </div>
       </aside>
     </div>
   </main>
+
+  <!-- Storm Confirm Modal -->
+  <div id="storm-confirm" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-title">Storm Incoming</div>
+      <p class="modal-line"><strong>Goal:</strong> Keep flood damage under <strong id="confirm-cap">—</strong></p>
+      <p class="modal-line">You've spent <strong id="confirm-spent">$0</strong> of your $<strong id="confirm-budget">—</strong> budget</p>
+      <p class="modal-note">Ecology (trees, river, happiness) affects your star rating only — it won't cause a fail.</p>
+      <div class="modal-btns">
+        <button id="confirm-cancel-btn" class="secondary-btn">Cancel</button>
+        <button id="confirm-run-btn" class="danger-btn">Run the Storm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cell hover tooltip -->
+  <div id="cell-tooltip" class="hidden"></div>
 
   <!-- Scripts in dependency order -->
   <script src="config.js"></script>

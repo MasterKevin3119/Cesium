@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <rect width="20" height="20" fill="#e1f5fe"/>
+  <!-- bank -->
+  <ellipse cx="10" cy="11" rx="9" ry="8"   fill="#0277bd"/>
+  <!-- water body -->
+  <ellipse cx="10" cy="11" rx="7.5" ry="6.5" fill="#0288d1"/>
+  <!-- ripple rings -->
+  <ellipse cx="10" cy="11" rx="5"   ry="4.5" fill="none" stroke="#01579b" stroke-width="0.7" opacity="0.6"/>
+  <ellipse cx="10" cy="11" rx="2.5" ry="2"   fill="none" stroke="#01579b" stroke-width="0.7" opacity="0.5"/>
+  <!-- highlight -->
+  <ellipse cx="7" cy="8"   rx="2.5" ry="1.5" fill="#81d4fa" opacity="0.6"/>
+</svg>

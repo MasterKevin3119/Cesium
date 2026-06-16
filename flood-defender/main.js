@@ -1,62 +1,58 @@
 /**
  * FLOOD DEFENDER - Main Entry Point & Event Wiring
- * 
- * Initializes the game, sets up event handlers, runs the main game loop.
  */
 
 let game;
 let renderer;
-let gameLoopInterval = null;
+let _rafId = null;
+let _lastStormTick = 0;
+const STORM_TICK_MS = 100;
 
-/**
- * Initialize the game.
- */
 function initGame() {
   game = new Game(CONFIG);
   renderer = new Renderer(CONFIG, game, 'game-canvas');
-
-  // Initial render
   renderer.render();
-
-  // Wire up event listeners
   setupEventListeners();
-
-  // Start animation loop
   startGameLoop();
 }
 
-/**
- * Set up all event listeners.
- */
 function setupEventListeners() {
   const canvas = renderer.canvas;
 
-  // Phase transition buttons
   document.addEventListener('click', (e) => {
     if (e.target.id === 'start-build-btn') {
       game.startBuild();
       renderer.render();
     }
+
     if (e.target.id === 'run-storm-btn') {
+      // Show confirm modal with current objective + spend summary
+      const ld = game.levelDef;
+      const el = (id) => document.getElementById(id);
+      const c = el('confirm-cap');    if (c) c.textContent = ld.damageCapForPass;
+      const s = el('confirm-spent');  if (s) s.textContent = '$' + (ld.budget - game.budgetRemaining);
+      const b = el('confirm-budget'); if (b) b.textContent = ld.budget;
+      const modal = el('storm-confirm');
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    if (e.target.id === 'confirm-run-btn') {
+      const modal = document.getElementById('storm-confirm');
+      if (modal) modal.classList.add('hidden');
       game.startStorm();
       renderer.render();
     }
-    if (e.target.id === 'retry-btn') {
-      game.retry();
-      renderer.render();
+
+    if (e.target.id === 'confirm-cancel-btn') {
+      const modal = document.getElementById('storm-confirm');
+      if (modal) modal.classList.add('hidden');
     }
-    if (e.target.id === 'next-level-btn') {
-      if (game.nextLevel()) {
-        renderer.render();
-      }
-    }
-    if (e.target.id === 'reset-btn') {
-      game.retry();
-      renderer.render();
-    }
+
+    if (e.target.id === 'retry-btn')      { game.retry();     renderer.render(); }
+    if (e.target.id === 'next-level-btn') { if (game.nextLevel()) renderer.render(); }
+    if (e.target.id === 'reset-btn')      { game.retry();     renderer.render(); }
   });
 
-  // Canvas interactions (build phase)
   canvas.addEventListener('click', (e) => {
     renderer.handleCanvasClick(e.clientX, e.clientY, false);
     renderer.render();
@@ -68,36 +64,38 @@ function setupEventListeners() {
     renderer.render();
   });
 
+  // Update hover state only — the RAF loop redraws the canvas
   canvas.addEventListener('mousemove', (e) => {
     renderer.handleCanvasHover(e.clientX, e.clientY);
-    renderer.render(); // Re-render for hover preview
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    renderer.hoveredCell = null;
+    renderer._mousePos   = null;
+    renderer._hideTooltip();
   });
 }
 
-/**
- * Main game loop.
- */
 function startGameLoop() {
-  // Clear any existing loop
-  if (gameLoopInterval) clearInterval(gameLoopInterval);
+  if (_rafId) cancelAnimationFrame(_rafId);
+  _lastStormTick = performance.now();
 
-  gameLoopInterval = setInterval(() => {
-    // Only advance storm if in storm phase
-    if (game.isStormActive()) {
+  function tick(now) {
+    // Advance storm simulation at its own fixed cadence
+    if (game.isStormActive() && now - _lastStormTick >= STORM_TICK_MS) {
       game.advanceStorm();
+      _lastStormTick = now;
     }
 
-    // Always render
     renderer.render();
-  }, 100); // ~10 FPS for reasonable animation speed
+    _rafId = requestAnimationFrame(tick);
+  }
+
+  _rafId = requestAnimationFrame(tick);
 }
 
-/**
- * Clean up on page unload.
- */
 window.addEventListener('beforeunload', () => {
-  if (gameLoopInterval) clearInterval(gameLoopInterval);
+  if (_rafId) cancelAnimationFrame(_rafId);
 });
 
-// Start game when DOM is ready
 document.addEventListener('DOMContentLoaded', initGame);

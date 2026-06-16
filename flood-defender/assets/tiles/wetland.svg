@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <rect width="20" height="20" fill="#00838f"/>
+  <!-- water pool -->
+  <path d="M0,13 Q5,10 10,13 Q15,16 20,13 L20,20 L0,20 Z" fill="#00575d"/>
+  <!-- reeds: stem + cattail head -->
+  <rect x="4"  y="7"  width="2" height="11" fill="#00695c" rx="1"/>
+  <ellipse cx="5" cy="6"  rx="2"   ry="3"   fill="#004d40"/>
+  <rect x="9"  y="5"  width="2" height="13" fill="#00695c" rx="1"/>
+  <ellipse cx="10" cy="4" rx="2"   ry="3.5" fill="#004d40"/>
+  <rect x="14" y="8"  width="2" height="10" fill="#00695c" rx="1"/>
+  <ellipse cx="15" cy="7" rx="2"   ry="3"   fill="#004d40"/>
+</svg>

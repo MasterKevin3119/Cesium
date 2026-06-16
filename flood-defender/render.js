@@ -1,6 +1,6 @@
 /**
  * FLOOD DEFENDER - Rendering & UI
- * 
+ *
  * Canvas rendering, UI updates, tooltips. Reads game state, updates DOM and canvas.
  */
 
@@ -9,115 +9,147 @@ class Renderer {
     this.config = config;
     this.game = game;
 
-    // Canvas setup
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
     this.cellSize = config.CELL_SIZE;
 
-    // UI elements (cached)
     this.elements = {
-      phaseTitle: document.getElementById('phase-title'),
-      phaseBriefing: document.getElementById('phase-briefing'),
-      budgetRemaining: document.getElementById('budget-remaining'),
-      maintenanceCost: document.getElementById('maintenance-cost'),
-      runStormBtn: document.getElementById('run-storm-btn'),
-      retryBtn: document.getElementById('retry-btn'),
-      nextLevelBtn: document.getElementById('next-level-btn'),
-      resetBtn: document.getElementById('reset-btn'),
-      tileSelector: document.getElementById('tile-selector'),
-      happinessMeter: document.getElementById('happiness-meter'),
-      treeHealthMeter: document.getElementById('tree-health-meter'),
+      phaseTitle:       document.getElementById('phase-title'),
+      phaseBriefing:    document.getElementById('phase-briefing'),
+      budgetRemaining:  document.getElementById('budget-remaining'),
+      maintenanceCost:  document.getElementById('maintenance-cost'),
+      runStormBtn:      document.getElementById('run-storm-btn'),
+      retryBtn:         document.getElementById('retry-btn'),
+      nextLevelBtn:     document.getElementById('next-level-btn'),
+      resetBtn:         document.getElementById('reset-btn'),
+      tileSelector:     document.getElementById('tile-selector'),
+      happinessMeter:   document.getElementById('happiness-meter'),
+      treeHealthMeter:  document.getElementById('tree-health-meter'),
       riverHealthMeter: document.getElementById('river-health-meter'),
-      damageCounter: document.getElementById('damage-counter'),
-      resultsPanel: document.getElementById('results-panel'),
-      scoreDisplay: document.getElementById('score-display'),
-      starsDisplay: document.getElementById('stars-display'),
-      lessonCard: document.getElementById('lesson-card'),
+      damageCounter:    document.getElementById('damage-counter'),
+      resultsPanel:     document.getElementById('results-panel'),
+      scoreDisplay:     document.getElementById('score-display'),
+      starsDisplay:     document.getElementById('stars-display'),
+      lessonCard:       document.getElementById('lesson-card'),
+      parametersPanel:  document.getElementById('parameters-panel'),
     };
 
-    // Interaction state
-    this.selectedTile = null;
-    this.hoveredCell = null;
-  }
+    this.selectedTile      = null;
+    this.hoveredCell       = null;
+    this._mousePos         = null;
+    this._topDamagedCells  = [];
+    this._images           = {};
+    this._preloadImages();
 
-  /**
-   * Full render update. Call every frame.
-   */
-  render() {
-    // Always update budget info in top bar
-    this.elements.budgetRemaining.textContent = this.game.budgetRemaining;
-    this.elements.maintenanceCost.textContent = this.game.maintenanceCost;
+    this.elements.cellTooltip = document.getElementById('cell-tooltip');
 
-    // Update UI based on current phase
-    switch (this.game.phase) {
-      case 'briefing':
-        this.renderBriefing();
-        break;
-      case 'build':
-        this.renderBuild();
-        break;
-      case 'storm':
-        this.renderStorm();
-        break;
-      case 'results':
-        this.renderResults();
-        break;
+    // Dirty-check state — avoid redundant DOM writes
+    this._lastPhase       = null;
+    this._lastBudget      = null;
+    this._lastMaintenance = null;
+    this._paletteBuilt    = false;
+
+    // Pre-cache hex→rgb per tile type so hexToRgb() is never called in the draw loop
+    this._rgbCache = {};
+    for (const [key, tile] of Object.entries(config.TILES)) {
+      this._rgbCache[key] = this._hexToRgb(tile.color);
     }
   }
 
-  // ============================================================================
-  // PHASE: BRIEFING
-  // ============================================================================
-  renderBriefing() {
-    this.elements.phaseTitle.textContent = 'Briefing';
-    this.elements.phaseBriefing.innerHTML = `
-      <h2>${this.game.levelDef.name}</h2>
-      <p>${this.game.levelDef.briefing}</p>
-      <p><strong>Budget:</strong> $${this.game.levelDef.budget}</p>
-      <p><strong>Goal:</strong> Keep damage below ${this.game.levelDef.damageCapForPass}</p>
-      <button id="start-build-btn" class="primary-btn">Start Building</button>
-    `;
+  // ── Top-level render ────────────────────────────────────────────────────────
 
-    // Draw empty grid
-    this.drawGrid(null);
+  render() {
+    const phaseChanged = this.game.phase !== this._lastPhase;
+    if (phaseChanged) {
+      this._lastPhase    = this.game.phase;
+      this._paletteBuilt = false;
+      this._updateObjectiveBar();
+    }
 
-    // Hide lesson card
-    this.elements.lessonCard.style.display = 'none';
+    // Budget counter — update only when value changes
+    if (this.game.budgetRemaining !== this._lastBudget) {
+      this._lastBudget = this.game.budgetRemaining;
+      this.elements.budgetRemaining.textContent = this.game.budgetRemaining;
+    }
+    if (this.game.maintenanceCost !== this._lastMaintenance) {
+      this._lastMaintenance = this.game.maintenanceCost;
+      this.elements.maintenanceCost.textContent = this.game.maintenanceCost;
+    }
 
-    // Clear buttons
-    this.elements.runStormBtn.style.display = 'none';
-    this.elements.retryBtn.style.display = 'none';
-    this.elements.nextLevelBtn.style.display = 'none';
+    switch (this.game.phase) {
+      case 'briefing': this.renderBriefing(phaseChanged); break;
+      case 'build':    this.renderBuild(phaseChanged);    break;
+      case 'storm':    this.renderStorm();                break;
+      case 'results':  this.renderResults(phaseChanged);  break;
+    }
   }
 
-  // ============================================================================
-  // PHASE: BUILD
-  // ============================================================================
-  renderBuild() {
-    this.elements.phaseTitle.textContent = 'Build';
-    this.elements.phaseBriefing.innerHTML = `
-      <p>Place green infrastructure to reduce flood damage.</p>
-      <p>Click to place, right-click to remove.</p>
-      <p><strong>Budget:</strong> $${this.game.budgetRemaining} / ${this.game.levelDef.budget}</p>
-      <p><strong>Maintenance:</strong> $${this.game.maintenanceCost}/level</p>
-    `;
+  // ── PHASE: BRIEFING ─────────────────────────────────────────────────────────
 
-    // Draw grid with placements
+  renderBriefing(phaseChanged) {
+    if (phaseChanged) {
+      const ld = this.game.levelDef;
+      this.elements.phaseTitle.textContent = 'Briefing';
+      this.elements.phaseBriefing.innerHTML = `
+        <h2>${ld.name}</h2>
+        <p>${ld.briefing}</p>
+        <hr>
+        <p style="font-weight:600;color:var(--accent);margin-bottom:6px">How to WIN this level:</p>
+        <ul class="win-list">
+          <li>Total flood damage stays under <strong>${ld.damageCapForPass}</strong></li>
+          <li>Don't exceed your budget of <strong>$${ld.budget}</strong></li>
+        </ul>
+        <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:10px">
+          Ecology (happiness, trees, river) does <em>not</em> affect pass/fail — only your star rating.
+        </p>
+        <hr>
+        <p style="font-weight:600;margin-bottom:5px">Star rating:</p>
+        <ul class="star-tier-list">
+          <li>&#9733; Survive — damage under ${ld.damageCapForPass} and budget intact</li>
+          <li>&#9733;&#9733; Survive with decent ecology and some budget left over</li>
+          <li>&#9733;&#9733;&#9733; Survive with excellent ecology and efficient spending</li>
+        </ul>
+        <button id="start-build-btn" class="primary-btn" style="margin-top:14px">Start Building</button>
+      `;
+      this.elements.lessonCard.style.display      = 'none';
+      this.elements.runStormBtn.style.display     = 'none';
+      this.elements.retryBtn.style.display        = 'none';
+      this.elements.nextLevelBtn.style.display    = 'none';
+      this.elements.parametersPanel.style.display = 'none';
+    }
     this.drawGrid(null);
+  }
 
-    // Hide lesson card
-    this.elements.lessonCard.style.display = 'none';
+  // ── PHASE: BUILD ────────────────────────────────────────────────────────────
 
-    // Draw tile palette
-    this.renderTilePalette();
+  renderBuild(phaseChanged) {
+    if (phaseChanged) {
+      this.elements.phaseTitle.textContent = 'Build';
+      this.elements.runStormBtn.style.display  = 'block';
+      this.elements.retryBtn.style.display     = 'block';
+      this.elements.nextLevelBtn.style.display = 'none';
+      this.elements.lessonCard.style.display   = 'none';
+      this.elements.parametersPanel.style.display = 'none';
+    }
 
-    // Show run storm button
-    this.elements.runStormBtn.style.display = 'block';
-    this.elements.retryBtn.style.display = 'block';
-    this.elements.nextLevelBtn.style.display = 'none';
+    // Briefing updates when budget changes (placement / removal)
+    if (phaseChanged || this.game.budgetRemaining !== this._lastBriefingBudget) {
+      this._lastBriefingBudget = this.game.budgetRemaining;
+      this.elements.phaseBriefing.innerHTML = `
+        <p>Place green infrastructure to reduce flood damage.</p>
+        <p>Click to place, right-click to remove.</p>
+        <p><strong>Budget:</strong> $${this.game.budgetRemaining} / ${this.game.levelDef.budget}</p>
+        <p><strong>Maintenance:</strong> $${this.game.maintenanceCost}/level</p>
+      `;
+    }
 
-    // Hide parameter meters (not relevant in build)
-    document.getElementById('parameters-panel').style.display = 'none';
+    // Tile palette — built once per phase entry, not every frame
+    if (!this._paletteBuilt) {
+      this.renderTilePalette();
+      this._paletteBuilt = true;
+    }
+
+    this.drawGrid(null);
   }
 
   renderTilePalette() {
@@ -128,9 +160,17 @@ class Renderer {
       const tileDef = this.config.TILES[tileType];
       const btn = document.createElement('button');
       btn.className = 'tile-btn';
-      btn.style.backgroundColor = tileDef.color;
-      btn.textContent = `${tileDef.name}\n$${tileDef.cost}`;
       btn.title = tileDef.tooltip;
+      if (tileDef.image) {
+        btn.innerHTML = `
+          <img class="tile-btn-icon" src="${tileDef.image}" alt="${tileDef.name}">
+          <span class="tile-btn-label">${tileDef.name}</span>
+          <span class="tile-btn-cost">$${tileDef.cost}</span>
+        `;
+      } else {
+        btn.style.backgroundColor = tileDef.color;
+        btn.innerHTML = `<span class="tile-btn-label">${tileDef.name}</span><span class="tile-btn-cost">$${tileDef.cost}</span>`;
+      }
       btn.dataset.tile = tileType;
       btn.addEventListener('click', () => {
         this.selectedTile = this.selectedTile === tileType ? null : tileType;
@@ -139,7 +179,6 @@ class Renderer {
       panel.appendChild(btn);
     }
 
-    // Add eraser tool
     const eraserBtn = document.createElement('button');
     eraserBtn.className = 'tile-btn eraser-btn';
     eraserBtn.textContent = '🗑️\nErase\n(50%)';
@@ -154,95 +193,214 @@ class Renderer {
 
   updateTilePaletteSelection() {
     const btns = this.elements.tileSelector.querySelectorAll('.tile-btn');
-    btns.forEach(btn => {
-      btn.classList.toggle('selected', btn.dataset.tile === this.selectedTile);
-    });
+    btns.forEach(btn => btn.classList.toggle('selected', btn.dataset.tile === this.selectedTile));
   }
 
-  // ============================================================================
-  // PHASE: STORM
-  // ============================================================================
+  // ── PHASE: STORM ────────────────────────────────────────────────────────────
+
   renderStorm() {
-    this.elements.phaseTitle.textContent = 'Storm';
-    this.elements.phaseBriefing.innerHTML = `<p>Storm in progress... Watch the water!</p>`;
-
-    const gridState = this.game.getGridState();
-    const metrics = this.game.getCurrentMetrics();
-
-    // Draw animated grid
-    this.drawGrid(gridState);
-
-    // Update parameter meters
-    if (metrics) {
-      this.updateMeter(this.elements.happinessMeter, metrics.happiness);
-      this.updateMeter(this.elements.treeHealthMeter, metrics.treeHealth);
-      this.updateMeter(this.elements.riverHealthMeter, metrics.riverHealth);
-      this.elements.damageCounter.textContent = `Damage: ${metrics.damage}`;
+    if (this._lastPhase !== 'storm' || !this._stormHeaderSet) {
+      this._stormHeaderSet = true;
+      this.elements.phaseTitle.textContent = 'Storm';
+      this.elements.phaseBriefing.innerHTML = '<p>Storm in progress... Watch the water!</p>';
+      this.elements.runStormBtn.style.display  = 'none';
+      this.elements.retryBtn.style.display     = 'block';
+      this.elements.nextLevelBtn.style.display = 'none';
+      this.elements.tileSelector.innerHTML     = '';
+      this.elements.parametersPanel.style.display = 'block';
     }
 
-    // Show parameters panel
-    document.getElementById('parameters-panel').style.display = 'block';
+    const gridState = this.game.getGridState();
+    const metrics   = this.game.getCurrentMetrics();
 
-    // Hide buttons during storm
-    this.elements.runStormBtn.style.display = 'none';
-    this.elements.retryBtn.style.display = 'none';
-    this.elements.nextLevelBtn.style.display = 'none';
-    this.elements.tileSelector.innerHTML = ''; // Hide palette
+    this.drawGrid(gridState);
+
+    if (metrics) {
+      this.updateMeter(this.elements.happinessMeter,   metrics.happiness);
+      this.updateMeter(this.elements.treeHealthMeter,  metrics.treeHealth);
+      this.updateMeter(this.elements.riverHealthMeter, metrics.riverHealth);
+      this._updateDamageBar(metrics.damage, this.game.levelDef.damageCapForPass);
+    }
   }
 
-  // ============================================================================
-  // PHASE: RESULTS
-  // ============================================================================
-  renderResults() {
+  // ── PHASE: RESULTS ──────────────────────────────────────────────────────────
+
+  renderResults(phaseChanged) {
+    if (!phaseChanged) {
+      // Redraw canvas in current view mode
+      this._drawResultsGrid();
+      return;
+    }
+
+    this._stormHeaderSet   = false;
+    this._showModelSol     = false;
+    this._modelSolRunning  = false;
+    this._topDamagedCells  = this.game.getTopDamagedCells(5);
+
     this.elements.phaseTitle.textContent = 'Results';
 
-    const metrics = this.game.getFinalMetrics();
-    const levelDef = this.game.levelDef;
+    const metrics  = this.game.getFinalMetrics();
+    const ld       = this.game.levelDef;
+    const passed   = this.game.passed;
+    const dmgOver  = metrics.totalDamage > ld.damageCapForPass;
+    const spent    = ld.budget - this.game.budgetRemaining;
+    const dmgColor = dmgOver ? 'var(--danger)' : 'var(--success)';
+    const dmgMark  = dmgOver ? '✗' : '✓';
 
-    let resultHTML = `
-      <h2>Level Complete</h2>
-      <p><strong>Final Damage:</strong> ${Math.round(metrics.totalDamage)} (cap: ${levelDef.damageCapForPass})</p>
-      <p><strong>Damage Avoided:</strong> ${Math.round(Math.max(0, 10000 - metrics.totalDamage))}</p>
-      <p><strong>Budget Remaining:</strong> $${this.game.budgetRemaining}</p>
-      <p><strong>Maintenance Paid:</strong> $${this.game.maintenanceCost}</p>
+    const starLabels = [
+      '',
+      'You survived — damage stayed under the cap.',
+      'Good ecology and budget efficiency on top of surviving.',
+      'Excellent ecology and efficient spending — outstanding!',
+    ];
+
+    const adviceHTML = !passed
+      ? `<div class="failure-advice">${this._buildFailureAdvice(metrics, this._topDamagedCells)}</div>`
+      : '';
+
+    // Model solution button (only if level has one)
+    const hasSol = !!(ld.referenceSolution && ld.referenceSolution.length > 0);
+    const modelBtnHTML = hasSol
+      ? `<button id="model-sol-btn" class="secondary-btn model-sol-btn" style="margin-top:10px">Show model solution</button>`
+      : '';
+
+    this.elements.phaseBriefing.innerHTML = `
+      <div class="result-banner ${passed ? 'pass-banner' : 'fail-banner'}">${passed ? '✓ LEVEL PASSED' : '✗ LEVEL FAILED'}</div>
+      <div class="result-verdict">
+        <p><span style="color:${dmgColor}">${dmgMark}</span> Damage: <strong style="color:${dmgColor}">${Math.round(metrics.totalDamage)}</strong> / ${ld.damageCapForPass} cap</p>
+        <p><span style="color:var(--success)">✓</span> Budget: spent <strong>$${spent}</strong> of $${ld.budget} ($${this.game.budgetRemaining} left)</p>
+      </div>
       <hr>
-      <p><strong>Happiness:</strong> ${Math.round(metrics.avgHappiness)}/100</p>
-      <p><strong>Tree Health:</strong> ${Math.round(metrics.avgTreeHealth)}/100</p>
-      <p><strong>River Health:</strong> ${Math.round(metrics.avgRiverHealth)}/100</p>
-      <hr>
-      <p style="font-size: 24px; font-weight: bold;">Score: ${this.game.score}</p>
-      <p>${'⭐'.repeat(this.game.stars)} (${'☆'.repeat(3 - this.game.stars)})</p>
+      <p style="font-size:1.1rem;margin-bottom:3px">${'⭐'.repeat(this.game.stars)}${'☆'.repeat(3 - this.game.stars)}</p>
+      <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:10px">${starLabels[this.game.stars] || ''}</p>
+      <p style="font-size:0.75rem;color:var(--text-dim)">
+        Happiness ${Math.round(metrics.avgHappiness)}/100 &nbsp;·&nbsp;
+        Trees ${Math.round(metrics.avgTreeHealth)}/100 &nbsp;·&nbsp;
+        River ${Math.round(metrics.avgRiverHealth)}/100
+      </p>
+      ${adviceHTML}
+      ${!passed ? '' : '<ul class="star-tier-list" style="margin-top:10px"><li>&#9733; Survive — damage under cap</li><li>&#9733;&#9733; Survive + decent ecology &amp; budget</li><li>&#9733;&#9733;&#9733; Survive + excellent ecology &amp; efficient spending</li></ul>'}
+      ${modelBtnHTML}
     `;
 
-    if (!this.game.passed) {
-      resultHTML += `<p style="color: red; font-weight: bold;">❌ Level Failed. Try again!</p>`;
-    } else {
-      resultHTML += `<p style="color: green; font-weight: bold;">✅ Level Passed!</p>`;
-    }
+    this.elements.resultsPanel.innerHTML = '';
 
-    this.elements.phaseBriefing.innerHTML = resultHTML;
-
-    // Show lesson card
     this.renderLessonCard(metrics);
 
-    // Draw final grid
+    this.elements.runStormBtn.style.display     = 'none';
+    this.elements.retryBtn.style.display        = 'block';
+    this.elements.nextLevelBtn.style.display    = passed ? 'block' : 'none';
+    this.elements.tileSelector.innerHTML        = '';
+    this.elements.parametersPanel.style.display = 'none';
+
+    // Wire up model solution button
+    if (hasSol) {
+      const btn = document.getElementById('model-sol-btn');
+      if (btn) btn.addEventListener('click', () => this._toggleModelSolution());
+    }
+
+    this._drawResultsGrid();
+  }
+
+  _toggleModelSolution() {
+    this._showModelSol = !this._showModelSol;
+    const btn = document.getElementById('model-sol-btn');
+
+    if (this._showModelSol) {
+      // Run reference sim (cached after first call)
+      if (!this._modelSolRunning) {
+        this._modelSolRunning = true;
+        if (btn) btn.textContent = 'Computing...';
+        // Use setTimeout to let the UI update before the expensive sim run
+        setTimeout(() => {
+          const refResult = this.game.runReferenceSolution();
+          this._refResult = refResult;
+          if (btn) btn.textContent = 'Show your layout';
+          this._renderModelComparison(refResult);
+          this._drawResultsGrid();
+        }, 0);
+        return;
+      }
+      if (btn) btn.textContent = 'Show your layout';
+      this._renderModelComparison(this._refResult);
+    } else {
+      if (btn) btn.textContent = 'Show model solution';
+      this.elements.resultsPanel.innerHTML = '';
+    }
+    this._drawResultsGrid();
+  }
+
+  _renderModelComparison(refResult) {
+    if (!refResult) return;
+    const ld      = this.game.levelDef;
+    const metrics = this.game.getFinalMetrics();
+    const spent   = ld.budget - this.game.budgetRemaining;
+    const passed  = this.game.passed;
+
+    const playerPassed = metrics.totalDamage <= ld.damageCapForPass;
+    const refPassed    = refResult.metrics.totalDamage <= ld.damageCapForPass;
+
+    const pMark  = playerPassed ? '✓' : '✗';
+    const pColor = playerPassed ? 'var(--success)' : 'var(--danger)';
+    const rMark  = refPassed    ? '✓' : '✗';
+    const rColor = refPassed    ? 'var(--success)' : 'var(--danger)';
+
+    const alsoValidNote = passed
+      ? `<p class="sol-also-valid">Your layout passed too — there are many valid solutions to this level.</p>`
+      : '';
+
+    this.elements.resultsPanel.innerHTML = `
+      <div class="sol-compare">
+        <div class="sol-col">
+          <div class="sol-col-label">Your layout</div>
+          <div class="sol-stat"><span style="color:${pColor}">${pMark}</span> Damage: <strong>${Math.round(metrics.totalDamage)}</strong></div>
+          <div class="sol-stat">Budget: <strong>$${spent}</strong> of $${ld.budget}</div>
+        </div>
+        <div class="sol-divider">vs</div>
+        <div class="sol-col">
+          <div class="sol-col-label">Model solution</div>
+          <div class="sol-stat"><span style="color:${rColor}">${rMark}</span> Damage: <strong>${Math.round(refResult.metrics.totalDamage)}</strong></div>
+          <div class="sol-stat">Budget: <strong>$${refResult.spent}</strong> of $${ld.budget}</div>
+        </div>
+      </div>
+      ${alsoValidNote}
+      <div class="sol-cap-note">Cap: ${ld.damageCapForPass}</div>
+      <div class="sol-explanation">
+        <strong>What makes this layout work:</strong><br>
+        ${ld.solutionExplanation}
+      </div>
+    `;
+  }
+
+  _drawResultsGrid() {
     const gridState = this.game.getGridState();
-    this.drawGrid(gridState);
+    if (this._showModelSol && this._refResult) {
+      // Overlay model solution placements on the base map
+      this._drawModelSolGrid();
+    } else {
+      this.drawGrid(gridState);
+    }
+  }
 
-    // Show result buttons
-    this.elements.runStormBtn.style.display = 'none';
-    this.elements.retryBtn.style.display = 'block';
-    this.elements.nextLevelBtn.style.display = this.game.passed ? 'block' : 'none';
-    this.elements.tileSelector.innerHTML = '';
+  _drawModelSolGrid() {
+    // Show the base map (no player tiles) with model solution placements overlaid
+    const ld  = this.game.levelDef;
+    const sol = ld.referenceSolution || [];
+    const elevGrid = this.game.getElevationGrid();
 
-    // Hide parameters during results
-    document.getElementById('parameters-panel').style.display = 'none';
+    // Build a placements dict from the model solution
+    const modelPlacements = {};
+    for (const pl of sol) modelPlacements[`${pl.x},${pl.y}`] = pl.type;
+
+    // Temporarily swap placements and draw, then restore
+    const savedPlacements = this.game.placements;
+    this.game.placements  = modelPlacements;
+    this.drawGrid(null);  // null gridState → uses getElevationGrid + placements
+    this.game.placements  = savedPlacements;
   }
 
   renderLessonCard(metrics) {
-    let lesson = '';
-    
-    // Pick a lesson based on outcome
+    let lesson;
     if (metrics.totalDamage > 80) {
       lesson = 'Green infrastructure like wetlands and retention ponds absorb and store water, reducing downstream flooding.';
     } else if (metrics.avgTreeHealth < 50) {
@@ -254,149 +412,333 @@ class Renderer {
     } else {
       lesson = 'Excellent work! Smart design using multiple green infrastructure types provides resilient flood defense.';
     }
-
-    this.elements.lessonCard.innerHTML = `
-      <h3>What You Learned</h3>
-      <p>${lesson}</p>
-    `;
+    this.elements.lessonCard.innerHTML = `<h3>What You Learned</h3><p>${lesson}</p>`;
     this.elements.lessonCard.style.display = 'block';
   }
 
-  // ============================================================================
-  // CANVAS DRAWING
-  // ============================================================================
+  // ── CANVAS ──────────────────────────────────────────────────────────────────
+
   drawGrid(gridState) {
-    // Clear canvas
-    this.ctx.fillStyle = '#f5f5f5';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    const ctx   = this.ctx;
+    const cs    = this.cellSize;
+    const W     = this.config.GRID_WIDTH;
+    const H     = this.config.GRID_HEIGHT;
+    const cache = this._rgbCache;
+    const waterScale = this.config.WATER_OPACITY_SCALE;
+    const now   = performance.now();
 
-    const width = this.config.GRID_WIDTH;
-    const height = this.config.GRID_HEIGHT;
+    ctx.fillStyle = '#0a1628';
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // Draw cells
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        // Get tile info from gridState or simulation's starting grid
-        let tileType = 'grass';
-        let water = 0;
-        let elevation = 0;
+    // During briefing/build, get base map for elevation + original tile types
+    const elevGrid = gridState ? null : this.game.getElevationGrid();
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let tileType = 'grass', water = 0, elevation = 0;
 
         if (gridState) {
           const cell = gridState[y][x];
-          tileType = cell.type;
-          water = cell.water;
+          tileType  = cell.type;
+          water     = cell.water;
           elevation = cell.elevation;
         } else {
-          // In briefing/build, show placements
+          const baseCell = elevGrid[y][x];
           const key = `${x},${y}`;
-          if (this.game.placements[key]) {
-            tileType = this.game.placements[key];
-          }
+          // Show player placement, or underlying map tile (river/house/grass)
+          tileType  = this.game.placements[key] || baseCell.type;
+          elevation = baseCell.elevation;
         }
 
-        const tileDef = this.config.TILES[tileType];
+        const rgb = cache[tileType] || cache['grass'];
+        const isRiver = tileType === 'river';
+        const px = x * cs, py = y * cs;
 
-        // Draw tile base color
-        this.ctx.fillStyle = tileDef.color;
-        
-        // Subtle elevation shading
-        const elevationShade = elevation * this.config.ELEVATION_SHADE_INTENSITY;
-        const rgb = this.hexToRgb(tileDef.color);
-        this.ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${1 - elevationShade})`;
-        
-        this.ctx.fillRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize);
+        // Base tile — SVG image if loaded, fall back to flat color
+        const img = this._images[tileType];
+        if (img && img.complete && img.naturalWidth > 0) {
+          ctx.drawImage(img, px, py, cs, cs);
+        } else {
+          ctx.fillStyle = `rgb(${rgb.r},${rgb.g},${rgb.b})`;
+          ctx.fillRect(px, py, cs, cs);
+        }
 
-        // Water overlay (semi-transparent blue, intensity with depth)
+        // Elevation tiers — 3 clearly distinct levels (0 = low/dark, 1 = neutral, 2 = high/bright)
+        if (elevation === 0) {
+          ctx.fillStyle = 'rgba(0,15,50,0.35)';
+          ctx.fillRect(px, py, cs, cs);
+        } else if (elevation === 2) {
+          ctx.fillStyle = 'rgba(255,250,200,0.22)';
+          ctx.fillRect(px, py, cs, cs);
+        }
+
+        // River: animated shimmer so it reads as flowing water
+        if (isRiver) {
+          const shimmer = Math.sin(now * 0.002 + x * 0.7 - y * 0.5) * 0.5 + 0.5;
+          ctx.fillStyle = `rgba(56,189,248,${0.35 + shimmer * 0.35})`;
+          ctx.fillRect(px, py, cs, cs);
+          // Moving highlight band
+          const lineY = py + ((Math.floor(now * 0.04 + x + y * 2) % cs + cs) % cs);
+          ctx.fillStyle = 'rgba(200,240,255,0.45)';
+          ctx.fillRect(px, lineY, cs, 2);
+        }
+
+        // Water overlay during storm
         if (water > 0) {
-          const waterAlpha = Math.min(0.8, water * this.config.WATER_OPACITY_SCALE);
-          this.ctx.fillStyle = `rgba(30, 136, 229, ${waterAlpha})`;
-          this.ctx.fillRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize);
+          ctx.fillStyle = `rgba(30,136,229,${Math.min(0.82, water * waterScale)})`;
+          ctx.fillRect(px, py, cs, cs);
         }
 
         // Grid lines
-        this.ctx.strokeStyle = '#ccc';
-        this.ctx.lineWidth = 0.5;
-        this.ctx.strokeRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize);
+        ctx.strokeStyle = 'rgba(148,163,184,0.10)';
+        ctx.lineWidth   = 0.5;
+        ctx.strokeRect(px, py, cs, cs);
       }
     }
 
-    // Draw hovered cell preview (build phase only)
-    if (this.game.phase === 'build' && this.hoveredCell && this.selectedTile && this.selectedTile !== '__erase__') {
+    // Elevation contour edges — single batched path for all borders between different levels
+    ctx.beginPath();
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const src = gridState ? gridState[y][x] : elevGrid[y][x];
+        const e   = src.elevation;
+        if (x < W - 1) {
+          const re = (gridState ? gridState[y][x+1] : elevGrid[y][x+1]).elevation;
+          if (re !== e) { ctx.moveTo((x+1)*cs, y*cs); ctx.lineTo((x+1)*cs, (y+1)*cs); }
+        }
+        if (y < H - 1) {
+          const be = (gridState ? gridState[y+1][x] : elevGrid[y+1][x]).elevation;
+          if (be !== e) { ctx.moveTo(x*cs, (y+1)*cs); ctx.lineTo((x+1)*cs, (y+1)*cs); }
+        }
+      }
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+    ctx.lineWidth   = 1;
+    ctx.stroke();
+
+    // Highlight most-damaged cells in results phase
+    if (this.game.phase === 'results' && this._topDamagedCells.length > 0) {
+      for (let i = 0; i < this._topDamagedCells.length; i++) {
+        const dc = this._topDamagedCells[i];
+        const alpha = i === 0 ? 1.0 : Math.max(0.4, 1 - i * 0.18);
+        ctx.strokeStyle = `rgba(248,113,113,${alpha})`;
+        ctx.lineWidth   = i === 0 ? 3 : 2;
+        ctx.strokeRect(dc.x * cs + 1.5, dc.y * cs + 1.5, cs - 3, cs - 3);
+      }
+    }
+
+    // Hover preview (build phase) + accent border on any hovered cell
+    if (this.hoveredCell) {
       const { x, y } = this.hoveredCell;
-      const tileDef = this.config.TILES[this.selectedTile];
-      this.ctx.fillStyle = tileDef.color;
-      this.ctx.globalAlpha = 0.5;
-      this.ctx.fillRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize);
-      this.ctx.globalAlpha = 1;
+
+      if (this.game.phase === 'build' && this.selectedTile && this.selectedTile !== '__erase__') {
+        const rgb = cache[this.selectedTile];
+        if (rgb) {
+          ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.55)`;
+          ctx.fillRect(x * cs, y * cs, cs, cs);
+        }
+      }
+
+      // Always draw a subtle accent border on the hovered cell
+      ctx.strokeStyle = 'rgba(56,189,248,0.75)';
+      ctx.lineWidth   = 1.5;
+      ctx.strokeRect(x * cs + 1, y * cs + 1, cs - 2, cs - 2);
+
+      // Update tooltip
+      if (this._mousePos) {
+        const info = this._getCellInfo(this.hoveredCell, gridState, elevGrid);
+        this._updateTooltip(info.tileType, info.elevation, info.water, this._mousePos);
+      }
+    } else {
+      this._hideTooltip();
     }
   }
 
-  hexToRgb(hex) {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16)
-    } : { r: 127, g: 127, b: 127 };
+  // ── HELPERS ─────────────────────────────────────────────────────────────────
+
+  _hexToRgb(hex) {
+    const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return r
+      ? { r: parseInt(r[1], 16), g: parseInt(r[2], 16), b: parseInt(r[3], 16) }
+      : { r: 127, g: 127, b: 127 };
   }
 
-  updateMeter(meterElement, value) {
-    const clampedValue = Math.max(0, Math.min(100, value));
-    // meterElement IS the meter-fill div
-    meterElement.style.width = `${clampedValue}%`;
-    const text = meterElement.querySelector('.meter-text');
-    if (text) {
-      text.textContent = `${Math.round(clampedValue)}`;
-    }
+  updateMeter(meterEl, value) {
+    const v = Math.max(0, Math.min(100, value));
+    meterEl.style.width = `${v}%`;
+    const txt = meterEl.querySelector('.meter-text');
+    if (txt) txt.textContent = Math.round(v);
   }
 
-  /**
-   * Get grid cell from mouse coordinates.
-   */
   getCellFromMouse(mouseX, mouseY) {
-    const rect = this.canvas.getBoundingClientRect();
-    const x = Math.floor((mouseX - rect.left) / this.cellSize);
-    const y = Math.floor((mouseY - rect.top) / this.cellSize);
-    if (x >= 0 && x < this.config.GRID_WIDTH && y >= 0 && y < this.config.GRID_HEIGHT) {
-      return { x, y };
-    }
+    const rect   = this.canvas.getBoundingClientRect();
+    const scaleX = this.canvas.width  / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    const x = Math.floor((mouseX - rect.left) * scaleX / this.cellSize);
+    const y = Math.floor((mouseY - rect.top)  * scaleY / this.cellSize);
+    if (x >= 0 && x < this.config.GRID_WIDTH && y >= 0 && y < this.config.GRID_HEIGHT) return { x, y };
     return null;
   }
 
-  /**
-   * Handle canvas click (place tile).
-   */
   handleCanvasClick(mouseX, mouseY, isRightClick = false) {
     if (this.game.phase !== 'build') return;
-
     const cell = this.getCellFromMouse(mouseX, mouseY);
     if (!cell) return;
 
     if (isRightClick || this.selectedTile === '__erase__') {
-      // Remove tile
-      const result = this.game.removeTile(cell.x, cell.y);
-      if (result.success) {
-        console.log(`Removed tile, got $${result.refund} back`);
-      }
+      this.game.removeTile(cell.x, cell.y);
     } else if (this.selectedTile) {
-      // Place tile
-      const result = this.game.placeTile(cell.x, cell.y, this.selectedTile);
-      if (!result.success) {
-        console.log(`Failed to place: ${result.reason}`);
+      this.game.placeTile(cell.x, cell.y, this.selectedTile);
+    }
+  }
+
+  handleCanvasHover(mouseX, mouseY) {
+    this.hoveredCell = this.getCellFromMouse(mouseX, mouseY);
+    this._mousePos   = { x: mouseX, y: mouseY };
+    if (!this.hoveredCell) this._hideTooltip();
+  }
+
+  // ── TOOLTIP ─────────────────────────────────────────────────────────────────
+
+  _getCellInfo(cell, gridState, elevGrid) {
+    const { x, y } = cell;
+    if (gridState) {
+      const c = gridState[y][x];
+      return { tileType: c.type, elevation: c.elevation, water: c.water };
+    }
+    if (elevGrid) {
+      const base = elevGrid[y][x];
+      const key  = `${x},${y}`;
+      return { tileType: this.game.placements[key] || base.type, elevation: base.elevation, water: 0 };
+    }
+    return { tileType: 'grass', elevation: 0, water: 0 };
+  }
+
+  _updateTooltip(tileType, elevation, water, mousePos) {
+    const el = this.elements.cellTooltip;
+    if (!el) return;
+
+    const tileDef  = this.config.TILES[tileType];
+    const name     = tileDef ? tileDef.name     : tileType;
+    const desc     = tileDef ? tileDef.tooltip  : '';
+
+    const elevLabel = elevation === 0 ? 'Low Ground' : elevation === 2 ? 'High Ground' : 'Mid Ground';
+    const elevColor = elevation === 0 ? '#f87171'    : elevation === 2 ? '#4ade80'     : '#94a3b8';
+
+    let tags = `<span class="tt-tag" style="color:${elevColor}">${elevLabel}</span>`;
+
+    if (tileDef && tileDef.cost > 0) {
+      tags += `<span class="tt-tag" style="color:#fbbf24">$${tileDef.cost}</span>`;
+    }
+    if (tileDef && tileDef.maintenance > 0) {
+      tags += `<span class="tt-tag" style="color:#94a3b8">Maint $${tileDef.maintenance}/lvl</span>`;
+    }
+    if (water > 0.01) {
+      tags += `<span class="tt-tag" style="color:#38bdf8">Water ${water.toFixed(2)}m</span>`;
+    }
+
+    el.innerHTML = `
+      <div class="tt-name">${name}</div>
+      <div class="tt-desc">${desc}</div>
+      <div class="tt-meta">${tags}</div>
+    `;
+
+    // Position near cursor, clamped inside viewport
+    const pad = 14;
+    const tw  = 234;
+    const th  = el.offsetHeight || 90;
+    let tx = mousePos.x + pad;
+    let ty = mousePos.y - th - pad;
+    if (tx + tw > window.innerWidth  - 8) tx = mousePos.x - tw - pad;
+    if (ty < 8)                           ty = mousePos.y + pad;
+
+    el.style.left = `${tx}px`;
+    el.style.top  = `${ty}px`;
+    el.classList.remove('hidden');
+  }
+
+  _hideTooltip() {
+    if (this.elements.cellTooltip) this.elements.cellTooltip.classList.add('hidden');
+  }
+
+  // ── IMAGE PRELOADING ────────────────────────────────────────────────────────
+
+  _preloadImages() {
+    for (const [key, tile] of Object.entries(this.config.TILES)) {
+      if (!tile.image) continue;
+      const img = new Image();
+      img.src = tile.image;
+      this._images[key] = img;
+    }
+  }
+
+  // ── WIN CONDITION HELPERS ────────────────────────────────────────────────────
+
+  _updateObjectiveBar() {
+    const ld  = this.game.levelDef;
+    const cap = document.getElementById('obj-cap');
+    const bud = document.getElementById('obj-budget');
+    if (cap) cap.textContent = ld.damageCapForPass;
+    if (bud) bud.textContent = ld.budget;
+  }
+
+  _updateDamageBar(damage, cap) {
+    const fill   = document.getElementById('damage-meter-fill');
+    const label  = document.getElementById('damage-value-label');
+    const status = document.getElementById('damage-status-text');
+    if (!fill || !label) return;
+
+    const pct  = Math.min(100, (damage / cap) * 100);
+    const over = damage > cap;
+    fill.style.width = `${pct}%`;
+    label.textContent = `${Math.round(damage)} / ${cap} cap`;
+    fill.classList.toggle('over-cap', over);
+    if (status) {
+      if (over) {
+        status.textContent  = 'OVER CAP — losing!';
+        status.style.color  = 'var(--danger)';
+      } else {
+        status.textContent  = `${Math.round(cap - damage)} under cap — winning!`;
+        status.style.color  = 'var(--success)';
       }
     }
   }
 
-  /**
-   * Handle canvas hover (show preview).
-   */
-  handleCanvasHover(mouseX, mouseY) {
-    const cell = this.getCellFromMouse(mouseX, mouseY);
-    this.hoveredCell = cell;
+  _buildFailureAdvice(metrics, topCells) {
+    const ld  = this.game.levelDef;
+    const sim = this.game.simulation;
+    const lines = [];
+
+    if (metrics.totalDamage > ld.damageCapForPass) {
+      const excess = Math.round(metrics.totalDamage - ld.damageCapForPass);
+      lines.push(`Flood damage exceeded the cap by <strong>${excess}</strong>.`);
+
+      // Check if worst damaged cells are near the river
+      let nearRiver = false;
+      if (sim && topCells.length > 0) {
+        outer: for (const dc of topCells.slice(0, 3)) {
+          for (let dy = -3; dy <= 3; dy++) {
+            for (let dx = -3; dx <= 3; dx++) {
+              const c = sim.getCell(dc.x + dx, dc.y + dy);
+              if (c && c.type === 'river') { nearRiver = true; break outer; }
+            }
+          }
+        }
+      }
+
+      if (nearRiver) {
+        lines.push('The worst flooding was near the river. Try placing <strong>wetlands or a levee</strong> between the river and the most-exposed houses, or a <strong>retention pond</strong> just downstream to absorb overflow.');
+      } else {
+        lines.push('Flooding was widespread. Spread more <strong>trees and retention ponds</strong> across the map to soak up rainfall, or use <strong>permeable pavement</strong> to slow runoff before it reaches houses.');
+      }
+
+      if (topCells.length > 0) {
+        lines.push('Red outlines on the map show the cells that took the most damage.');
+      }
+    }
+
+    return lines.join(' ');
   }
 }
 
-// Export for use in other scripts
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = Renderer;
-}
+if (typeof module !== 'undefined' && module.exports) module.exports = Renderer;

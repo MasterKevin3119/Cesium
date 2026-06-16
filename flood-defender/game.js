@@ -30,6 +30,8 @@ class Game {
     this.score = 0;
     this.stars = 0;
     this.passed = false;
+    this._elevationGrid = null;
+    this._refSolResult  = null; // cached reference-solution run
   }
 
   getCurrentLevel() {
@@ -224,6 +226,18 @@ class Game {
   }
 
   /**
+   * Get the base map grid (elevation + tile types before placements).
+   * Used during briefing/build to show rivers, houses, and elevation.
+   */
+  getElevationGrid() {
+    if (!this._elevationGrid) {
+      const tempSim = new Simulation(this.config, this.levelDef);
+      this._elevationGrid = tempSim.grid;
+    }
+    return this._elevationGrid;
+  }
+
+  /**
    * Get the current grid state for rendering (if in storm phase).
    */
   getGridState() {
@@ -247,11 +261,53 @@ class Game {
     return this.simulation.getFinalMetrics();
   }
 
+  getTopDamagedCells(n) {
+    if (!this.simulation) return [];
+    return this.simulation.getTopDamagedCells(n || 5);
+  }
+
   /**
    * Is storm in progress?
    */
   isStormActive() {
     return this.phase === 'storm';
+  }
+
+  /**
+   * Run the level's referenceSolution on a fresh simulation (does NOT touch
+   * the player's grid or score). Returns { metrics, spent } so the Results
+   * screen can show a side-by-side comparison.  Result is cached per level.
+   */
+  runReferenceSolution() {
+    if (this._refSolResult) return this._refSolResult;
+
+    const ld  = this.levelDef;
+    const sol = ld.referenceSolution;
+    if (!sol || sol.length === 0) return null;
+
+    const sim = new Simulation(this.config, ld);
+
+    // Track occupied cells so we don't double-count skipped placements
+    const occupied = new Set();
+    for (let y = 0; y < 32; y++)
+      for (let x = 0; x < 32; x++)
+        if (sim.getCell(x, y).type !== 'grass') occupied.add(`${x},${y}`);
+
+    let spent = 0;
+    for (const pl of sol) {
+      const key = `${pl.x},${pl.y}`;
+      if (occupied.has(key)) continue;
+      const td = this.config.TILES[pl.type];
+      if (!td || !td.placeable) continue;
+      sim.setCell(pl.x, pl.y, pl.type);
+      occupied.add(key);
+      spent += td.cost;
+    }
+
+    while (!sim.isComplete()) sim.tick();
+
+    this._refSolResult = { metrics: sim.getFinalMetrics(), spent };
+    return this._refSolResult;
   }
 
   /**
