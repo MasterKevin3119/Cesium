@@ -65,13 +65,43 @@
     return total;
   }
 
+  /* Terrain height cache: keyed by "lon,lat" rounded to 6dp */
+  var _thCache = {};
+
   /* Returns ellipsoid-relative terrain height at a lon/lat, or 0 if tiles not loaded yet */
   function getTerrainHeight(lon, lat) {
+    var key = lon.toFixed(6) + ',' + lat.toFixed(6);
+    if (_thCache[key] !== undefined) return _thCache[key];
     try {
       var cart = Cesium.Cartographic.fromDegrees(lon, lat);
       var h = viewer && viewer.scene.globe.getHeight(cart);
-      return (typeof h === 'number' && isFinite(h)) ? h : 0;
+      var result = (typeof h === 'number' && isFinite(h)) ? h : 0;
+      if (result !== 0) _thCache[key] = result;
+      return result;
     } catch (e) { return 0; }
+  }
+
+  /* Pre-fetch terrain heights for all house positions using sampleTerrainMostDetailed,
+     then re-render once all heights are known. */
+  function prefetchTerrainHeights(callback) {
+    if (!viewer || !state.houses.length) { if (callback) callback(); return; }
+    try {
+      var cartos = state.houses.map(function (h) {
+        return Cesium.Cartographic.fromDegrees(h.lon, h.lat);
+      });
+      Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartos)
+        .then(function (updated) {
+          updated.forEach(function (c, i) {
+            var h = state.houses[i];
+            var key = h.lon.toFixed(6) + ',' + h.lat.toFixed(6);
+            if (typeof c.height === 'number' && isFinite(c.height)) {
+              _thCache[key] = c.height;
+            }
+          });
+          if (callback) callback();
+        })
+        .catch(function () { if (callback) callback(); });
+    } catch (e) { if (callback) callback(); }
   }
 
   function mapId() {
@@ -161,36 +191,32 @@
     }
     var base = window.FLOOD_SUPABASE_URL.replace(/\/$/, '');
     var anonKey = window.FLOOD_SUPABASE_ANON_KEY;
-    function doPull(auth) {
-      var mid = mapId();
-      var url = base + '/rest/v1/map_scene?map_id=eq.' + encodeURIComponent(mid) + '&select=scene';
-      var token = auth ? auth.token : anonKey;
-      var headers = { apikey: anonKey, Authorization: 'Bearer ' + token };
-      fetch(url, { headers: headers })
-        .then(function (res) { return res.json(); })
-        .then(function (rows) {
-          if (!Array.isArray(rows) || !rows[0] || !rows[0].scene) {
-            if (typeof done === 'function') done(false);
-            return;
-          }
-          var sc = rows[0].scene;
-          state.houses = Array.isArray(sc.houses) ? sc.houses : [];
-          state.roads = Array.isArray(sc.roads) ? sc.roads : [];
-          normalizeScene();
-          saveLocal();
+    // Use anonKey as the Bearer token so all users (not just admins) can read the scene.
+    // Writes still require an admin JWT — see saveRemote().
+    var mid = mapId();
+    var url = base + '/rest/v1/map_scene?map_id=eq.' + encodeURIComponent(mid) + '&select=scene';
+    var headers = { apikey: anonKey, Authorization: 'Bearer ' + anonKey };
+    fetch(url, { headers: headers })
+      .then(function (res) { return res.json(); })
+      .then(function (rows) {
+        if (!Array.isArray(rows) || !rows[0] || !rows[0].scene) {
+          if (typeof done === 'function') done(false);
+          return;
+        }
+        var sc = rows[0].scene;
+        state.houses = Array.isArray(sc.houses) ? sc.houses : [];
+        state.roads = Array.isArray(sc.roads) ? sc.roads : [];
+        normalizeScene();
+        saveLocal();
+        prefetchTerrainHeights(function () {
           render();
           if (typeof done === 'function') done(true);
-        })
-        .catch(function (e) {
-          console.warn('[mapScene] Supabase pull:', e.message || e);
-          if (typeof done === 'function') done(false);
         });
-    }
-    if (window.supabaseAuth && typeof window.supabaseAuth.getAuthForApi === 'function') {
-      window.supabaseAuth.getAuthForApi(doPull);
-    } else {
-      doPull(null);
-    }
+      })
+      .catch(function (e) {
+        console.warn('[mapScene] Supabase pull:', e.message || e);
+        if (typeof done === 'function') done(false);
+      });
   }
 
   // ── Rendering ──────────────────────────────────────────────────────────────
@@ -322,14 +348,18 @@
     if (!viewer) return;
     normalizeScene();
 
+    var anyNeedsRerender = false;
     for (var i = 0; i < state.houses.length; i++) {
       var h = state.houses[i];
       var isSelected = ('mapscene-house-' + h.id) === selectedId;
-      var needsRerender = renderHousePolygons(h, isSelected);
-      if (needsRerender && !render._rerenderPending) {
-        render._rerenderPending = true;
-        setTimeout(function () { render._rerenderPending = false; render(); }, 2000);
-      }
+      if (renderHousePolygons(h, isSelected)) anyNeedsRerender = true;
+    }
+    if (anyNeedsRerender && !render._rerenderPending) {
+      render._rerenderPending = true;
+      prefetchTerrainHeights(function () {
+        render._rerenderPending = false;
+        render();
+      });
     }
 
     for (var r = 0; r < state.roads.length; r++) {
