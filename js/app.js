@@ -48,8 +48,20 @@
     return { west: west, south: south, east: east, north: north };
   }
 
+  function computeStudyMapBounds() {
+    const lonHalf = 0.0062;
+    const latHalf = 0.0060;
+    return {
+      west: FLOOD_CENTER.longitude - lonHalf,
+      south: FLOOD_CENTER.latitude - latHalf,
+      east: FLOOD_CENTER.longitude + lonHalf,
+      north: FLOOD_CENTER.latitude + latHalf,
+    };
+  }
+
   // Global flood entity reference (null when no flood shown)
   let floodEntity = null;
+  let studyMapEntity = null;
   // Flood grid zones (will be generated; default to 32x32 → 1024 zones)
   let floodZones = [];
 
@@ -128,23 +140,66 @@
    * Rain-driven (30/60/100) uses blue tints; “Show 0.5 m / 1 m” uses green (matches legend + gridManager).
    * Keep aligned with js/gridManager.js COLOR_*.
    */
-  const OVERLAY_RAIN_30 = new Cesium.Color(0.88, 0.96, 1.0, 0.5);
-  const OVERLAY_RAIN_60 = new Cesium.Color(0.7, 0.9, 1.0, 0.55);
-  const OVERLAY_RAIN_100 = new Cesium.Color(0.0, 0.25, 0.7, 0.65);
-  const OVERLAY_FLOOD_05 = new Cesium.Color(0.5, 0.95, 0.6, 0.55);
-  const OVERLAY_FLOOD_1 = new Cesium.Color(0.0, 0.6, 0.25, 0.65);
-
   function floodOverlayMaterialForLevel(level, targetDeltaMeters) {
     const d = Number(targetDeltaMeters) || 0;
     if (d <= 0) return Cesium.Color.WHITE.withAlpha(0.05);
-    if (level === '30') return OVERLAY_RAIN_30;
-    if (level === '60') return OVERLAY_RAIN_60;
-    if (level === '100') return OVERLAY_RAIN_100;
-    if (level === '0.5' || level === '0.5m' || level === 0.5) return OVERLAY_FLOOD_05;
-    if (level === '1' || level === '1m' || level === 1) return OVERLAY_FLOOD_1;
-    if (d <= 0.11) return OVERLAY_RAIN_30;
-    if (d <= 0.51) return OVERLAY_RAIN_60;
-    return OVERLAY_RAIN_100;
+    if (level === '30') return new Cesium.Color(0.88, 0.96, 1.0, 0.5);
+    if (level === '60') return new Cesium.Color(0.7, 0.9, 1.0, 0.55);
+    if (level === '100') return new Cesium.Color(0.0, 0.25, 0.7, 0.65);
+    if (level === '0.5' || level === '0.5m' || level === 0.5) return new Cesium.Color(0.5, 0.95, 0.6, 0.55);
+    if (level === '1' || level === '1m' || level === 1) return new Cesium.Color(0.0, 0.6, 0.25, 0.65);
+    if (d <= 0.11) return new Cesium.Color(0.88, 0.96, 1.0, 0.5);
+    if (d <= 0.51) return new Cesium.Color(0.7, 0.9, 1.0, 0.55);
+    return new Cesium.Color(0.0, 0.25, 0.7, 0.65);
+  }
+
+  function renderLocalStudyMap() {
+    if (!viewer || studyMapEntity) return;
+    const b = computeStudyMapBounds();
+    studyMapEntity = viewer.entities.add({
+      name: "Kampung Asahan study map",
+      rectangle: {
+        coordinates: Cesium.Rectangle.fromDegrees(b.west, b.south, b.east, b.north),
+        material: "assets/kampung-asahan.png",
+        height: 1,
+      },
+    });
+    try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+  }
+
+  async function initBaseMap() {
+    if (!viewer || typeof Cesium === "undefined") return;
+    setStartupStatus("Loading basemap imagery...");
+    try {
+      let provider = null;
+      if (Cesium.ArcGisMapServerImageryProvider && Cesium.ArcGisMapServerImageryProvider.fromUrl) {
+        provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
+          "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
+        );
+      }
+      if (!provider) {
+        provider = new Cesium.UrlTemplateImageryProvider({
+          url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+          maximumLevel: 19,
+          credit: "OpenStreetMap",
+        });
+      }
+      try {
+        if (provider.errorEvent && provider.errorEvent.addEventListener) {
+          provider.errorEvent.addEventListener(function (err) {
+            console.warn("Basemap tile error:", err);
+            setStartupStatus("Basemap tile request failed. Check network access to map tile servers.");
+          });
+        }
+      } catch (e) { /* ignore */ }
+      viewer.imageryLayers.removeAll();
+      viewer.imageryLayers.addImageryProvider(provider);
+      setStartupStatus("Viewer ready. Basemap loading...");
+      try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+    } catch (e) {
+      console.warn("Basemap imagery failed:", e);
+      setStartupStatus("Basemap imagery failed. Check network access to ArcGIS/OSM tile servers.");
+    }
   }
 
   /**
@@ -503,6 +558,30 @@
     return true;
   }
 
+  function setInitialView(longitude, latitude, heightMeters) {
+    const lon = parseCoord(longitude, BOUNDS.lon);
+    const lat = parseCoord(latitude, BOUNDS.lat);
+    if (lon === undefined || lat === undefined || !viewer) return false;
+    const height = heightMeters != null
+      ? (clamp(Number(heightMeters), BOUNDS.height.min, BOUNDS.height.max) ?? 50000)
+      : 50000;
+    viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
+      orientation: {
+        heading: 0,
+        pitch: -Cesium.Math.PI_OVER_TWO,
+        roll: 0,
+      },
+    });
+    if (markerEntity) viewer.entities.remove(markerEntity);
+    markerEntity = viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(lon, lat),
+      point: { pixelSize: 12, color: Cesium.Color.CORNFLOWERBLUE },
+    });
+    try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+    return true;
+  }
+
   /**
    * Public API: cesiumFlyTo(latitude, longitude [, heightMeters [, addMarker]]).
    * Called from same window or from parent/iframe via postMessage.
@@ -749,8 +828,9 @@
       ? String(CONFIG.OPEN_METEO_FORECAST).replace(/\/$/, "")
       : "https://api.open-meteo.com/v1/forecast";
 
-  const gravityScratch = new Cesium.Cartesian3();
+  let gravityScratch = null;
   function rainUpdateCallback(p, dt) {
+    if (!gravityScratch) gravityScratch = new Cesium.Cartesian3();
     Cesium.Cartesian3.normalize(p.position, gravityScratch);
     Cesium.Cartesian3.multiplyByScalar(gravityScratch, -8000 * dt, gravityScratch);
     p.velocity = Cesium.Cartesian3.add(p.velocity, gravityScratch, p.velocity);
@@ -1538,6 +1618,46 @@
     if (el) { el.classList.add("loading-overlay--hidden"); el.style.display = "none"; }
   }
 
+  function setStartupStatus(message, force) {
+    const el = document.getElementById("startupStatus");
+    if (!el) return;
+    if (!force && !isDebugMode()) {
+      el.textContent = "";
+      return;
+    }
+    el.textContent = message || "";
+  }
+
+  function showLoadingError(message) {
+    setStartupStatus(message, true);
+    const el = document.getElementById("loadingOverlay");
+    if (!el) return;
+    el.classList.remove("loading-overlay--hidden");
+    el.style.display = "flex";
+    el.innerHTML = '<span>' + message + '</span>';
+  }
+
+  function hasWebGLSupport() {
+    try {
+      const canvas = document.createElement("canvas");
+      return !!(window.WebGLRenderingContext && (
+        canvas.getContext("webgl") || canvas.getContext("experimental-webgl")
+      ));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function afterFirstPaint(fn) {
+    if (typeof requestAnimationFrame !== "function") {
+      setTimeout(fn, 0);
+      return;
+    }
+    requestAnimationFrame(function () {
+      requestAnimationFrame(fn);
+    });
+  }
+
   /** Mini-games only: skip creating the Cesium viewer (no globe / terrain / flood tiles). */
   function isMissionOnlyMode() {
     try {
@@ -1548,28 +1668,43 @@
     }
   }
 
+  function isDebugMode() {
+    try {
+      return new URLSearchParams(window.location.search).get("debug") === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
   async function init() {
+    setStartupStatus("Starting globe...");
+    const debugMode = isDebugMode();
     if (isMissionOnlyMode()) {
       document.documentElement.classList.add("mission-only-mode");
       hideLoading();
+      setStartupStatus("");
       return;
     }
     // Hard safety net — clears the overlay after 10 s no matter what else fails.
-    setTimeout(hideLoading, 10000);
     if (typeof Cesium === "undefined") {
       console.error("Cesium failed to load.");
-      hideLoading();
+      showLoadingError("Could not load the globe. Check your internet connection and refresh.");
       return;
     }
+    if (!hasWebGLSupport()) {
+      showLoadingError("WebGL is disabled or unavailable in this browser.");
+      return;
+    }
+    setStartupStatus("Cesium loaded. Creating viewer...");
     if (typeof CONFIG !== "undefined" && CONFIG.CESIUM_ION_ACCESS_TOKEN) {
       Cesium.Ion.defaultAccessToken = CONFIG.CESIUM_ION_ACCESS_TOKEN;
     }
 
     const viewerOptions = {
-      terrain: Cesium.Terrain.fromWorldTerrain(),
+      terrainProvider: new Cesium.EllipsoidTerrainProvider(),
       timeline: false,
       animation: false,
-      baseLayerPicker: true,
+      baseLayerPicker: false,
       geocoder: false,
       /* 3D globe only: 2D/Columbus modes flatten the scene and fight terrain + flood height + map scene boxes/roads. */
       sceneModePicker: false,
@@ -1577,8 +1712,9 @@
       fullscreenButton: true,
       vrButton: false,
       useDefaultRenderLoop: true,
-      requestRenderMode: true,
+      requestRenderMode: false,
       maximumRenderTimeChange: Infinity,
+      imageryProvider: false,
     };
 
     const bingKey = typeof CONFIG !== "undefined" && CONFIG.BING_MAPS_KEY && String(CONFIG.BING_MAPS_KEY).trim();
@@ -1594,38 +1730,72 @@
       }
     }
 
-    viewer = new Cesium.Viewer("cesiumContainer", viewerOptions);
+    try {
+      viewer = new Cesium.Viewer("cesiumContainer", viewerOptions);
+    } catch (e) {
+      console.error("Cesium viewer failed to initialise:", e);
+      showLoadingError("Could not initialise the globe. Refresh the page or try another browser.");
+      return;
+    }
     window.cesiumViewer = viewer;
+    setStartupStatus("Viewer created. Flying to Kampung Asahan...");
 
     viewer.scene.mode = Cesium.SceneMode.SCENE3D;
-    viewer.scene.globe.depthTestAgainstTerrain = true;
+    viewer.scene.globe.depthTestAgainstTerrain = false;
+    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#355f72");
+    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#102536");
+    viewer.scene.globe.show = true;
+    initBaseMap();
+    try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
+    afterFirstPaint(hideLoading);
+    setTimeout(hideLoading, 1500);
 
-    // Initialize and render the flood zone grid (outline-only)
-    try {
-      try { if (window.floodConfig && typeof window.floodConfig.load === 'function') window.floodConfig.load(); } catch (e) { /* ignore */ }
-      initFloodZones();
-      window.floodZones = floodZones;
-      try { if (window.gridManager && typeof window.gridManager.init === 'function') window.gridManager.init(viewer); } catch (e) { /* ignore */ }
-      renderZoneGrid();
-      sampleTerrainForZones(); // async: updates zone heights from actual terrain once tiles load
-      try {
-        if (window.floodConfig && typeof window.floodConfig.pullFromSupabase === 'function') {
-          window.floodConfig.pullFromSupabase(function (ok) {
-            if (ok) {
-              try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
-            }
-          });
+    if (!debugMode) {
+      // Initialize and render the flood zone grid after the globe has painted.
+      afterFirstPaint(function () {
+        try {
+        try { if (window.floodConfig && typeof window.floodConfig.load === 'function') window.floodConfig.load(); } catch (e) { /* ignore */ }
+        initFloodZones();
+        window.floodZones = floodZones;
+        try { if (window.gridManager && typeof window.gridManager.init === 'function') window.gridManager.init(viewer); } catch (e) { /* ignore */ }
+        renderZoneGrid();
+        sampleTerrainForZones(); // async: updates zone heights from actual terrain once tiles load
+        try {
+          if (window.floodConfig && typeof window.floodConfig.pullFromSupabase === 'function') {
+            window.floodConfig.pullFromSupabase(function (ok) {
+              if (ok) {
+                try { if (window.gridManager && window.gridManager.updateAllVisuals) window.gridManager.updateAllVisuals(); } catch (e) { /* ignore */ }
+              }
+            });
+          }
+        } catch (e) { /* ignore */ }
+        // initialize floodState
+        try { if (window.floodState && typeof window.floodState.init === 'function') window.floodState.init(viewer); } catch (e) { /* ignore */ }
+        // Expose utility to window for external calls if needed
+        window.floodZonesByIds = floodZonesByIds;
+        try { if (window.mapScene && typeof window.mapScene.init === 'function') window.mapScene.init(viewer); } catch (e) { /* ignore */ }
+        // Init adminMode after viewer and gridManager are ready
+        try { if (window.adminMode && typeof window.adminMode.init === 'function') window.adminMode.init(viewer); } catch (e) { /* ignore */ }
+        } catch (e) {
+          console.warn('Flood zone init failed:', e);
         }
-      } catch (e) { /* ignore */ }
-      // initialize floodState
-      try { if (window.floodState && typeof window.floodState.init === 'function') window.floodState.init(viewer); } catch (e) { /* ignore */ }
-      // Expose utility to window for external calls if needed
-      window.floodZonesByIds = floodZonesByIds;
-      try { if (window.mapScene && typeof window.mapScene.init === 'function') window.mapScene.init(viewer); } catch (e) { /* ignore */ }
-      // Init adminMode after viewer and gridManager are ready
-      try { if (window.adminMode && typeof window.adminMode.init === 'function') window.adminMode.init(viewer); } catch (e) { /* ignore */ }
-    } catch (e) {
-      console.warn('Flood zone init failed:', e);
+      });
+    } else {
+      afterFirstPaint(function () {
+        try {
+          try { if (window.floodConfig && typeof window.floodConfig.load === 'function') window.floodConfig.load(); } catch (e) { /* ignore */ }
+          initFloodZones();
+          window.floodZones = floodZones;
+          try { if (window.gridManager && typeof window.gridManager.init === 'function') window.gridManager.init(viewer); } catch (e) { /* ignore */ }
+          renderZoneGrid();
+          try { if (window.floodState && typeof window.floodState.init === 'function') window.floodState.init(viewer); } catch (e) { /* ignore */ }
+          window.floodZonesByIds = floodZonesByIds;
+          setStartupStatus("Debug mode: grid/highlights enabled; weather/polling skipped.");
+        } catch (e) {
+          console.warn('Debug grid init failed:', e);
+          setStartupStatus("Debug mode: map loaded, but grid init failed.");
+        }
+      });
     }
 
     viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
@@ -1635,19 +1805,22 @@
     initTimeSlider();
     // Flood controls in the coords/weather panel
     try { initFloodControls(); } catch (e) { /* ignore */ }
-    try { initViewerSessionSync(); } catch (e) { /* ignore */ }
-    try { startSharedFloodZonesPolling(); } catch (e) { /* ignore */ }
-    setTimeout(function () { try { applyAdminDeepLink(); } catch (e) { /* ignore */ } }, 500);
+    if (!debugMode) {
+      try { initViewerSessionSync(); } catch (e) { /* ignore */ }
+      try { startSharedFloodZonesPolling(); } catch (e) { /* ignore */ }
+      setTimeout(function () { try { applyAdminDeepLink(); } catch (e) { /* ignore */ } }, 500);
+    }
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("lat") == null || urlParams.get("lon") == null) {
       const lat = typeof CONFIG !== "undefined" && CONFIG.defaultLat != null ? CONFIG.defaultLat : 3.3633483;
       const lon = typeof CONFIG !== "undefined" && CONFIG.defaultLon != null ? CONFIG.defaultLon : 101.3449264;
-      flyToCoordinates(lon, lat, DEFAULTS.flyToHeight, true);
+      setInitialView(lon, lat, Math.max(DEFAULTS.flyToHeight || 0, 9000));
+      setStartupStatus("Viewer ready. Loading basemap imagery...");
       const inputLat = document.getElementById("inputLat");
       const inputLon = document.getElementById("inputLon");
       if (inputLat) inputLat.value = lat;
       if (inputLon) inputLon.value = lon;
-      fetchWeatherForCoordinates(lat, lon);
+      if (!debugMode) fetchWeatherForCoordinates(lat, lon);
     }
     initPlacesSearch();
     initCopyUrlButton();
@@ -1660,14 +1833,21 @@
       if (queuedTileCount === 0) hideLoading();
     });
     setTimeout(hideLoading, 3000);
-
     window.cesiumFlyTo = cesiumFlyTo;
     window.CesiumViewer = viewer;
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () { init().catch(function (e) { console.error(e); }); });
+    document.addEventListener("DOMContentLoaded", function () {
+      init().catch(function (e) {
+        console.error(e);
+        showLoadingError("Could not initialise the globe. Refresh the page or try another browser.");
+      });
+    });
   } else {
-    init().catch(function (e) { console.error(e); });
+    init().catch(function (e) {
+      console.error(e);
+      showLoadingError("Could not initialise the globe. Refresh the page or try another browser.");
+    });
   }
 })();

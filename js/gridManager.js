@@ -16,10 +16,24 @@
   let adminShowLevel1 = true;
   // Hide all flood zones while the scene (houses/roads) editor is active
   let sceneEditMode = false;
+  let COLOR_30 = null;
+  let COLOR_60 = null;
+  let COLOR_100 = null;
+  let COLOR_05 = null;
+  let COLOR_1 = null;
+  let COLOR_TEMP = null;
+  let MATERIAL_30 = null;
+  let MATERIAL_60 = null;
+  let MATERIAL_100 = null;
+  let MATERIAL_05 = null;
+  let MATERIAL_1 = null;
+  let MATERIAL_TEMP = null;
+  let MATERIAL_BASE = null;
 
   function init(v) {
     viewer = v;
     tempSelection = [];
+    initCesiumMaterials();
     // ensure floodConfig loaded
     try { if (window.floodConfig && typeof window.floodConfig.load === 'function') window.floodConfig.load(); } catch (e) { /* ignore */ }
     updateAllVisuals();
@@ -194,20 +208,24 @@
     var n = colors.length;
     return new Cesium.Color(r / n, g / n, b / n, Math.min(a / n * 1.5, 0.85));
   }
-  // Rain zones: 0.1 / 0.5 / 1 mm thresholds (blue shades); flood depth: 0.5 m / 1 m (green).
-  const COLOR_30 = new Cesium.Color(0.39, 0.75, 1.0, 0.65);
-  const COLOR_60 = new Cesium.Color(0.1, 0.47, 0.92, 0.75);
-  const COLOR_100 = new Cesium.Color(0.0, 0.14, 0.71, 0.88);
-  const COLOR_05 = new Cesium.Color(0.5, 0.95, 0.6, 0.55);
-  const COLOR_1 = new Cesium.Color(0.0, 0.6, 0.25, 0.65);
-  const COLOR_TEMP = new Cesium.Color(0.96, 0.62, 0.04, 0.35);
-  const MATERIAL_30 = materialProp(COLOR_30);
-  const MATERIAL_60 = materialProp(COLOR_60);
-  const MATERIAL_100 = materialProp(COLOR_100);
-  const MATERIAL_05 = materialProp(COLOR_05);
-  const MATERIAL_1 = materialProp(COLOR_1);
-  const MATERIAL_TEMP = materialProp(COLOR_TEMP);
-  const MATERIAL_BASE = materialProp(Cesium.Color.WHITE.withAlpha(0.05));
+
+  function initCesiumMaterials() {
+    if (MATERIAL_BASE || typeof Cesium === 'undefined') return;
+    // Rain zones: 0.1 / 0.5 / 1 mm thresholds (blue shades); flood depth: 0.5 m / 1 m (green).
+    COLOR_30 = new Cesium.Color(0.39, 0.75, 1.0, 0.65);
+    COLOR_60 = new Cesium.Color(0.1, 0.47, 0.92, 0.75);
+    COLOR_100 = new Cesium.Color(0.0, 0.14, 0.71, 0.88);
+    COLOR_05 = new Cesium.Color(0.5, 0.95, 0.6, 0.55);
+    COLOR_1 = new Cesium.Color(0.0, 0.6, 0.25, 0.65);
+    COLOR_TEMP = new Cesium.Color(0.96, 0.62, 0.04, 0.35);
+    MATERIAL_30 = materialProp(COLOR_30);
+    MATERIAL_60 = materialProp(COLOR_60);
+    MATERIAL_100 = materialProp(COLOR_100);
+    MATERIAL_05 = materialProp(COLOR_05);
+    MATERIAL_1 = materialProp(COLOR_1);
+    MATERIAL_TEMP = materialProp(COLOR_TEMP);
+    MATERIAL_BASE = materialProp(Cesium.Color.WHITE.withAlpha(0.05));
+  }
 
   function setSceneEditMode(on) {
     sceneEditMode = !!on;
