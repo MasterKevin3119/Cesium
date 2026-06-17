@@ -987,11 +987,19 @@
         }
         .decision-making__map-img {
             display: block;
-            max-width: 100%;
-            width: auto;
+            width: 100%;
             height: auto;
             vertical-align: middle;
         }
+        .decision-making__map-video {
+            display: block;
+            max-width: 100%;
+            width: 100%;
+            height: auto;
+            vertical-align: middle;
+        }
+        .decision-making__map-video[hidden] { display: none; }
+        .decision-making__map-img[hidden] { display: none; }
         .decision-making__compass {
             display: flex;
             align-items: center;
@@ -1320,7 +1328,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/supabaseConfig.js?v=202604023"></script>
     <script src="js/supabaseAuth.js?v=202606031"></script>
-    <script src="js/requireAuthGate.js?v=202606031"></script>
+
     <div id="readTheWaterOverlay" class="read-the-water" hidden aria-hidden="true">
         <header class="read-the-water__header">
             <h1 class="read-the-water__title">Read The Water</h1>
@@ -1367,6 +1375,7 @@
         <div class="decision-making__main">
             <div class="decision-making__map">
                 <img class="decision-making__map-img" src="" alt="" />
+                <video class="decision-making__map-video" hidden muted autoplay loop playsinline></video>
             </div>
             <div class="decision-making__compass" aria-label="Choose primary flow direction"></div>
         </div>
@@ -1657,7 +1666,7 @@
     <script src="js/floodState.js?v=202604023"></script>
     <script src="js/adminMode.js?v=202604075"></script>
     <script src="js/mapScene.js?v=202604143"></script>
-    <script src="js/app.js?v=202606031"></script>
+    <script src="js/app.js?v=202606173"></script>
     <script src="js/readTheWater.js?v=202604023"></script>
     <script src="js/identifyFlood.js?v=202604023"></script>
     <script src="js/decisionMaking.js?v=202604023"></script>

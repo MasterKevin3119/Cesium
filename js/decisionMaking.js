@@ -61,6 +61,7 @@
       question:
         "Based on the flood simulation shown, in which direction is the floodwater primarily flowing?",
       mapFile: "1.png",
+      mapVideo: "Mission 3 question 1.mp4",
       correctDirection: "south-east",
       correct: {
         title: "Good Job",
@@ -225,6 +226,7 @@
     var titleEl = root.querySelector(".decision-making__title");
     var qEl = root.querySelector(".decision-making__question");
     var mapImg = root.querySelector(".decision-making__map-img");
+    var mapVideo = root.querySelector(".decision-making__map-video");
     var compassEl = root.querySelector(".decision-making__compass");
     var modal = root.querySelector(".decision-making__modal");
     var modalTitle = root.querySelector(".decision-making__modal-title");
@@ -373,9 +375,19 @@
     function updateStepContent() {
       var step = getStep();
       if (qEl) qEl.textContent = step.question;
-      if (mapImg) {
-        mapImg.src = ASSETS_BASE + step.mapFile;
-        mapImg.alt = "Flood simulation map for scenario " + step.scenarioId;
+      if (step.mapVideo && mapVideo) {
+        if (mapImg) mapImg.hidden = true;
+        mapVideo.hidden = false;
+        mapVideo.src = ASSETS_BASE + step.mapVideo;
+        mapVideo.load();
+        mapVideo.play().catch(function () {});
+      } else {
+        if (mapVideo) { mapVideo.hidden = true; mapVideo.src = ""; }
+        if (mapImg) {
+          mapImg.hidden = false;
+          mapImg.src = ASSETS_BASE + step.mapFile;
+          mapImg.alt = "Flood simulation map for scenario " + step.scenarioId;
+        }
       }
     }
 

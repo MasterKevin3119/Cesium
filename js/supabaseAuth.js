@@ -76,15 +76,16 @@
       cachedToken = session.access_token || null;
       cachedUser = userFromSupabaseUser(session.user);
       var uid = session.user.id;
-      function finish() {
-        cb(cachedToken ? { token: cachedToken, userId: uid } : null);
-      }
+      // Respond immediately from local session — do not wait for getUser() network call.
+      cb(cachedToken ? { token: cachedToken, userId: uid } : null);
+      // Refresh metadata cache silently — do NOT fire authCallback here or it
+      // triggers onSessionChange → getAuthForApi → getUser → authCallback → loop.
       if (c.auth.getUser) {
         c.auth.getUser().then(function (ur) {
-          if (ur && !ur.error && ur.data && ur.data.user) cachedUser = userFromSupabaseUser(ur.data.user);
-        }).catch(function () { /* keep session-based user */ }).then(finish);
-      } else {
-        finish();
+          if (ur && !ur.error && ur.data && ur.data.user) {
+            cachedUser = userFromSupabaseUser(ur.data.user);
+          }
+        }).catch(function () {});
       }
     }).catch(function () {
       cachedUser = null;

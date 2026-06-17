@@ -1535,7 +1535,7 @@
 
   function hideLoading() {
     const el = document.getElementById("loadingOverlay");
-    if (el) el.classList.add("loading-overlay--hidden");
+    if (el) { el.classList.add("loading-overlay--hidden"); el.style.display = "none"; }
   }
 
   /** Mini-games only: skip creating the Cesium viewer (no globe / terrain / flood tiles). */
@@ -1554,8 +1554,11 @@
       hideLoading();
       return;
     }
+    // Hard safety net — clears the overlay after 10 s no matter what else fails.
+    setTimeout(hideLoading, 10000);
     if (typeof Cesium === "undefined") {
       console.error("Cesium failed to load.");
+      hideLoading();
       return;
     }
     if (typeof CONFIG !== "undefined" && CONFIG.CESIUM_ION_ACCESS_TOKEN) {
