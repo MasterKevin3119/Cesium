@@ -167,15 +167,60 @@
     try { viewer.scene.requestRender(); } catch (e) { /* ignore */ }
   }
 
+  function withTimeout(promise, ms, label) {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      var timer = setTimeout(function () {
+        if (done) return;
+        done = true;
+        reject(new Error((label || "Operation") + " timed out"));
+      }, ms);
+      promise.then(function (value) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(value);
+      }).catch(function (err) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+  }
+
   async function initBaseMap() {
     if (!viewer || typeof Cesium === "undefined") return;
     setStartupStatus("Loading basemap imagery...");
     try {
       let provider = null;
-      if (Cesium.ArcGisMapServerImageryProvider && Cesium.ArcGisMapServerImageryProvider.fromUrl) {
-        provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
-          "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
-        );
+      const bingKey = typeof CONFIG !== "undefined" && CONFIG.BING_MAPS_KEY && String(CONFIG.BING_MAPS_KEY).trim();
+      if (bingKey) {
+        try {
+          provider = await withTimeout(
+            Cesium.BingMapsImageryProvider.fromUrl("https://dev.virtualearth.net", {
+              key: bingKey,
+              mapStyle: Cesium.BingMapsStyle.AERIAL_WITH_LABELS,
+            }),
+            5000,
+            "Bing Maps"
+          );
+        } catch (e) {
+          console.warn("Bing Maps failed, trying fallback basemap:", e);
+        }
+      }
+      if (!provider && Cesium.ArcGisMapServerImageryProvider && Cesium.ArcGisMapServerImageryProvider.fromUrl) {
+        try {
+          provider = await withTimeout(
+            Cesium.ArcGisMapServerImageryProvider.fromUrl(
+              "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
+            ),
+            5000,
+            "ArcGIS imagery"
+          );
+        } catch (e) {
+          console.warn("ArcGIS imagery failed, trying OpenStreetMap:", e);
+        }
       }
       if (!provider) {
         provider = new Cesium.UrlTemplateImageryProvider({
@@ -1679,6 +1724,7 @@
   async function init() {
     setStartupStatus("Starting globe...");
     const debugMode = isDebugMode();
+    setTimeout(hideLoading, 8000);
     if (isMissionOnlyMode()) {
       document.documentElement.classList.add("mission-only-mode");
       hideLoading();
@@ -1717,19 +1763,6 @@
       imageryProvider: false,
     };
 
-    const bingKey = typeof CONFIG !== "undefined" && CONFIG.BING_MAPS_KEY && String(CONFIG.BING_MAPS_KEY).trim();
-    if (bingKey) {
-      try {
-        const bing = await Cesium.BingMapsImageryProvider.fromUrl("https://dev.virtualearth.net", {
-          key: bingKey,
-          mapStyle: Cesium.BingMapsStyle.AERIAL_WITH_LABELS,
-        });
-        viewerOptions.imageryProvider = bing;
-      } catch (e) {
-        console.warn("Bing Maps failed, using default imagery:", e);
-      }
-    }
-
     try {
       viewer = new Cesium.Viewer("cesiumContainer", viewerOptions);
     } catch (e) {
@@ -1752,7 +1785,7 @@
 
     if (!debugMode) {
       // Initialize and render the flood zone grid after the globe has painted.
-      afterFirstPaint(function () {
+      setTimeout(function () {
         try {
         try { if (window.floodConfig && typeof window.floodConfig.load === 'function') window.floodConfig.load(); } catch (e) { /* ignore */ }
         initFloodZones();
@@ -1779,9 +1812,9 @@
         } catch (e) {
           console.warn('Flood zone init failed:', e);
         }
-      });
+      }, 500);
     } else {
-      afterFirstPaint(function () {
+      setTimeout(function () {
         try {
           try { if (window.floodConfig && typeof window.floodConfig.load === 'function') window.floodConfig.load(); } catch (e) { /* ignore */ }
           initFloodZones();
@@ -1795,7 +1828,7 @@
           console.warn('Debug grid init failed:', e);
           setStartupStatus("Debug mode: map loaded, but grid init failed.");
         }
-      });
+      }, 500);
     }
 
     viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
