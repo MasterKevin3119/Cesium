@@ -113,9 +113,17 @@ class Simulation {
       }
     }
 
+    // River channel sits at elevation 0; surrounding terrain slopes up with
+    // distance from the river so water naturally drains toward the channel.
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
-        this.grid[y][x].elevation = Math.floor(rng() * 3);
+        if (this.grid[y][x].type === 'river') {
+          this.grid[y][x].elevation = 0;
+          continue;
+        }
+        const dist = Math.abs(x - riverX);
+        const slope = dist >= 10 ? 2 : dist >= 5 ? 1 : 0;
+        this.grid[y][x].elevation = Math.min(2, slope + Math.floor(rng() * 2));
       }
     }
   }
@@ -231,61 +239,76 @@ class Simulation {
 
   flow(x, y) {
     const cell = this.grid[y][x];
-    if (cell.water <= 0.01) return; // Negligible water, don't flow
+    const waterIn = cell.water; // read-only snapshot — never mutate this.grid during flow
 
-    const head = cell.elevation + cell.water;
+    // Even negligible water must be forwarded so nextGrid is complete (mass conserved)
+    if (waterIn <= 0.01) {
+      this.nextGrid[y][x].water += waterIn;
+      return;
+    }
 
-    // Orthogonal neighbors: [up, down, left, right]
-    const neighbors = [
-      { dx: 0, dy: -1 }, // up
-      { dx: 0, dy: 1 },  // down
-      { dx: -1, dy: 0 }, // left
-      { dx: 1, dy: 0 }   // right
+    const head = cell.elevation + waterIn;
+    const offsets = [
+      { dx:  0, dy: -1 }, // up
+      { dx:  0, dy:  1 }, // down
+      { dx: -1, dy:  0 }, // left
+      { dx:  1, dy:  0 }, // right
     ];
 
-    for (const { dx, dy } of neighbors) {
+    let totalDesired = 0;
+    const flowList = [];
+
+    for (const { dx, dy } of offsets) {
       const nx = x + dx;
       const ny = y + dy;
-      if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
+
+      // ── Boundary exits ──────────────────────────────────────────────────────
+      // Top edge is the river entry point — no drain there.
+      // All other edges act as open outfalls (virtual sea level: elev 0, water 0).
+      if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) {
+        if (ny < 0) continue; // top edge: sealed
+        // head of virtual outfall cell = 0; flow toward it if head > 0
+        const desired = Math.min(waterIn * 0.5, head * 0.3);
+        if (desired > 0) { flowList.push({ nx: -1, ny: -1, desired }); totalDesired += desired; }
+        continue;
+      }
 
       const neighbor = this.grid[ny][nx];
       const neighborHead = neighbor.elevation + neighbor.water;
 
-      // Check if a levee blocks flow
-      if (this.isLeveeBetween(x, y, nx, ny, head)) {
-        continue; // Levee blocks unless overtopped
-      }
-
-      // Only flow to lower head
+      if (this.isLeveeBetween(x, y, nx, ny)) continue;
       if (neighborHead >= head) continue;
 
-      const headDiff = head - neighborHead;
-      // Flow proportional to head difference, but capped to avoid overshoot
-      const flowAmount = Math.min(cell.water * 0.5, headDiff * 0.3);
-
-      cell.water -= flowAmount;
-      this.nextGrid[ny][nx].water += flowAmount;
+      const desired = Math.min(waterIn * 0.5, (head - neighborHead) * 0.3);
+      if (desired > 0) { flowList.push({ nx, ny, desired }); totalDesired += desired; }
     }
 
-    // Copy remaining water to nextGrid
-    this.nextGrid[y][x].water += cell.water;
+    // ── Proportional scaling ─────────────────────────────────────────────────
+    // If the sum of all desired outflows exceeds available water, scale every
+    // outflow down by the same factor so no water is created.
+    const scale = totalDesired > waterIn ? waterIn / totalDesired : 1.0;
+    let totalSent = 0;
+
+    for (const f of flowList) {
+      const amt = f.desired * scale;
+      totalSent += amt;
+      if (f.nx >= 0) this.nextGrid[f.ny][f.nx].water += amt;
+      // nx === -1: water exits the map through a boundary — intentional drain
+    }
+
+    // Remaining water stays on this cell
+    this.nextGrid[y][x].water += waterIn - totalSent;
   }
 
-  isLeveeBetween(x, y, nx, ny, waterHead) {
-    // Check if a levee on either side of the edge blocks flow
-    const cell = this.grid[y][x];
+  isLeveeBetween(x, y, nx, ny) {
+    const cell     = this.grid[y][x];
     const neighbor = this.grid[ny][nx];
+    const crestDepth = this.config.SIM.leveHeight; // water DEPTH needed to overtop (not absolute head)
 
-    // If either cell is a levee, check overtopping
-    const leveeHeight = this.config.SIM.leveHeight;
-    if (cell.type === 'levee') {
-      if (waterHead <= leveeHeight) return true; // Levee blocks
-    }
-    if (neighbor.type === 'levee') {
-      const neighborHead = neighbor.elevation + neighbor.water;
-      if (neighborHead <= leveeHeight) return true;
-    }
-
+    // A levee on the destination side blocks inflow unless source water is deep enough to overtop.
+    if (neighbor.type === 'levee') return cell.water <= crestDepth;
+    // A levee on the source side blocks outflow until water depth exceeds the crest.
+    if (cell.type     === 'levee') return cell.water <= crestDepth;
     return false;
   }
 
