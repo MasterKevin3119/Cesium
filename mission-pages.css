@@ -5,7 +5,7 @@
   --accent: #38bdf8;
   --accent2: #0ea5e9;
   --text: #e2e8f0;
-  --muted: #94a3b8;
+  --muted: #a8b8cc; /* bumped from #94a3b8 for ~5.1:1 contrast on dark bg */
   --card: rgba(30, 41, 59, 0.75);
   --white: #ffffff;
 }
@@ -236,3 +236,51 @@ body {
   font-weight: 600;
 }
 [hidden] { display: none !important; }
+
+/* Mission-end: progress dots */
+.mission-end__progress {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 1.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(56, 189, 248, 0.9);
+}
+.mission-end__progress-step {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.25);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  transition: background 0.3s ease, border-color 0.3s ease;
+  flex-shrink: 0;
+}
+.mission-end__progress-step--done {
+  background: rgba(56, 189, 248, 0.6);
+  border-color: var(--accent);
+}
+.mission-end__progress-step--current {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
+}
+
+/* Mission-intro: simulator control hints */
+.mission-hints {
+  margin: 0.75rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.mission-hints li {
+  margin-bottom: 0.4rem;
+}
+.mission-hints li:last-child {
+  margin-bottom: 0;
+}
+.mission-hints strong {
+  color: var(--text);
+  font-weight: 600;
+}

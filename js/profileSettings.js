@@ -127,6 +127,16 @@
       });
     }
 
+    var profileSignOut = document.getElementById('profileSignOut');
+    if (profileSignOut) {
+      profileSignOut.addEventListener('click', function () {
+        closeProfileModal();
+        if (window.supabaseAuth && typeof window.supabaseAuth.signOut === 'function') {
+          window.supabaseAuth.signOut();
+        }
+      });
+    }
+
     var savePin = document.getElementById('profileSavePin');
     if (savePin) {
       savePin.addEventListener('click', function () {

@@ -12,10 +12,6 @@
   <link rel="stylesheet" href="mission-pages.css" />
 </head>
 <body>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabaseConfig.js?v=202604023"></script>
-  <script src="js/supabaseAuth.js?v=202606031"></script>
-  <script src="js/requireAuthGate.js?v=202606031"></script>
   <div class="mission-shell">
     <header class="mission-shell__header">
       <a class="logo" href="index.html"><img src="logo.svg" alt="" class="logo-icon" aria-hidden="true">Flood Quest</a>
@@ -26,8 +22,12 @@
       </nav>
     </header>
     <main class="mission-shell__main">
-      <span class="mission-shell__badge">Complete</span>
-      <h1 class="mission-shell__title mission-end__title" id="endTitle">Mission complete</h1>
+      <hgroup>
+        <span class="mission-shell__badge">Complete</span>
+        <h1 class="mission-shell__title mission-end__title" id="endTitle">Mission complete</h1>
+      </hgroup>
+      <!-- Progress dots — populated by JS -->
+      <div class="mission-end__progress" id="missionProgressTracker" aria-live="polite"></div>
       <p class="mission-end__sub" id="endSub"></p>
       <div class="mission-shell__card mission-end-summary" id="missionFirstTrySummary" hidden aria-live="polite"></div>
       <div class="mission-actions">
@@ -36,75 +36,137 @@
       </div>
     </main>
   </div>
+
+  <!-- Confetti burst — plays once on load, then removes itself -->
   <script>
     (function () {
-      var ORDER = [
-        { id: "read-water", label: "Read The Water", intro: "mission-read-water.html", play: "viewer.html?mission=read-water" },
-        { id: "flooded-areas", label: "Identify Flooded Areas", intro: "mission-flooded-areas.html", play: "viewer.html?mission=flooded-areas" },
-        { id: "decision-making", label: "Flood Awareness & Decision Making", intro: "mission-decision-making.html", play: "viewer.html?mission=decision-making" }
-      ];
-      var params = new URLSearchParams(window.location.search);
-      var completed = params.get("completed") || "";
-      var idx = ORDER.findIndex(function (m) { return m.id === completed; });
+      const canvas = document.createElement('canvas');
+      canvas.setAttribute('aria-hidden', 'true');
+      canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
+      document.body.appendChild(canvas);
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      const colors = ['#38bdf8', '#0ea5e9', '#7dd3fc', '#e2e8f0', '#86efac', '#fbbf24', '#a78bfa'];
+      const pieces = Array.from({ length: 80 }, function () {
+        return {
+          x: Math.random() * canvas.width,
+          y: -10 - Math.random() * 200,
+          w: 6 + Math.random() * 8,
+          h: 3 + Math.random() * 5,
+          r: Math.random() * Math.PI * 2,
+          vx: (Math.random() - 0.5) * 3,
+          vy: 1.5 + Math.random() * 3.5,
+          vr: (Math.random() - 0.5) * 0.12,
+          color: colors[Math.floor(Math.random() * colors.length)],
+        };
+      });
+      let frame = 0;
+      const maxFrames = 160;
+      function animate() {
+        if (frame > maxFrames) { canvas.remove(); return; }
+        frame++;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = frame < 110 ? 1 : Math.max(0, 1 - (frame - 110) / 50);
+        pieces.forEach(function (p) {
+          p.x += p.vx; p.y += p.vy; p.r += p.vr; p.vy += 0.07;
+          ctx.save();
+          ctx.translate(p.x + p.w / 2, p.y + p.h / 2);
+          ctx.rotate(p.r);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          ctx.restore();
+        });
+        requestAnimationFrame(animate);
+      }
+      animate();
+    })();
+  </script>
 
-      var titleEl = document.getElementById("endTitle");
-      var subEl = document.getElementById("endSub");
-      var btnNext = document.getElementById("btnNextMission");
-      var btnHub = document.getElementById("btnMissionHub");
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabaseConfig.js?v=20260624"></script>
+  <script src="js/supabaseAuth.js?v=20260624"></script>
+  <script src="js/requireAuthGate.js?v=20260624"></script>
+  <script src="js/missionOrder.js?v=20260624"></script>
+  <script>
+    (function () {
+      const ORDER = window.MISSION_ORDER || [];
 
-      if (titleEl) titleEl.textContent = "Mission complete";
+      const TAKEAWAYS = {
+        'read-water':
+          'Visual depth recognition is your first warning system. Knowing what 0.5 m and 1.0 m look like in the real world means you can act before the water reaches a dangerous level.',
+        'flooded-areas':
+          'Floodwater doesn\'t spread evenly — low ground and drainage paths fill first. Knowing which zones flood early gives you time to plan escape routes before they\'re cut off.',
+        'decision-making':
+          'In a real flood the moment to decide is before routes are gone. You\'ve practised reading flow and choosing safe paths — that instinct is what keeps you and others safe when it counts.',
+      };
+
+      const params = new URLSearchParams(window.location.search);
+      const completed = params.get('completed') || '';
+      const idx = ORDER.findIndex(function (m) { return m.id === completed; });
+
+      const titleEl = document.getElementById('endTitle');
+      const subEl = document.getElementById('endSub');
+      const btnNext = document.getElementById('btnNextMission');
+      const btnHub = document.getElementById('btnMissionHub');
+      const progressEl = document.getElementById('missionProgressTracker');
+
+      if (titleEl) titleEl.textContent = 'Mission complete';
 
       if (idx < 0) {
-        if (subEl) subEl.textContent = "Thanks for playing. Return to the mission list when you are ready.";
+        if (subEl) subEl.textContent = 'Thanks for playing. Return to the mission list when you are ready.';
         if (btnNext) btnNext.hidden = true;
       } else {
-        var mission = ORDER[idx];
-        if (subEl) {
-          subEl.textContent =
-            "You finished " + mission.label + ". Go to the next mission or return to the mission list.";
-        }
-        var next = ORDER[idx + 1];
+        const mission = ORDER[idx];
+        const takeaway = TAKEAWAYS[completed] || ('You finished ' + mission.label + '. Go to the next mission or return to the mission list.');
+        if (subEl) subEl.textContent = takeaway;
+
+        const next = ORDER[idx + 1];
         if (btnNext) {
-          if (next) {
-            btnNext.textContent = "Next mission";
-            btnNext.href = next.intro;
-          } else {
-            btnNext.textContent = "Play again";
-            btnNext.href = mission.intro;
-          }
+          btnNext.textContent = next ? 'Next mission' : 'Play again';
+          btnNext.href = next ? next.intro : mission.intro;
+        }
+
+        if (progressEl) {
+          const dots = ORDER.map(function (m, i) {
+            let cls = 'mission-end__progress-step';
+            if (i < idx) cls += ' mission-end__progress-step--done';
+            if (i === idx) cls += ' mission-end__progress-step--current';
+            return '<span class="' + cls + '" aria-hidden="true"></span>';
+          }).join('');
+          progressEl.innerHTML = dots + '<span>' + (idx + 1) + ' / ' + ORDER.length + ' missions</span>';
         }
       }
 
       if (btnHub) {
-        btnHub.textContent = "Back to missions";
-        btnHub.href = "index.html#mission";
+        btnHub.textContent = 'Back to missions';
+        btnHub.href = 'index.html#mission';
       }
 
-      var missionLabel = idx >= 0 && ORDER[idx] ? ORDER[idx].label : "";
       window.__MISSION_END_COMPLETED__ = completed;
-      window.__MISSION_END_LABEL__ = missionLabel;
+      window.__MISSION_END_LABEL__ = idx >= 0 && ORDER[idx] ? ORDER[idx].label : '';
     })();
   </script>
-  <script src="js/missionEndSummary.js?v=202604081"></script>
+  <script src="js/missionEndSummary.js?v=20260624"></script>
   <script>
     (function () {
-      var id = window.__MISSION_END_COMPLETED__ || "";
-      var label = window.__MISSION_END_LABEL__ || "";
-      if (window.missionEndSummary && typeof window.missionEndSummary.run === "function") {
+      const id = window.__MISSION_END_COMPLETED__ || '';
+      const label = window.__MISSION_END_LABEL__ || '';
+      if (window.missionEndSummary && typeof window.missionEndSummary.run === 'function') {
         window.missionEndSummary.run(id, label);
       }
     })();
   </script>
-  <script src="js/userAvatar.js?v=202604023"></script>
+  <script src="js/userAvatar.js?v=20260624"></script>
   <script>
     (function () {
       function go() {
-        var slot = document.getElementById("missionPlayerSlot");
-        if (slot && window.userAvatar && typeof window.userAvatar.mountInSlot === "function") {
+        const slot = document.getElementById('missionPlayerSlot');
+        if (slot && window.userAvatar && typeof window.userAvatar.mountInSlot === 'function') {
           window.userAvatar.mountInSlot(slot, { size: 44 });
         }
       }
-      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go);
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
       else go();
     })();
   </script>

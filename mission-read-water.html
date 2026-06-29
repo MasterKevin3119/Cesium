@@ -12,10 +12,6 @@
   <link rel="stylesheet" href="mission-pages.css" />
 </head>
 <body>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabaseConfig.js?v=202604023"></script>
-  <script src="js/supabaseAuth.js?v=202606031"></script>
-  <script src="js/requireAuthGate.js?v=202606031"></script>
   <div class="mission-shell">
     <header class="mission-shell__header">
       <a class="logo" href="index.html"><img src="logo.svg" alt="" class="logo-icon" aria-hidden="true">Flood Quest</a>
@@ -26,13 +22,20 @@
       </nav>
     </header>
     <main class="mission-shell__main">
-      <span class="mission-shell__badge">Mini-game</span>
-      <h1 class="mission-shell__title">Read The Water</h1>
-      <p class="mission-shell__lead">Practice recognising flood depth from scenes before you start.</p>
+      <hgroup>
+        <span class="mission-shell__badge">Mini-game</span>
+        <h1 class="mission-shell__title">Read The Water</h1>
+      </hgroup>
+      <p class="mission-shell__lead">Practise recognising flood depth from scenes before you start.</p>
       <div class="mission-shell__card">
         <p>
           Learn what <strong style="color: var(--text);">0.5 m</strong> and <strong style="color: var(--text);">1.0 m</strong> flood depths look like through quick visual challenges. Options are shuffled each time you play.
         </p>
+        <ul class="mission-hints">
+          <li>Open the <strong>flood panel</strong> on the left side of the simulator — the depth question appears there</li>
+          <li>Use the <strong>depth toggle</strong> to switch between 0.5 m and 1.0 m flood views on the terrain</li>
+          <li>Select your answer from the panel and submit before the next question loads</li>
+        </ul>
       </div>
       <div class="mission-actions">
         <a class="btn btn-primary" href="viewer.html?mission=read-water">Play</a>
@@ -40,16 +43,21 @@
       </div>
     </main>
   </div>
-  <script src="js/userAvatar.js?v=202604023"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabaseConfig.js?v=20260624"></script>
+  <script src="js/supabaseAuth.js?v=20260624"></script>
+  <script src="js/requireAuthGate.js?v=20260624"></script>
+  <script src="js/userAvatar.js?v=20260624"></script>
   <script>
     (function () {
       function go() {
-        var slot = document.getElementById("missionPlayerSlot");
-        if (slot && window.userAvatar && typeof window.userAvatar.mountInSlot === "function") {
+        const slot = document.getElementById('missionPlayerSlot');
+        if (slot && window.userAvatar && typeof window.userAvatar.mountInSlot === 'function') {
           window.userAvatar.mountInSlot(slot, { size: 44 });
         }
       }
-      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go);
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
       else go();
     })();
   </script>

@@ -34,6 +34,10 @@ class Game {
     this.maintenanceCost = 0;
     this.placements = {};
 
+    // Undo / redo stacks (build phase only)
+    this._undoHistory = [];
+    this._redoHistory = [];
+
     // Simulation
     this.simulation = null;
 
@@ -44,6 +48,19 @@ class Game {
     this.passed = false;
     this._elevationGrid = null;
     this._refSolResult  = null;
+
+    // Adaptive difficulty flags (Feature 3)
+    this._adaptiveBoosted = false;
+    this._suggestEasy     = false;
+    this._applyAdaptiveDifficulty();
+
+    // Unlock sandbox (Feature 8) after any 2 regular levels are unlocked
+    if (this.unlockedLevels.length >= 2) {
+      const sandboxIdx = this.config.LEVELS.findIndex(l => l.isSandbox);
+      if (sandboxIdx >= 0 && !this.unlockedLevels.includes(sandboxIdx)) {
+        this.unlockedLevels.push(sandboxIdx);
+      }
+    }
   }
 
   getCurrentLevel() {
@@ -53,6 +70,45 @@ class Game {
   getAvailableTiles() {
     return this.levelDef.availableTiles || [];
   }
+
+  // ── Undo / Redo ──────────────────────────────────────────────────────────────
+
+  _snapshotState() {
+    return {
+      placements:      Object.assign({}, this.placements),
+      budgetRemaining: this.budgetRemaining,
+      maintenanceCost: this.maintenanceCost,
+    };
+  }
+
+  _pushUndo() {
+    this._undoHistory.push(this._snapshotState());
+    if (this._undoHistory.length > 20) this._undoHistory.shift();
+    this._redoHistory = [];
+  }
+
+  undo() {
+    if (this.phase !== 'build' || this._undoHistory.length === 0) return false;
+    this._redoHistory.push(this._snapshotState());
+    const s = this._undoHistory.pop();
+    this.placements      = s.placements;
+    this.budgetRemaining = s.budgetRemaining;
+    this.maintenanceCost = s.maintenanceCost;
+    return true;
+  }
+
+  redo() {
+    if (this.phase !== 'build' || this._redoHistory.length === 0) return false;
+    this._undoHistory.push(this._snapshotState());
+    const s = this._redoHistory.pop();
+    this.placements      = s.placements;
+    this.budgetRemaining = s.budgetRemaining;
+    this.maintenanceCost = s.maintenanceCost;
+    return true;
+  }
+
+  canUndo() { return this.phase === 'build' && this._undoHistory.length > 0; }
+  canRedo() { return this.phase === 'build' && this._redoHistory.length > 0; }
 
   /**
    * Try to place a tile at (x, y). Returns { success, reason }.
@@ -79,6 +135,8 @@ class Game {
     const newMaintenance = this.maintenanceCost + tileDef.maintenance;
     // For now, allow maintenance; it's deducted at results
 
+    this._pushUndo();
+
     // Place it
     this.placements[key] = tileType;
     this.budgetRemaining -= tileDef.cost;
@@ -96,6 +154,8 @@ class Game {
     if (!tileType) {
       return { success: false, reason: 'No tile here' };
     }
+
+    this._pushUndo();
 
     const tileDef = this.config.TILES[tileType];
     const refund = Math.round(tileDef.cost * refundFraction);
@@ -119,11 +179,21 @@ class Game {
    */
   startStorm() {
     this.simulation = new Simulation(this.config, this.effectiveLevelDef);
+    this.simulation.enableReplayRecording();
+    this.simulation.enableHydrologyLog();
     for (const [key, tileType] of Object.entries(this.placements)) {
       const [x, y] = key.split(',').map(Number);
       this.simulation.setCell(x, y, tileType);
     }
     this.phase = 'storm';
+  }
+
+  getReplayFrames() {
+    return this.simulation ? this.simulation.getReplayFrames() : [];
+  }
+
+  getHydrologyLog() {
+    return this.simulation ? this.simulation.getHydrologyLog() : [];
   }
 
   /**
@@ -149,6 +219,14 @@ class Game {
    * Compute final score and star rating.
    */
   computeScore() {
+    // Sandbox: no scoring, always passes
+    if (this.effectiveLevelDef.isSandbox) {
+      this.score  = 0;
+      this.stars  = 0;
+      this.passed = true;
+      return;
+    }
+
     const metrics  = this.simulation.getFinalMetrics();
     const levelDef = this.effectiveLevelDef;
 
@@ -183,10 +261,18 @@ class Game {
     this.passed = metrics.housesLost <= levelDef.maxHousesLost && this.budgetRemaining >= 0;
 
     if (this.passed && this.currentLevelIndex + 1 < this.config.LEVELS.length) {
-      if (!this.unlockedLevels.includes(this.currentLevelIndex + 1)) {
-        this.unlockedLevels.push(this.currentLevelIndex + 1);
-      }
+      const next = this.currentLevelIndex + 1;
+      if (!this.unlockedLevels.includes(next)) this.unlockedLevels.push(next);
     }
+
+    // Sandbox unlock once 2+ regular levels are unlocked
+    const sandboxIdx = this.config.LEVELS.findIndex(l => l.isSandbox);
+    if (sandboxIdx >= 0 && this.unlockedLevels.length >= 2 && !this.unlockedLevels.includes(sandboxIdx)) {
+      this.unlockedLevels.push(sandboxIdx);
+    }
+
+    this._savePerformanceHistory();
+    this._evaluateBadges(metrics);
   }
 
   /**
@@ -290,6 +376,7 @@ class Game {
     if (!sol || sol.length === 0) return null;
 
     const sim = new Simulation(this.config, ld);
+    sim.enableReplayRecording();
 
     // Track occupied cells so we don't double-count skipped placements
     const occupied = new Set();
@@ -310,8 +397,87 @@ class Game {
 
     while (!sim.isComplete()) sim.tick();
 
-    this._refSolResult = { metrics: sim.getFinalMetrics(), spent };
+    this._refSolResult = { metrics: sim.getFinalMetrics(), spent, frames: sim.getReplayFrames() };
     return this._refSolResult;
+  }
+
+  // ── Adaptive Difficulty (Feature 3) ─────────────────────────────────────────
+
+  _getPerformanceHistory() {
+    try { return JSON.parse(localStorage.getItem('fdPerfHistory') || '[]'); } catch(e) { return []; }
+  }
+
+  _applyAdaptiveDifficulty() {
+    const history = this._getPerformanceHistory();
+    if (history.length < 2) return;
+    const recent = history.slice(-2);
+    const all3Stars = recent.every(h => h.stars === 3 && h.passed);
+    const allFailed = recent.every(h => !h.passed);
+
+    if (all3Stars && this.effectiveLevelDef) {
+      this.effectiveLevelDef = Object.assign({}, this.effectiveLevelDef, {
+        rainRate:    this.effectiveLevelDef.rainRate    * 1.12,
+        riverInflow: this.effectiveLevelDef.riverInflow * 1.12,
+      });
+      this._adaptiveBoosted = true;
+    }
+    this._suggestEasy = allFailed && (this.config.DIFFICULTY.current !== 'easy');
+  }
+
+  _savePerformanceHistory() {
+    const history = this._getPerformanceHistory();
+    history.push({ levelIndex: this.currentLevelIndex, stars: this.stars, passed: this.passed });
+    if (history.length > 10) history.splice(0, history.length - 10);
+    try { localStorage.setItem('fdPerfHistory', JSON.stringify(history)); } catch(e) {}
+  }
+
+  // ── Badges (Feature 9) ───────────────────────────────────────────────────────
+
+  _getBadgeStore() {
+    try { return JSON.parse(localStorage.getItem('fdBadges') || '{}'); } catch(e) { return {}; }
+  }
+
+  _evaluateBadges(metrics) {
+    if (!this.passed || !metrics) return;
+    const store = this._getBadgeStore();
+
+    // Budget Wizard: pass with ≥40% budget remaining
+    const budgetPct = this.effectiveLevelDef.budget > 0
+      ? this.budgetRemaining / this.effectiveLevelDef.budget : 0;
+    if (budgetPct >= 0.40) store.budgetWizard = true;
+
+    // River Guardian: pass with avg river health ≥90
+    if (metrics.avgRiverHealth >= 90) store.riverGuardian = true;
+
+    // Ecologist: pass using only green tiles — track across levels
+    const greenSet = new Set(this.config.SYNERGY_TILES || ['tree','wetland','raingarden','pond']);
+    const onlyGreen = Object.values(this.placements).every(t => greenSet.has(t));
+    if (onlyGreen) {
+      if (!store.ecologistLevels) store.ecologistLevels = [];
+      if (!store.ecologistLevels.includes(this.currentLevelIndex))
+        store.ecologistLevels.push(this.currentLevelIndex);
+      if (store.ecologistLevels.length >= 3) store.ecologist = true;
+    }
+
+    this._badgeData = store;
+    try { localStorage.setItem('fdBadges', JSON.stringify(store)); } catch(e) {}
+  }
+
+  getBadgeData() {
+    if (!this._badgeData) this._badgeData = this._getBadgeStore();
+    return this._badgeData;
+  }
+
+  // ── Storm Preview (Feature 1) ─────────────────────────────────────────────────
+
+  computeStormPreview(ticks = 20) {
+    const tempSim = new Simulation(this.config, this.effectiveLevelDef);
+    for (const [key, tileType] of Object.entries(this.placements)) {
+      const [x, y] = key.split(',').map(Number);
+      tempSim.setCell(x, y, tileType);
+    }
+    for (let i = 0; i < ticks; i++) tempSim.tick();
+    return tempSim.getGridState();
   }
 
   /**

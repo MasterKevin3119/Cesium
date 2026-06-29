@@ -42,6 +42,28 @@ class Simulation {
     this.currentHappiness = 0;
     this.currentTreeHealth = 100;
     this.currentRiverHealth = 100;
+
+    // Replay recording (null = disabled, array = recording)
+    this._replayFrames = null;
+
+    // Hydrology log (null = disabled)
+    this._hydrologyLog = null;
+  }
+
+  enableReplayRecording() {
+    this._replayFrames = [];
+  }
+
+  getReplayFrames() {
+    return this._replayFrames || [];
+  }
+
+  enableHydrologyLog() {
+    this._hydrologyLog = [];
+  }
+
+  getHydrologyLog() {
+    return this._hydrologyLog || [];
   }
 
   createEmptyGrid() {
@@ -219,16 +241,49 @@ class Simulation {
 
     // Update live parameters
     this.updateLiveParameters();
+
+    // Record replay frame (water depths only, compact)
+    if (this._replayFrames !== null) {
+      const W = this.width, H = this.height;
+      const frame = new Float32Array(W * H);
+      for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++)
+          frame[y * W + x] = this.grid[y][x].water;
+      this._replayFrames.push(frame);
+    }
+
+    // Record hydrology log entry (rainfall rate + max house water depth per tick)
+    if (this._hydrologyLog !== null) {
+      let maxHouseWater = 0;
+      for (let y = 0; y < this.height; y++)
+        for (let x = 0; x < this.width; x++)
+          if (this.grid[y][x].type === 'house' && this.grid[y][x].water > maxHouseWater)
+            maxHouseWater = this.grid[y][x].water;
+      this._hydrologyLog.push({ tick: this.tickCount, rainRate: currentRainRate, maxHouseWater });
+    }
   }
 
   absorb(x, y) {
     const cell = this.grid[y][x];
     const tileDef = this.config.TILES[cell.type];
 
-    if (tileDef.absorbCapacity === 0) return; // Can't absorb
+    if (tileDef.absorbCapacity === 0) return;
+
+    // Tile synergy: green tiles adjacent to 2+ other green tiles absorb 20% more
+    const synergySet = this.config.SYNERGY_TILES;
+    let synergyNeighbours = 0;
+    if (synergySet && synergySet.includes(cell.type)) {
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
+          if (synergySet.includes(this.grid[ny][nx].type)) synergyNeighbours++;
+        }
+      }
+    }
+    const synergyMult = synergyNeighbours >= 2 ? 1.2 : 1.0;
 
     const canAbsorb = Math.min(
-      tileDef.absorbRate,
+      tileDef.absorbRate * synergyMult,
       tileDef.absorbCapacity - cell.absorbed,
       cell.water
     );

@@ -439,7 +439,30 @@ const CONFIG = {
         {x:1,y:24,type:'raingarden'}, {x:2,y:23,type:'raingarden'},
         {x:30,y:20,type:'raingarden'},{x:31,y:19,type:'raingarden'},
       ],
-    }
+    },
+    // ── SANDBOX (Feature 8) ────────────────────────────────────────────────────
+    {
+      id: 'sandbox',
+      name: 'Sandbox — Free Play',
+      description: 'No win conditions. Experiment freely with any tiles.',
+      briefing: 'Free play mode — unlimited budget, no damage cap, no fail state. Try any combination of tiles and watch how the water behaves. What happens if you ring the entire river with wetlands? Can you build a perfect levee wall? This space is yours to experiment.',
+      isSandbox: true,
+      gridSeed: 42,
+      numHouses: 10,
+      numRiverCells: 6,
+      riverStartPos: { x: 16, y: 0 },
+      budget: 99999,
+      rainRate: 0.25,
+      riverInflow: 0.35,
+      rainRampUp: 8,
+      rainPeak: 30,
+      rainRampDown: 22,
+      maxHousesLost: 9999,
+      availableTiles: ['tree', 'raingarden', 'pond', 'permeable', 'levee', 'wetland', 'road'],
+      showTutorialHints: false,
+      solutionExplanation: '',
+      referenceSolution: [],
+    },
   ],
 
   // ============================================================================
@@ -490,6 +513,172 @@ const CONFIG = {
     riverHealth: "A healthy river is buffered by natural features (trees, wetlands). Direct paved runoff stresses the river.",
     budgetEfficiency: "Smart planning maximizes protection with minimal cost. Maintenance compounds—maintain what you really need.",
     leveleTrade: "Levees protect behind but concentrate water ahead. Use them strategically!",
+  },
+
+  // ============================================================================
+  // IN-CONTEXT GLOSSARY (Feature 11)
+  // Terms that appear in briefing text get a dotted underline + hover definition.
+  // ============================================================================
+  GLOSSARY: {
+    'wetland':              'A low-lying area saturated with water, acting as a natural sponge that absorbs and slowly releases floodwater.',
+    'levee':                'An embankment alongside a river that holds water back — powerful, but can be overtopped when the volume is too great.',
+    'permeable':            'Allows water to pass through into the ground, rather than running off across the surface.',
+    'impermeable':          'Blocks water from soaking in — roads and concrete are impermeable, causing rapid runoff and faster flooding.',
+    'runoff':               'Rainwater that flows across the surface when the ground cannot absorb it quickly enough.',
+    'absorption':           'The process by which soil and vegetation soak up water, reducing surface flow and peak flood levels.',
+    'catchment':            'The area of land from which all rainfall drains toward a single river or outlet point.',
+    'green infrastructure': 'Networks of trees, wetlands and engineered features that manage water using natural processes.',
+    'retention pond':       'An engineered basin that captures stormwater and releases it slowly, preventing rapid downstream surges.',
+    'rain garden':          'A shallow planted depression that captures street runoff and lets it soak into the ground.',
+    'flash flood':          'A sudden, intense flood caused by heavy rainfall over a short time — water rises within minutes.',
+    'inflow':               'Water entering the system from rainfall or a river source during the storm.',
+    'maintenance':          'The ongoing cost to keep an infrastructure tile functioning at full capacity each storm cycle.',
+    'river health':         'A measure of the ecological quality of a river — improved by natural buffers, degraded by paved runoff.',
+    'bioswale':             'A vegetated channel that slows and filters stormwater runoff, similar to a large rain garden.',
+  },
+
+  // ============================================================================
+  // TILE SYNERGY (Feature 2)
+  // Green tiles adjacent to 2+ other green tiles get a 1.2× absorption bonus.
+  // ============================================================================
+  SYNERGY_TILES: ['tree', 'wetland', 'raingarden', 'pond'],
+
+  // ============================================================================
+  // ACHIEVEMENT BADGES (Feature 9)
+  // ============================================================================
+  BADGES: {
+    ecologist: {
+      id: 'ecologist', emoji: '🌿',
+      name: 'Ecologist',
+      description: 'Win 3 different levels using only green infrastructure (trees, rain gardens, wetlands, ponds)',
+    },
+    budgetWizard: {
+      id: 'budgetWizard', emoji: '💰',
+      name: 'Budget Wizard',
+      description: 'Pass any level with 40% or more of your budget still remaining',
+    },
+    riverGuardian: {
+      id: 'riverGuardian', emoji: '🌊',
+      name: 'River Guardian',
+      description: 'Pass any level with an average river health score above 90/100',
+    },
+  },
+
+  // ============================================================================
+  // CASE STUDY CARDS (Feature 5) — unlocked on level completion
+  // ============================================================================
+  CASE_STUDIES: {
+    level1: {
+      title: 'Rotterdam Water Squares',
+      location: 'Rotterdam, Netherlands', year: 2013,
+      facts: [
+        'Public squares built to flood deliberately during heavy rain, storing water underground',
+        'Benthemplein square holds 1.7 million litres — enough to fill 680 bathtubs',
+        'Nearby street flooding fell by 80% after the first major storm',
+      ],
+      connection: 'You designed the same concept: low-lying spaces that catch water before it can reach homes.',
+    },
+    level2: {
+      title: 'Singapore ABC Waters Programme',
+      location: 'Singapore', year: 2006,
+      facts: [
+        'Singapore transformed concrete canals into naturalised waterways with planted banks',
+        'The programme linked 100 parks into one continuous blue-green network across the city',
+        'Flood events in target areas fell by 90% over the first decade',
+      ],
+      connection: 'Permeable surfaces and green buffers alongside channels — the same combination you used here.',
+    },
+    level3: {
+      title: 'Bangladesh Mangrove Restoration',
+      location: 'Sundarbans, Bangladesh', year: 2015,
+      facts: [
+        'Bangladesh restored 150,000 hectares of mangrove wetlands along the Bay of Bengal',
+        'Mangroves dissipate up to 75% of wave energy and slow river surges during storms',
+        'Villagers in restored zones reported significantly less flooding than in cleared areas',
+      ],
+      connection: 'Wetlands alongside rivers are nature\'s flood buffer — exactly what you placed at the river banks.',
+    },
+    level4: {
+      title: 'New Orleans Post-Katrina Green Rebuild',
+      location: 'New Orleans, USA', year: 2010,
+      facts: [
+        'After Katrina, New Orleans converted a golf course into 25 acres of bioswales and retention ponds',
+        'The city\'s "Dutch Dialogues" project imported Netherlands water management expertise city-wide',
+        'Green infrastructure projects reduced flood damage in target zones by an estimated 65%',
+      ],
+      connection: 'Multi-layer defence — large absorption at source, barriers at corridors, drainage per house — mirrors modern New Orleans.',
+    },
+    level5: {
+      title: 'UK Natural Flood Management',
+      location: 'Yorkshire & Cumbria, England', year: 2017,
+      facts: [
+        'After 2015 floods, the UK invested £15M in "slow the flow" — planting floodplain trees and restoring river meanders',
+        'Peak flows in treated catchments dropped by up to 30% during later storms',
+        'Farmers were paid to hold water in fields using earth bunds and shallow scrapes',
+      ],
+      connection: 'Longer storms need catchment-wide absorption — trees and wetlands across the whole landscape, not just near individual houses.',
+    },
+    level6: {
+      title: 'Tokyo G-Cans Underground Cistern',
+      location: 'Tokyo, Japan', year: 2006,
+      facts: [
+        'Tokyo built the world\'s largest underground flood cistern — 6.3 km long, 50 m deep',
+        'Five enormous silos capture flash flood surges from five rivers simultaneously',
+        'Since 2006, flood damage in greater Tokyo has fallen by 85%',
+      ],
+      connection: 'Flash floods need massive fast-capture storage at the source — the same logic as placing ponds and wetlands at the river head.',
+    },
+    level7: {
+      title: 'Netherlands Delta Programme',
+      location: 'Netherlands', year: 1958,
+      facts: [
+        'After 1,836 people died in the 1953 North Sea flood, the Netherlands built 13 massive barriers and dams over 25 years',
+        'Today 60% of the Netherlands\' 17 million people live below sea level, protected by layered defence',
+        'The programme costs $1.5 billion per year to maintain — far cheaper than one major flood',
+      ],
+      connection: 'Your three-layer defence — wetland absorption, levee barriers, local drainage — is the Delta Programme in miniature.',
+    },
+  },
+
+  // ============================================================================
+  // REAL WORLD EVENT LINKS (Feature 10)
+  // ============================================================================
+  REAL_EVENTS: {
+    level1: {
+      name: '2015 UK Winter Floods', year: 2015, location: 'Northern England',
+      summary: 'After months of record rainfall, rivers in Yorkshire and Cumbria burst their banks. Over 16,000 homes flooded. Damage exceeded £5 billion. Communities that had planted riverside trees and created floodplain meadows in the years prior reported significantly lower water levels.',
+      lesson: 'Green infrastructure works year-round — every tree placed today will absorb water from future storms, not just this one.',
+    },
+    level2: {
+      name: '2011 Queensland Floods', year: 2011, location: 'Queensland, Australia',
+      summary: '75% of Queensland was declared a disaster zone. The Lockyer Valley was hit by a sudden wall of water. Levees that had never been overtopped failed under the surge volume because the catchment had no buffer infrastructure upstream.',
+      lesson: 'Levees alone are not enough — permeable surfaces and catchment-wide absorption reduce the peak volume that reaches any barrier.',
+    },
+    level3: {
+      name: '2011 Bangkok Floods', year: 2011, location: 'Bangkok, Thailand',
+      summary: 'Thailand\'s worst flooding in 50 years killed 815 people. Half of Bangkok went underwater for months. The city\'s historic canal network — designed for flood management — had been paved over for urban development, removing the city\'s natural absorption system.',
+      lesson: 'What was paved over matters. The wetlands you placed restore exactly what decades of development removed.',
+    },
+    level4: {
+      name: 'Hurricane Katrina — New Orleans', year: 2005, location: 'New Orleans, USA',
+      summary: 'Katrina\'s storm surge overwhelmed 240 miles of levees. 1,833 people died and 80% of the city flooded. Post-disaster analysis found that degraded coastal wetlands — which once dissipated storm surge — had been destroyed over decades. Single-layer levee defence had no backup.',
+      lesson: 'Redundant defence — wetlands absorbing the first surge, levees as a second line — is the lesson New Orleans has since invested billions to implement.',
+    },
+    level5: {
+      name: '2019 Venice Flooding (Acqua Alta)', year: 2019, location: 'Venice, Italy',
+      summary: 'On 12 November 2019, Venice recorded its highest flood level since 1966: 187 cm above sea level. 80% of the city was submerged. The flooding lasted weeks because the storm sustained peak rainfall for far longer than historical models predicted.',
+      lesson: 'Long-duration peak rain is what overwhelmed Venice. Extra storage capacity during the prolonged peak is what your strategy addresses.',
+    },
+    level6: {
+      name: '2013 Colorado Flash Floods', year: 2013, location: 'Colorado, USA',
+      summary: 'Seven days of intense rain caused flash floods across Colorado\'s Front Range, causing $4 billion in damage and killing 8 people. Suburban expansion had replaced natural grasslands and wetlands that once absorbed intense rainfall, leaving no buffer for the sudden surge.',
+      lesson: 'Flash floods punish systems with no buffer near the source. Retention ponds and wetlands at the river head are the difference between managed surge and catastrophe.',
+    },
+    level7: {
+      name: '1931 China Floods', year: 1931, location: 'Central China',
+      summary: 'The deadliest natural disaster in recorded history. Up to 4 million people perished when the Yangtze, Huai and Yellow rivers flooded simultaneously. Decades of deforestation had eliminated all natural flood regulation. No layered defence existed — when the rivers rose, nothing slowed them.',
+      lesson: 'The three-layer defence you\'ve mastered — absorption, barrier, local drainage — is the modern answer to what the 1931 floods exposed as a fatal single-point failure.',
+    },
   },
 };
 

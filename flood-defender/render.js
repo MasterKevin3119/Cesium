@@ -42,7 +42,28 @@ class Renderer {
     this._images           = {};
     this._preloadImages();
 
+    // Replay and compare state
+    this._replayActive  = false;
+    this._replayFrame   = 0;
+    this._replayTimer   = null;
+    this._compareActive = false;
+    this._compareFrame  = 0;
+    this._compareTimer  = null;
+
+    // Terrain heatmap (Feature 6)
+    this._heatmapActive = false;
+
+    // Storm preview (Feature 1)
+    this._previewActive = false;
+    this._previewGrid   = null;
+
+    // Glossary tooltip element (Feature 11)
+    this._glossTooltip  = null;
+
     this.elements.cellTooltip = document.getElementById('cell-tooltip');
+
+    // Glossary delegated listener (Feature 11) — set up once
+    this._setupGlossaryListener();
 
     // Dirty-check state — avoid redundant DOM writes
     this._lastPhase       = null;
@@ -65,6 +86,17 @@ class Renderer {
       this._lastPhase    = this.game.phase;
       this._paletteBuilt = false;
       this._updateObjectiveBar();
+
+      // Stop any active replay/compare animations
+      if (this._replayTimer)  { clearInterval(this._replayTimer);  this._replayTimer  = null; this._replayActive  = false; }
+      if (this._compareTimer) { clearInterval(this._compareTimer); this._compareTimer = null; this._compareActive = false; }
+
+      // Show undo/redo buttons only in build phase
+      const undoBtn = document.getElementById('undo-btn');
+      const redoBtn = document.getElementById('redo-btn');
+      const inBuild = this.game.phase === 'build';
+      if (undoBtn) undoBtn.style.display = inBuild ? 'inline-block' : 'none';
+      if (redoBtn) redoBtn.style.display = inBuild ? 'inline-block' : 'none';
     }
 
     // Budget counter — update only when value changes
@@ -90,28 +122,46 @@ class Renderer {
   renderBriefing(phaseChanged) {
     if (phaseChanged) {
       const ld = this.game.levelDef;
+      const realEvent = this.config.REAL_EVENTS && this.config.REAL_EVENTS[ld.id];
+      const eventFootnote = realEvent
+        ? `<div class="real-event-note">🌍 Similar to: <em>${realEvent.name}</em> (${realEvent.year}) &mdash; <button class="link-btn" id="real-event-btn">Learn more</button></div>`
+        : '';
+
+      const winConditions = ld.isSandbox
+        ? `<p style="color:var(--success);font-weight:600">Sandbox — no win condition. Experiment freely!</p>`
+        : `<ul class="win-list">
+            <li>Lose no more than <strong>${ld.maxHousesLost}</strong> house${ld.maxHousesLost === 1 ? '' : 's'} to flooding</li>
+            <li>Don't exceed your budget of <strong>$${this.game.effectiveLevelDef.budget}</strong></li>
+          </ul>
+          <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:10px">
+            Ecology (happiness, trees, river) does <em>not</em> affect pass/fail — only your star rating.
+          </p>
+          <hr>
+          <p style="font-weight:600;margin-bottom:5px">Star rating:</p>
+          <ul class="star-tier-list">
+            <li>&#9733; Survive — lose ≤ ${ld.maxHousesLost} houses and budget intact</li>
+            <li>&#9733;&#9733; Survive with decent ecology and some budget left over</li>
+            <li>&#9733;&#9733;&#9733; Survive with excellent ecology and efficient spending</li>
+          </ul>`;
+
       this.elements.phaseTitle.textContent = 'Briefing';
       this.elements.phaseBriefing.innerHTML = `
         <h2>${ld.name}</h2>
         <p>${ld.briefing}</p>
+        ${eventFootnote}
         <hr>
-        <p style="font-weight:600;color:var(--accent);margin-bottom:6px">How to WIN this level:</p>
-        <ul class="win-list">
-          <li>Lose no more than <strong>${ld.maxHousesLost}</strong> house${ld.maxHousesLost === 1 ? '' : 's'} to flooding</li>
-          <li>Don't exceed your budget of <strong>$${this.game.effectiveLevelDef.budget}</strong></li>
-        </ul>
-        <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:10px">
-          Ecology (happiness, trees, river) does <em>not</em> affect pass/fail — only your star rating.
-        </p>
-        <hr>
-        <p style="font-weight:600;margin-bottom:5px">Star rating:</p>
-        <ul class="star-tier-list">
-          <li>&#9733; Survive — lose ≤ ${ld.maxHousesLost} houses and budget intact</li>
-          <li>&#9733;&#9733; Survive with decent ecology and some budget left over</li>
-          <li>&#9733;&#9733;&#9733; Survive with excellent ecology and efficient spending</li>
-        </ul>
+        <p style="font-weight:600;color:var(--accent);margin-bottom:6px">${ld.isSandbox ? '' : 'How to WIN this level:'}</p>
+        ${winConditions}
         <button id="start-build-btn" class="primary-btn" style="margin-top:14px">Start Building</button>
       `;
+
+      this._applyGlossary(this.elements.phaseBriefing);
+
+      // Wire real event button
+      const evtBtn = document.getElementById('real-event-btn');
+      if (evtBtn && realEvent) {
+        evtBtn.addEventListener('click', () => this._showRealEventModal(realEvent));
+      }
       this.elements.lessonCard.style.display      = 'none';
       this.elements.runStormBtn.style.display     = 'none';
       this.elements.retryBtn.style.display        = 'none';
@@ -139,12 +189,43 @@ class Renderer {
     // Briefing updates when budget changes (placement / removal)
     if (phaseChanged || this.game.budgetRemaining !== this._lastBriefingBudget) {
       this._lastBriefingBudget = this.game.budgetRemaining;
+
+      const adaptiveHtml = this.game._adaptiveBoosted
+        ? `<div class="adaptive-chip challenge">⚡ Challenge Mode — +12% rain intensity</div>`
+        : this.game._suggestEasy
+          ? `<div class="adaptive-chip easy-nudge">💡 Struggling? Try Easy mode — same map, less rain.</div>`
+          : '';
+
       this.elements.phaseBriefing.innerHTML = `
+        ${adaptiveHtml}
         <p>Place green infrastructure to reduce flood damage.</p>
-        <p>Click to place, right-click to remove.</p>
-        <p><strong>Budget:</strong> $${this.game.budgetRemaining} / ${this.game.levelDef.budget}</p>
+        <p>Click to place, right-click or long-press to remove.</p>
+        <p><strong>Budget:</strong> $${this.game.budgetRemaining} / ${this.game.effectiveLevelDef.budget}</p>
         <p><strong>Maintenance:</strong> $${this.game.maintenanceCost}/level</p>
+        <div class="build-toggles">
+          <button id="heatmap-btn" class="toggle-btn ${this._heatmapActive ? 'active' : ''}">🗺 Terrain Map</button>
+          <button id="preview-btn" class="toggle-btn">🌧 Flood Preview</button>
+        </div>
       `;
+
+      // Wire toggle buttons
+      const heatBtn = document.getElementById('heatmap-btn');
+      if (heatBtn) heatBtn.addEventListener('click', () => {
+        this._heatmapActive = !this._heatmapActive;
+        heatBtn.classList.toggle('active', this._heatmapActive);
+        if (this._heatmapActive) { this._previewActive = false; }
+      });
+      const prevBtn = document.getElementById('preview-btn');
+      if (prevBtn) prevBtn.addEventListener('click', () => {
+        this._previewGrid  = this.game.computeStormPreview(20);
+        this._previewActive = true;
+        this._heatmapActive = false;
+        const hb = document.getElementById('heatmap-btn');
+        if (hb) hb.classList.remove('active');
+        prevBtn.textContent = '🌧 Flood Preview (updated)';
+      });
+
+      this._applyGlossary(this.elements.phaseBriefing);
     }
 
     // Tile palette — built once per phase entry, not every frame
@@ -152,6 +233,12 @@ class Renderer {
       this.renderTilePalette();
       this._paletteBuilt = true;
     }
+
+    // Keep undo/redo buttons in sync with stack state
+    const undoBtn = document.getElementById('undo-btn');
+    const redoBtn = document.getElementById('redo-btn');
+    if (undoBtn) undoBtn.disabled = !this.game.canUndo();
+    if (redoBtn) redoBtn.disabled = !this.game.canRedo();
 
     this.drawGrid(null);
   }
@@ -246,7 +333,8 @@ class Renderer {
     const metrics  = this.game.getFinalMetrics();
     const ld       = this.game.effectiveLevelDef;
     const passed   = this.game.passed;
-    const housesOver = metrics.housesLost > ld.maxHousesLost;
+    const isSandbox = !!ld.isSandbox;
+    const housesOver = !isSandbox && metrics.housesLost > ld.maxHousesLost;
     const spent    = ld.budget - this.game.budgetRemaining;
     const dmgColor = housesOver ? 'var(--danger)' : 'var(--success)';
     const dmgMark  = housesOver ? '✗' : '✓';
@@ -258,36 +346,94 @@ class Renderer {
       'Excellent ecology and efficient spending — outstanding!',
     ];
 
-    const adviceHTML = !passed
+    const adviceHTML = !passed && !isSandbox
       ? `<div class="failure-advice">${this._buildFailureAdvice(metrics)}</div>`
       : '';
 
     // Model solution button (only if level has one)
-    const hasSol = !!(ld.referenceSolution && ld.referenceSolution.length > 0);
+    const hasSol = !isSandbox && !!(ld.referenceSolution && ld.referenceSolution.length > 0);
     const modelBtnHTML = hasSol
       ? `<button id="model-sol-btn" class="secondary-btn model-sol-btn" style="margin-top:10px">Show model solution</button>`
       : '';
 
+    // Replay and compare buttons
+    const hasFrames = this.game.getReplayFrames().length > 0;
+    const replayBtnHTML = hasFrames
+      ? `<button id="replay-btn" class="secondary-btn" style="margin-top:8px;width:100%">↩ Replay Storm</button>`
+      : '';
+    const compareBtnHTML = (hasFrames && hasSol)
+      ? `<button id="compare-btn" class="secondary-btn" style="margin-top:6px;width:100%">⚡ Compare Side-by-Side</button>`
+      : '';
+
+    // Sandbox vs regular banner
+    const bannerHTML = isSandbox
+      ? `<div class="result-banner sandbox-banner">🧪 EXPERIMENT COMPLETE</div>
+         <p style="font-size:0.82rem;color:var(--text-dim);margin-bottom:8px">No win condition in Sandbox. Tiles placed: <strong>${Object.keys(this.game.placements).length}</strong>. Budget used: <strong>$${spent}</strong>.</p>`
+      : `<div class="result-banner ${passed ? 'pass-banner' : 'fail-banner'}">${passed ? '✓ LEVEL PASSED' : '✗ LEVEL FAILED'}</div>
+         <div class="result-verdict">
+           <p><span style="color:${dmgColor}">${dmgMark}</span> Houses lost: <strong style="color:${dmgColor}">${metrics.housesLost} / ${metrics.totalHouses}</strong> (cap: ${ld.maxHousesLost})</p>
+           <p><span style="color:var(--success)">✓</span> Budget: spent <strong>$${spent}</strong> of $${ld.budget} ($${this.game.budgetRemaining} left)</p>
+         </div>
+         <hr>
+         <p style="font-size:1.1rem;margin-bottom:3px">${'⭐'.repeat(this.game.stars)}${'☆'.repeat(3 - this.game.stars)}</p>
+         <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:10px">${starLabels[this.game.stars] || ''}</p>
+         <p style="font-size:0.75rem;color:var(--text-dim)">
+           Happiness ${Math.round(metrics.avgHappiness)}/100 &nbsp;·&nbsp;
+           Trees ${Math.round(metrics.avgTreeHealth)}/100 &nbsp;·&nbsp;
+           River ${Math.round(metrics.avgRiverHealth)}/100
+         </p>`;
+
+    // Achievement badges (Feature 9)
+    const badgeData = this.game.getBadgeData();
+    const badgeDefs = this.config.BADGES || {};
+    const earnedBadges = Object.entries(badgeDefs)
+      .filter(([id]) => badgeData[id])
+      .map(([, b]) => `<span class="badge-chip" title="${b.description}">${b.emoji} ${b.name}</span>`)
+      .join('');
+    const badgesHTML = earnedBadges
+      ? `<div class="badge-strip">${earnedBadges}</div>`
+      : '';
+
     this.elements.phaseBriefing.innerHTML = `
-      <div class="result-banner ${passed ? 'pass-banner' : 'fail-banner'}">${passed ? '✓ LEVEL PASSED' : '✗ LEVEL FAILED'}</div>
-      <div class="result-verdict">
-        <p><span style="color:${dmgColor}">${dmgMark}</span> Houses lost: <strong style="color:${dmgColor}">${metrics.housesLost} / ${metrics.totalHouses}</strong> (cap: ${ld.maxHousesLost})</p>
-        <p><span style="color:var(--success)">✓</span> Budget: spent <strong>$${spent}</strong> of $${ld.budget} ($${this.game.budgetRemaining} left)</p>
-      </div>
-      <hr>
-      <p style="font-size:1.1rem;margin-bottom:3px">${'⭐'.repeat(this.game.stars)}${'☆'.repeat(3 - this.game.stars)}</p>
-      <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:10px">${starLabels[this.game.stars] || ''}</p>
-      <p style="font-size:0.75rem;color:var(--text-dim)">
-        Happiness ${Math.round(metrics.avgHappiness)}/100 &nbsp;·&nbsp;
-        Trees ${Math.round(metrics.avgTreeHealth)}/100 &nbsp;·&nbsp;
-        River ${Math.round(metrics.avgRiverHealth)}/100
-      </p>
+      ${bannerHTML}
       ${adviceHTML}
-      ${!passed ? '' : '<ul class="star-tier-list" style="margin-top:10px"><li>&#9733; Survive — houses within cap</li><li>&#9733;&#9733; Survive + decent ecology &amp; budget</li><li>&#9733;&#9733;&#9733; Survive + excellent ecology &amp; efficient spending</li></ul>'}
+      ${badgesHTML}
+      ${!passed || isSandbox ? '' : '<ul class="star-tier-list" style="margin-top:10px"><li>&#9733; Survive — houses within cap</li><li>&#9733;&#9733; Survive + decent ecology &amp; budget</li><li>&#9733;&#9733;&#9733; Survive + excellent ecology &amp; efficient spending</li></ul>'}
       ${modelBtnHTML}
+      ${replayBtnHTML}
+      ${compareBtnHTML}
     `;
 
     this.elements.resultsPanel.innerHTML = '';
+
+    // Case study card (Feature 5)
+    const caseStudy = this.config.CASE_STUDIES && this.config.CASE_STUDIES[this.game.levelDef.id];
+    if (caseStudy) {
+      const factsHTML = (caseStudy.facts || []).map(f => `<li>${f}</li>`).join('');
+      const el = document.createElement('div');
+      el.className = 'case-card';
+      el.innerHTML = `
+        <div class="case-card-header">📖 Real-World Case Study</div>
+        <div class="case-title">${caseStudy.title}</div>
+        <div class="case-meta">${caseStudy.location} · ${caseStudy.year}</div>
+        <ul class="case-facts">${factsHTML}</ul>
+        <div class="case-connection"><em>${caseStudy.connection}</em></div>
+      `;
+      this.elements.resultsPanel.appendChild(el);
+    }
+
+    // Hydrology dashboard (Feature 12)
+    const hydroLog = this.game.getHydrologyLog();
+    if (hydroLog && hydroLog.length > 1) {
+      const dash = document.createElement('div');
+      dash.className = 'hydro-dash';
+      dash.innerHTML = `<div class="hydro-title">💧 Hydrology Dashboard</div>${this._buildHydroSVG(hydroLog)}
+        <div class="hydro-legend">
+          <span class="hl-rain">▬ Rainfall Rate</span>
+          <span class="hl-water">▬ Max House Depth</span>
+        </div>`;
+      this.elements.resultsPanel.appendChild(dash);
+    }
 
     this.renderLessonCard(metrics);
 
@@ -305,6 +451,12 @@ class Renderer {
       const btn = document.getElementById('model-sol-btn');
       if (btn) btn.addEventListener('click', () => this._toggleModelSolution());
     }
+
+    // Wire up replay / compare buttons
+    const replayBtn = document.getElementById('replay-btn');
+    if (replayBtn) replayBtn.addEventListener('click', () => this._toggleReplay());
+    const compareBtn = document.getElementById('compare-btn');
+    if (compareBtn) compareBtn.addEventListener('click', () => this._toggleCompare());
 
     this._drawResultsGrid();
   }
@@ -377,6 +529,7 @@ class Renderer {
   }
 
   _drawResultsGrid() {
+    if (this._replayActive || this._compareActive) return;
     const gridState = this.game.getGridState();
     if (this._showModelSol && this._refResult) {
       // Overlay model solution placements on the base map
@@ -422,7 +575,7 @@ class Renderer {
 
   // ── CANVAS ──────────────────────────────────────────────────────────────────
 
-  drawGrid(gridState) {
+  drawGrid(gridState, skipLostHouses = false) {
     const ctx   = this.ctx;
     const cs    = this.cellSize;
     const W     = this.config.GRID_WIDTH;
@@ -520,8 +673,61 @@ class Renderer {
     ctx.lineWidth   = 1;
     ctx.stroke();
 
+    // Terrain heatmap overlay (Feature 6) — build/briefing phase only
+    if (this._heatmapActive && !gridState) {
+      const heatGrid = elevGrid;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const elev = heatGrid[y][x].elevation;
+          const px = x * cs, py = y * cs;
+          if (elev === 0)      ctx.fillStyle = 'rgba(0,102,204,0.38)';
+          else if (elev === 2) ctx.fillStyle = 'rgba(204,34,0,0.38)';
+          else                 continue;
+          ctx.fillRect(px, py, cs, cs);
+        }
+      }
+    }
+
+    // Storm preview overlay (Feature 1) — build phase only
+    if (this._previewActive && this._previewGrid && !gridState) {
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const water = this._previewGrid[y][x].water;
+          if (water > 0.01) {
+            ctx.fillStyle = `rgba(56,189,248,${Math.min(0.65, water * waterScale)})`;
+            ctx.fillRect(x * cs, y * cs, cs, cs);
+          }
+        }
+      }
+    }
+
+    // Synergy glow (Feature 2) — green border on tiles with 2+ adjacent green tiles
+    if (this.game.phase === 'build' && !gridState) {
+      const synergySet = this.config.SYNERGY_TILES;
+      if (synergySet) {
+        const dx = [1, -1, 0, 0], dy = [0, 0, 1, -1];
+        ctx.lineWidth = 2.5;
+        for (const [key, tileType] of Object.entries(this.game.placements)) {
+          if (!synergySet.includes(tileType)) continue;
+          const [cx2, cy2] = key.split(',').map(Number);
+          let adj = 0;
+          for (let d = 0; d < 4; d++) {
+            const nx = cx2 + dx[d], ny = cy2 + dy[d];
+            if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+            const nKey = `${nx},${ny}`;
+            const nType = this.game.placements[nKey] || (elevGrid ? elevGrid[ny][nx].type : 'grass');
+            if (synergySet.includes(nType)) adj++;
+          }
+          if (adj >= 2) {
+            ctx.strokeStyle = 'rgba(74,222,128,0.85)';
+            ctx.strokeRect(cx2 * cs + 1.5, cy2 * cs + 1.5, cs - 3, cs - 3);
+          }
+        }
+      }
+    }
+
     // Mark lost houses red in results phase; show flooding houses during storm
-    if (this.game.phase === 'results' && this._lostHouseCells.length > 0) {
+    if (!skipLostHouses && this.game.phase === 'results' && this._lostHouseCells.length > 0) {
       for (const { x, y } of this._lostHouseCells) {
         ctx.fillStyle   = 'rgba(239,68,68,0.45)';
         ctx.fillRect(x * cs, y * cs, cs, cs);
@@ -566,6 +772,219 @@ class Renderer {
       }
     } else {
       this._hideTooltip();
+    }
+  }
+
+  // ── REPLAY ──────────────────────────────────────────────────────────────────
+
+  _toggleReplay() {
+    if (this._replayActive) this._stopReplay();
+    else this._startReplay();
+  }
+
+  _startReplay() {
+    this._stopCompare();
+    this._replayActive = true;
+    this._replayFrame  = 0;
+    const btn = document.getElementById('replay-btn');
+    if (btn) btn.textContent = '⏹ Stop Replay';
+
+    const frames = this.game.getReplayFrames();
+    this._replayTimer = setInterval(() => {
+      if (this._replayFrame >= frames.length) { this._stopReplay(); return; }
+      this._drawReplayFrame(this._replayFrame++, frames);
+    }, 75);
+  }
+
+  _stopReplay() {
+    this._replayActive = false;
+    if (this._replayTimer) { clearInterval(this._replayTimer); this._replayTimer = null; }
+    const btn = document.getElementById('replay-btn');
+    if (btn) btn.textContent = '↩ Replay Storm';
+    this._drawResultsGrid();
+  }
+
+  _drawReplayFrame(frameIndex, frames) {
+    const frame = frames[frameIndex];
+    const W   = this.config.GRID_WIDTH;
+    const H   = this.config.GRID_HEIGHT;
+    const cs  = this.cellSize;
+    const ctx = this.ctx;
+    const waterScale = this.config.WATER_OPACITY_SCALE;
+    const threshold  = this.config.SIM.houseLossDepth / this.config.SIM.metersPerUnit;
+
+    this.drawGrid(null, true); // base map without static lost-house boxes
+
+    const elevGrid = this.game.getElevationGrid();
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const water = frame[y * W + x];
+        if (water <= 0.001) continue;
+        const px = x * cs, py = y * cs;
+        ctx.fillStyle = `rgba(30,136,229,${Math.min(0.82, water * waterScale)})`;
+        ctx.fillRect(px, py, cs, cs);
+        const key = `${x},${y}`;
+        const tileType = this.game.placements[key] || elevGrid[y][x].type;
+        if (tileType === 'house' && water > threshold) {
+          ctx.fillStyle = 'rgba(239,68,68,0.55)';
+          ctx.fillRect(px, py, cs, cs);
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(px + 1, py + 1, cs - 2, cs - 2);
+        }
+      }
+    }
+
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(4, 4, 148, 28);
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 13px Inter, sans-serif';
+    ctx.fillText(`↩ Tick ${frameIndex + 1} / ${frames.length}`, 10, 23);
+  }
+
+  // ── COMPARE (side-by-side replay) ───────────────────────────────────────────
+
+  _toggleCompare() {
+    if (this._compareActive) this._stopCompare();
+    else this._startCompare();
+  }
+
+  _startCompare() {
+    this._stopReplay();
+
+    const playerFrames = this.game.getReplayFrames();
+    if (!playerFrames.length) return;
+
+    // runReferenceSolution is cached; this call is free if already done
+    const refResult = this.game.runReferenceSolution();
+    if (!refResult) return;
+    this._refResult = refResult;
+
+    this._compareActive = true;
+    this._compareFrame  = 0;
+    const btn = document.getElementById('compare-btn');
+    if (btn) btn.textContent = '⏹ Stop Compare';
+
+    const refFrames  = refResult.frames || [];
+    const maxFrames  = Math.max(playerFrames.length, refFrames.length);
+
+    this._compareTimer = setInterval(() => {
+      if (this._compareFrame >= maxFrames) { this._stopCompare(); return; }
+      this._drawCompareSplit(this._compareFrame++, playerFrames, refFrames);
+    }, 75);
+  }
+
+  _stopCompare() {
+    this._compareActive = false;
+    if (this._compareTimer) { clearInterval(this._compareTimer); this._compareTimer = null; }
+    const btn = document.getElementById('compare-btn');
+    if (btn) btn.textContent = '⚡ Compare Side-by-Side';
+    this._drawResultsGrid();
+  }
+
+  _drawCompareSplit(frameIndex, playerFrames, refFrames) {
+    const W      = this.config.GRID_WIDTH;
+    const H      = this.config.GRID_HEIGHT;
+    const totalW = this.canvas.width;
+    const totalH = this.canvas.height;
+    const halfW  = Math.floor(totalW / 2);
+    const cs     = Math.floor(halfW / W);
+    const ctx    = this.ctx;
+
+    ctx.fillStyle = '#0a1628';
+    ctx.fillRect(0, 0, totalW, totalH);
+
+    const playerFrame = playerFrames[Math.min(frameIndex, playerFrames.length - 1)];
+    const refFrame    = refFrames[Math.min(frameIndex, refFrames.length - 1)];
+
+    const modelPlacements = {};
+    for (const pl of (this.game.levelDef.referenceSolution || []))
+      modelPlacements[`${pl.x},${pl.y}`] = pl.type;
+
+    this._drawMiniGrid(0,     0, cs, playerFrame, this.game.placements);
+    this._drawMiniGrid(halfW, 0, cs, refFrame,    modelPlacements);
+
+    // Divider
+    ctx.strokeStyle = 'rgba(56,189,248,0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(halfW, 0);
+    ctx.lineTo(halfW, totalH);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(0,     0, halfW, 26);
+    ctx.fillRect(halfW, 0, halfW, 26);
+    ctx.font = 'bold 12px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('Your Layout',    halfW / 2,          17);
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillText('Model Solution', halfW + halfW / 2,  17);
+    ctx.textAlign = 'left';
+
+    // Tick counter
+    const maxFrames = Math.max(playerFrames.length, refFrames.length);
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(4, totalH - 28, 168, 24);
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px Inter, sans-serif';
+    ctx.fillText(`Tick ${frameIndex + 1} / ${maxFrames}`, 8, totalH - 10);
+  }
+
+  _drawMiniGrid(offsetX, offsetY, cs, waterFrame, placements) {
+    const W   = this.config.GRID_WIDTH;
+    const H   = this.config.GRID_HEIGHT;
+    const ctx = this.ctx;
+    const cache     = this._rgbCache;
+    const elevGrid  = this.game.getElevationGrid();
+    const waterScale = this.config.WATER_OPACITY_SCALE;
+    const threshold  = this.config.SIM.houseLossDepth / this.config.SIM.metersPerUnit;
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const baseCell = elevGrid[y][x];
+        const key      = `${x},${y}`;
+        const tileType = placements[key] || baseCell.type;
+        const elev     = baseCell.elevation;
+        const px = offsetX + x * cs;
+        const py = offsetY + y * cs;
+
+        const img = this._images[tileType];
+        if (img && img.complete && img.naturalWidth > 0) {
+          ctx.drawImage(img, px, py, cs, cs);
+        } else {
+          const rgb = cache[tileType] || cache['grass'];
+          ctx.fillStyle = `rgb(${rgb.r},${rgb.g},${rgb.b})`;
+          ctx.fillRect(px, py, cs, cs);
+        }
+
+        if (elev === 0) {
+          ctx.fillStyle = 'rgba(0,15,50,0.35)';
+          ctx.fillRect(px, py, cs, cs);
+        } else if (elev === 2) {
+          ctx.fillStyle = 'rgba(255,250,200,0.22)';
+          ctx.fillRect(px, py, cs, cs);
+        }
+
+        if (waterFrame) {
+          const water = waterFrame[y * W + x];
+          if (water > 0.001) {
+            ctx.fillStyle = `rgba(30,136,229,${Math.min(0.82, water * waterScale)})`;
+            ctx.fillRect(px, py, cs, cs);
+            const resolvedType = placements[key] || baseCell.type;
+            if (resolvedType === 'house' && water > threshold) {
+              ctx.fillStyle = 'rgba(239,68,68,0.55)';
+              ctx.fillRect(px, py, cs, cs);
+            }
+          }
+        }
+
+        ctx.strokeStyle = 'rgba(148,163,184,0.08)';
+        ctx.lineWidth   = 0.5;
+        ctx.strokeRect(px, py, cs, cs);
+      }
     }
   }
 
@@ -647,6 +1066,13 @@ class Renderer {
     }
     if (tileDef && tileDef.maintenance > 0) {
       tags += `<span class="tt-tag" style="color:#94a3b8">Maint $${tileDef.maintenance}/lvl</span>`;
+      // Budget forecast (Feature 7): lifetime cost over storm duration
+      const ld = this.game.effectiveLevelDef || this.game.levelDef;
+      const stormTicks = (ld.rainRampUp || 0) + (ld.rainPeak || 0) + (ld.rainRampDown || 0);
+      if (stormTicks > 0 && this.game.phase === 'build') {
+        const lifetime = tileDef.cost + Math.round(tileDef.maintenance * stormTicks / 10);
+        tags += `<span class="tt-tag" style="color:#c084fc">Lifecycle ~$${lifetime}</span>`;
+      }
     }
     if (water > 0.01) {
       tags += `<span class="tt-tag" style="color:#38bdf8">Water ${water.toFixed(2)}m</span>`;
@@ -737,6 +1163,108 @@ class Renderer {
     }
 
     return lines.join(' ');
+  }
+
+  // ── Glossary (Feature 11) ────────────────────────────────────────────────────
+
+  _setupGlossaryListener() {
+    document.addEventListener('mouseover', (e) => {
+      const target = e.target.closest('.gloss-term');
+      if (!target) return;
+      const term = target.dataset.term;
+      const def  = this.config.GLOSSARY && this.config.GLOSSARY[term];
+      if (!def) return;
+      const rect = target.getBoundingClientRect();
+      this._showGlossTooltip(rect, term, def);
+    });
+    document.addEventListener('mouseout', (e) => {
+      if (e.target.classList && e.target.classList.contains('gloss-term'))
+        this._hideGlossTooltip();
+    });
+  }
+
+  _showGlossTooltip(rect, term, def) {
+    let el = document.getElementById('gloss-tooltip');
+    if (!el) return;
+    el.innerHTML = `<strong>${term}</strong><br>${def}`;
+    const pad = 6;
+    let tx = rect.left, ty = rect.bottom + pad;
+    if (tx + 240 > window.innerWidth) tx = Math.max(0, window.innerWidth - 248);
+    if (ty + 70  > window.innerHeight) ty = rect.top - 70;
+    el.style.left = `${tx}px`;
+    el.style.top  = `${ty}px`;
+    el.classList.remove('hidden');
+  }
+
+  _hideGlossTooltip() {
+    const el = document.getElementById('gloss-tooltip');
+    if (el) el.classList.add('hidden');
+  }
+
+  _applyGlossary(element) {
+    if (!this.config.GLOSSARY || !element) return;
+    const terms   = Object.keys(this.config.GLOSSARY);
+    const escaped = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex   = new RegExp(`\\b(${escaped.join('|')})\\b`, 'gi');
+
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const nodes  = [];
+    let node;
+    while ((node = walker.nextNode())) nodes.push(node);
+
+    for (const n of nodes) {
+      if (!n.textContent || !regex.test(n.textContent)) { regex.lastIndex = 0; continue; }
+      regex.lastIndex = 0;
+      const wrap = document.createElement('span');
+      wrap.innerHTML = n.textContent.replace(regex, (match) => {
+        const key = terms.find(t => t.toLowerCase() === match.toLowerCase()) || match;
+        return `<span class="gloss-term" data-term="${key}">${match}</span>`;
+      });
+      n.parentNode.replaceChild(wrap, n);
+    }
+  }
+
+  // ── Real Event Modal (Feature 10) ────────────────────────────────────────────
+
+  _showRealEventModal(evt) {
+    const modal = document.getElementById('real-event-modal');
+    if (!modal) return;
+    const body = modal.querySelector('.modal-card');
+    if (body) {
+      body.innerHTML = `
+        <div class="modal-title">🌍 ${evt.name} (${evt.year})</div>
+        <p class="modal-line" style="color:var(--text-dim);margin-bottom:8px">${evt.location}</p>
+        <p class="modal-line">${evt.summary}</p>
+        <div class="modal-note"><strong>Lesson:</strong> ${evt.lesson}</div>
+        <div class="modal-btns">
+          <button id="real-event-close-btn" class="primary-btn">Close</button>
+        </div>
+      `;
+      document.getElementById('real-event-close-btn')
+        .addEventListener('click', () => modal.classList.add('hidden'));
+    }
+    modal.classList.remove('hidden');
+  }
+
+  // ── Hydrology Dashboard (Feature 12) ─────────────────────────────────────────
+
+  _buildHydroSVG(log) {
+    const W = 300, H = 90, pad = 6;
+    const n  = log.length;
+    const maxRain  = Math.max(...log.map(e => e.rainRate),  0.001);
+    const maxWater = Math.max(...log.map(e => e.maxHouseWater), 0.001);
+
+    const rx = (i) => pad + (i / (n - 1)) * (W - pad * 2);
+    const rainY  = (v) => H - pad - (v / maxRain)  * (H - pad * 2);
+    const waterY = (v) => H - pad - (v / maxWater) * (H - pad * 2);
+
+    const rainPts  = log.map((e, i) => `${rx(i).toFixed(1)},${rainY(e.rainRate).toFixed(1)}`).join(' ');
+    const waterPts = log.map((e, i) => `${rx(i).toFixed(1)},${waterY(e.maxHouseWater).toFixed(1)}`).join(' ');
+
+    return `<svg class="hydro-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points="${rainPts}"  fill="none" stroke="#38bdf8" stroke-width="1.8"/>
+      <polyline points="${waterPts}" fill="none" stroke="#f87171" stroke-width="1.8"/>
+    </svg>`;
   }
 }
 

@@ -35,6 +35,8 @@
         <button id="home-btn" class="secondary-btn">⌂ Home</button>
         <button id="difficulty-easy-btn" class="secondary-btn">Easy</button>
         <button id="difficulty-normal-btn" class="secondary-btn">Normal</button>
+        <button id="undo-btn" class="secondary-btn" style="display:none" disabled title="Undo (Ctrl+Z)">↩</button>
+        <button id="redo-btn" class="secondary-btn" style="display:none" disabled title="Redo (Ctrl+Y)">↪</button>
         <button id="run-storm-btn" class="primary-btn">▶ Run Storm</button>
         <button id="retry-btn" class="secondary-btn">↺ Retry</button>
         <button id="prev-level-btn" class="secondary-btn">← Prev</button>
@@ -149,6 +151,28 @@
 
   <!-- Cell hover tooltip -->
   <div id="cell-tooltip" class="hidden"></div>
+
+  <!-- Glossary tooltip (Feature 11) -->
+  <div id="gloss-tooltip" class="hidden"></div>
+
+  <!-- Real Event Modal (Feature 10) -->
+  <div id="real-event-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <!-- content injected by renderer -->
+    </div>
+  </div>
+
+  <!-- Guided Discovery Tour (Feature 4) -->
+  <div id="tour-overlay" class="hidden">
+    <div class="tour-card" id="tour-card">
+      <div class="tour-step" id="tour-step-label">Step 1 / 5</div>
+      <div class="tour-text" id="tour-text"></div>
+      <div class="tour-btns">
+        <button id="tour-skip-btn" class="secondary-btn">Skip Tour</button>
+        <button id="tour-next-btn" class="primary-btn">Got it →</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Auth gate — must run before game scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

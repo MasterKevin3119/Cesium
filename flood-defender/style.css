@@ -157,6 +157,7 @@ header p {
   cursor: crosshair;
   box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(56,189,248,0.08);
   max-width: 100%;
+  touch-action: none; /* let JS handle all touch gestures */
 }
 
 /* ── Phase Briefing ──────────────────────────────────────────────────────────── */
@@ -551,17 +552,63 @@ button:disabled {
 /* ── Responsive ──────────────────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
   .container { flex-direction: column; padding: 12px 16px 20px; }
+  .main-section { width: 100%; }
+  #game-canvas { width: 100%; height: auto; }
   .sidebar { width: 100%; max-height: none; overflow-y: visible; flex-direction: row; flex-wrap: wrap; }
   .panel { flex: 1; min-width: 200px; }
   #phase-briefing { width: 100%; }
 }
 
+/* ── Phone (≤ 600px) ─────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
-  header { padding: 0 14px; }
-  header h1 { font-size: 1rem; }
-  .top-bar { padding: 10px 14px; flex-direction: column; align-items: flex-start; }
-  .container { padding: 10px 12px 16px; gap: 10px; }
-  #game-canvas { max-width: 100%; height: auto; }
+  header { padding: 0 12px; }
+  header h1 { font-size: 0.95rem; }
+
+  /* Objective bar: stack when it wraps */
+  #objective-bar { padding: 5px 12px; font-size: 0.72rem; }
+
+  /* Top bar: two rows — info on top, buttons below */
+  .top-bar {
+    padding: 8px 12px;
+    gap: 6px;
+  }
+  #phase-title { font-size: 0.88rem; }
+  .budget-info { font-size: 0.73rem; gap: 8px; }
+
+  /* Button row wraps and uses smaller padding */
+  .button-group {
+    width: 100%;
+    margin-left: 0 !important;
+    justify-content: flex-start;
+    gap: 5px;
+  }
+  .button-group button {
+    padding: 5px 9px;
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+  }
+
+  /* Canvas: JS already resizes the drawing buffer;
+     keep it full-width in CSS too as a fallback */
+  .main-section { width: 100%; }
+  #game-canvas { width: 100% !important; height: auto !important; }
+
+  /* Container tighter on phones */
+  .container { padding: 8px 10px 14px; gap: 8px; }
+
+  /* Sidebar panels: stack vertically on phones */
+  .sidebar { flex-direction: column; }
+  .panel { min-width: 0; width: 100%; }
+
+  /* Tile buttons: two-column grid on small screens for easier tapping */
+  #tile-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  /* Modal fits phone width */
+  .modal-card { padding: 20px 18px; }
 }
 
 /* ── Objective Bar ───────────────────────────────────────────────────────────── */
@@ -781,6 +828,235 @@ button:disabled {
   font-weight: 600;
   letter-spacing: 0.02em;
 }
+
+/* ── Adaptive Difficulty Chip (Feature 3) ────────────────────────────────────── */
+.adaptive-chip {
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+  display: inline-block;
+}
+.adaptive-chip.challenge {
+  background: rgba(251,191,36,0.12);
+  border: 1px solid rgba(251,191,36,0.4);
+  color: var(--warning);
+}
+.adaptive-chip.easy-nudge {
+  background: rgba(74,222,128,0.10);
+  border: 1px solid rgba(74,222,128,0.35);
+  color: var(--success);
+}
+
+/* ── Build Toggles (Feature 1 & 6) ──────────────────────────────────────────── */
+.build-toggles {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.toggle-btn {
+  font-size: 0.73rem;
+  padding: 5px 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  background: rgba(255,255,255,0.05);
+  border-color: var(--border-mid);
+  color: var(--text-dim);
+}
+.toggle-btn.active {
+  background: rgba(56,189,248,0.15);
+  border-color: var(--accent-mid);
+  color: var(--accent);
+}
+
+/* ── Achievement Badges (Feature 9) ──────────────────────────────────────────── */
+.badge-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+.badge-chip {
+  font-size: 0.73rem;
+  padding: 4px 9px;
+  border-radius: 20px;
+  background: rgba(251,191,36,0.12);
+  border: 1px solid rgba(251,191,36,0.4);
+  color: var(--warning);
+  cursor: default;
+  white-space: nowrap;
+}
+
+/* ── Case Study Card (Feature 5) ─────────────────────────────────────────────── */
+.case-card {
+  background: rgba(56,189,248,0.06);
+  border: 1px solid rgba(56,189,248,0.22);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-top: 10px;
+  font-size: 0.8rem;
+}
+.case-card-header {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.case-title {
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+  font-size: 0.85rem;
+}
+.case-meta {
+  font-size: 0.73rem;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.case-facts {
+  list-style: disc;
+  padding-left: 18px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.case-facts li { font-size: 0.78rem; }
+.case-connection {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  padding-top: 7px;
+}
+
+/* ── Hydrology Dashboard (Feature 12) ───────────────────────────────────────── */
+.hydro-dash {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-top: 10px;
+}
+.hydro-title {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.hydro-svg {
+  width: 100%;
+  height: 90px;
+  display: block;
+  background: rgba(0,0,0,0.25);
+  border-radius: 4px;
+}
+.hydro-legend {
+  display: flex;
+  gap: 12px;
+  margin-top: 5px;
+  font-size: 0.7rem;
+}
+.hl-rain  { color: #38bdf8; }
+.hl-water { color: #f87171; }
+
+/* ── Real Event Note (Feature 10) ───────────────────────────────────────────── */
+.real-event-note {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  background: rgba(56,189,248,0.05);
+  border: 1px solid rgba(56,189,248,0.18);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  margin: 8px 0;
+}
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.link-btn:hover { color: #fff; }
+
+/* ── Sandbox Banner (Feature 8) ─────────────────────────────────────────────── */
+.sandbox-banner {
+  background: rgba(192,132,252,0.10);
+  border: 2px solid rgba(192,132,252,0.45);
+  color: #c084fc;
+}
+
+/* ── In-Context Glossary (Feature 11) ───────────────────────────────────────── */
+.gloss-term {
+  border-bottom: 1.5px dotted var(--accent);
+  cursor: help;
+  color: inherit;
+}
+.gloss-term:hover { color: var(--accent); }
+
+#gloss-tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  background: rgba(10,18,40,0.97);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  max-width: 240px;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+}
+#gloss-tooltip strong { color: var(--accent); display: block; margin-bottom: 3px; font-size: 0.8rem; }
+
+/* ── Tour Overlay (Feature 4) ───────────────────────────────────────────────── */
+#tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  pointer-events: none;
+}
+.tour-card {
+  position: absolute;
+  pointer-events: all;
+  background: rgba(10,18,40,0.97);
+  border: 1px solid var(--accent-mid);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  max-width: 300px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  animation: tt-in 0.2s ease;
+}
+.tour-step {
+  font-size: 0.72rem;
+  color: var(--accent);
+  font-family: var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 6px;
+}
+.tour-text {
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+.tour-btns { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* ── Utilities ───────────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }

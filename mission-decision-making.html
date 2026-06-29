@@ -12,10 +12,6 @@
   <link rel="stylesheet" href="mission-pages.css" />
 </head>
 <body>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabaseConfig.js?v=202604023"></script>
-  <script src="js/supabaseAuth.js?v=202606031"></script>
-  <script src="js/requireAuthGate.js?v=202606031"></script>
   <div class="mission-shell">
     <header class="mission-shell__header">
       <a class="logo" href="index.html"><img src="logo.svg" alt="" class="logo-icon" aria-hidden="true">Flood Quest</a>
@@ -26,13 +22,20 @@
       </nav>
     </header>
     <main class="mission-shell__main">
-      <span class="mission-shell__badge">Mini-game</span>
-      <h1 class="mission-shell__title">Flood Awareness &amp; Decision Making</h1>
+      <hgroup>
+        <span class="mission-shell__badge">Scenario</span>
+        <h1 class="mission-shell__title">Flood Awareness &amp; Decision Making</h1>
+      </hgroup>
       <p class="mission-shell__lead">Read flow direction, pick safe routes, and decide when no path is safe.</p>
       <div class="mission-shell__card">
         <p>
           This mission teaches you to read flood flow on a map, choose safer escape routes at different water depths, and recognise when staying put is the better option.
         </p>
+        <ul class="mission-hints">
+          <li>Watch the <strong>flow arrows</strong> on the map panel to judge which direction floodwater is moving</li>
+          <li>Routes are highlighted — select <strong>every route you think is safe</strong> at the given depth before submitting</li>
+          <li>If all paths are underwater or unsafe, select <strong>"No safe route"</strong> instead of guessing</li>
+        </ul>
       </div>
       <div class="mission-actions">
         <a class="btn btn-primary" href="viewer.html?mission=decision-making">Play</a>
@@ -40,16 +43,21 @@
       </div>
     </main>
   </div>
-  <script src="js/userAvatar.js?v=202604023"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabaseConfig.js?v=20260624"></script>
+  <script src="js/supabaseAuth.js?v=20260624"></script>
+  <script src="js/requireAuthGate.js?v=20260624"></script>
+  <script src="js/userAvatar.js?v=20260624"></script>
   <script>
     (function () {
       function go() {
-        var slot = document.getElementById("missionPlayerSlot");
-        if (slot && window.userAvatar && typeof window.userAvatar.mountInSlot === "function") {
+        const slot = document.getElementById('missionPlayerSlot');
+        if (slot && window.userAvatar && typeof window.userAvatar.mountInSlot === 'function') {
           window.userAvatar.mountInSlot(slot, { size: 44 });
         }
       }
-      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go);
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
       else go();
     })();
   </script>

@@ -106,7 +106,12 @@
     if (userAuthBtn) {
       userAuthBtn.addEventListener('click', function () {
         try { window._floodAuthNext = null; } catch (e) { /* ignore */ }
-        openAuthModal('');
+        var user = window.supabaseAuth && window.supabaseAuth.getCurrentUser();
+        if (user && typeof window.openFloodProfileModal === 'function') {
+          window.openFloodProfileModal();
+        } else {
+          openAuthModal('');
+        }
       });
     }
 
