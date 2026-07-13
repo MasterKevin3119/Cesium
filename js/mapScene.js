@@ -85,6 +85,13 @@
      then re-render once all heights are known. */
   function prefetchTerrainHeights(callback) {
     if (!viewer || !state.houses.length) { if (callback) callback(); return; }
+    // Ensure every house gets a cache entry so the re-render guard terminates.
+    function _markFallback() {
+      state.houses.forEach(function (h) {
+        var key = h.lon.toFixed(6) + ',' + h.lat.toFixed(6);
+        if (_thCache[key] === undefined) _thCache[key] = 0;
+      });
+    }
     try {
       var cartos = state.houses.map(function (h) {
         return Cesium.Cartographic.fromDegrees(h.lon, h.lat);
@@ -94,14 +101,13 @@
           updated.forEach(function (c, i) {
             var h = state.houses[i];
             var key = h.lon.toFixed(6) + ',' + h.lat.toFixed(6);
-            if (typeof c.height === 'number' && isFinite(c.height)) {
-              _thCache[key] = c.height;
-            }
+            // Store the result (including 0) so _terrainKey checks stop looping.
+            _thCache[key] = (typeof c.height === 'number' && isFinite(c.height)) ? c.height : 0;
           });
           if (callback) callback();
         })
-        .catch(function () { if (callback) callback(); });
-    } catch (e) { if (callback) callback(); }
+        .catch(function () { _markFallback(); if (callback) callback(); });
+    } catch (e) { _markFallback(); if (callback) callback(); }
   }
 
   function mapId() {
@@ -231,6 +237,7 @@
     var halfLen = len / 2, halfWid = wid / 2;
     var mPerDegLon = 111320 * Math.cos(Cesium.Math.toRadians(h.lat));
     var eid = 'mapscene-house-' + h.id;
+    var _terrainKey = h.lon.toFixed(6) + ',' + h.lat.toFixed(6);
     var th = getTerrainHeight(h.lon, h.lat);
 
     function pt(xM, yM, zM) {
@@ -332,7 +339,10 @@
       }));
     });
 
-    return th === 0;
+    // Return true only if terrain hasn't been fetched yet (cache key absent).
+    // Returning true when th===0 but the key IS cached (EllipsoidTerrainProvider legitimately
+    // returns 0) caused an infinite clear-and-re-render loop that prevented houses appearing.
+    return _thCache[_terrainKey] === undefined;
   }
 
   function clearEntities() {
