@@ -213,34 +213,6 @@
       return false;
     }
 
-    function tryLandingNextParam() {
-      var next = null;
-      try {
-        var q = new URLSearchParams(window.location.search);
-        next = sanitizeNext(q.get('next') || '');
-      } catch (e) { /* ignore */ }
-      if (!next) return;
-      window.supabaseAuth.getAuthForApi(function () {
-        var user = window.supabaseAuth.getCurrentUser();
-        if (user) {
-          if (maybeRedirectAfterAuth()) return;
-          return;
-        }
-        try { window._floodAuthNext = next; } catch (e) { /* ignore */ }
-        var ctx;
-        if (next.indexOf('admin=1') !== -1) {
-          ctx = 'Sign in with an admin account to open the zone editor (admins see it automatically after sign-in).';
-        } else if (/^flood-defender\//i.test(next)) {
-          ctx = 'Sign in or create an account to play Flood Defender.';
-        } else if (/^mission-.*\.html/i.test(next)) {
-          ctx = 'Sign in or create an account to open missions and the flood map.';
-        } else {
-          ctx = 'Sign in or create an account to use the simulator and missions.';
-        }
-        openAuthModal(ctx);
-      });
-    }
-
     function updateAuthUI(sessionAuth) {
       var hasSession = !!sessionAuth;
       updateLandingSignUpVisible(!hasSession);
@@ -303,7 +275,6 @@
 
     authRefreshUi();
     window.supabaseAuth.onAuthChange(authRefreshUi);
-    tryLandingNextParam();
 
     try {
       if (modal && window.userAvatar) window.userAvatar.initPicker(modal);
@@ -379,10 +350,6 @@
       });
     }
 
-    try {
-      var params = new URLSearchParams(window.location.search);
-      if (params.get('openAuth') === '1') openAuthModal('');
-    } catch (e) { /* ignore */ }
   }
 
   window.initFloodAuthUi = initFloodAuthUi;
