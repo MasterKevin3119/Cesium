@@ -137,7 +137,7 @@
 
   /**
    * Raised water-surface colour for per-zone flood animation.
-   * Rain-driven (30/60/100) uses blue tints; “Show 0.5 m / 1 m” uses green (matches legend + gridManager).
+   * Rain-driven (30/60/100) uses blue tints; “Show 0.5 m / 1 m” uses red (matches legend + gridManager).
    * Keep aligned with js/gridManager.js COLOR_*.
    */
   function floodOverlayMaterialForLevel(level, targetDeltaMeters) {
@@ -146,8 +146,8 @@
     if (level === '30') return new Cesium.Color(0.88, 0.96, 1.0, 0.5);
     if (level === '60') return new Cesium.Color(0.7, 0.9, 1.0, 0.55);
     if (level === '100') return new Cesium.Color(0.0, 0.25, 0.7, 0.65);
-    if (level === '0.5' || level === '0.5m' || level === 0.5) return new Cesium.Color(0.5, 0.95, 0.6, 0.55);
-    if (level === '1' || level === '1m' || level === 1) return new Cesium.Color(0.0, 0.6, 0.25, 0.65);
+    if (level === '0.5' || level === '0.5m' || level === 0.5) return new Cesium.Color(1.0, 0.45, 0.45, 0.55);
+    if (level === '1' || level === '1m' || level === 1) return new Cesium.Color(0.75, 0.05, 0.05, 0.65);
     if (d <= 0.11) return new Cesium.Color(0.88, 0.96, 1.0, 0.5);
     if (d <= 0.51) return new Cesium.Color(0.7, 0.9, 1.0, 0.55);
     return new Cesium.Color(0.0, 0.25, 0.7, 0.65);

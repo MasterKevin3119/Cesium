@@ -433,13 +433,13 @@
         .zone-color-legend__row--active { color: var(--text); }
         .zone-color-legend__row--active .zone-color-legend__swatch { box-shadow: 0 0 0 2px rgba(56,189,248,0.4); }
         #legendRowDepth05.zone-color-legend__row--active .zone-color-legend__swatch,
-        #legendRowDepth1.zone-color-legend__row--active  .zone-color-legend__swatch { box-shadow: 0 0 0 2px rgba(74,222,128,0.55); }
+        #legendRowDepth1.zone-color-legend__row--active  .zone-color-legend__swatch { box-shadow: 0 0 0 2px rgba(248,113,113,0.55); }
         .zone-color-legend__hint { font-family: var(--font-body); font-size: 12px; color: var(--text-faint); margin-top: 8px; }
         .swatch-rain01  { background: rgba(100,190,255,0.75); }
         .swatch-rain05  { background: rgba(25,120,235,0.85); }
         .swatch-rain1   { background: rgba(0,35,180,0.95); }
-        .swatch-depth05 { background: rgba(128,242,153,0.55); }
-        .swatch-depth1  { background: rgba(0,153,64,0.65); }
+        .swatch-depth05 { background: rgba(255,115,115,0.55); }
+        .swatch-depth1  { background: rgba(191,13,13,0.65); }
 
         /* ── MC HEADER BTN (legacy class, kept for admin btn fallback) ────────── */
         .mc-header-btn {
@@ -1483,11 +1483,11 @@
                         </div>
                         <div id="legendRowDepth05" class="zone-color-legend__row" data-tier="depth05">
                             <span class="zone-color-legend__swatch swatch-depth05" aria-hidden="true"></span>
-                            <span><strong>0.5 m flood</strong> — light green (Show 0.5 m)</span>
+                            <span><strong>0.5 m flood</strong> — light red (Show 0.5 m)</span>
                         </div>
                         <div id="legendRowDepth1" class="zone-color-legend__row" data-tier="depth1">
                             <span class="zone-color-legend__swatch swatch-depth1" aria-hidden="true"></span>
-                            <span><strong>1 m flood</strong> — dark green (Show 1 m)</span>
+                            <span><strong>1 m flood</strong> — dark red (Show 1 m)</span>
                         </div>
                         <div class="zone-color-legend__hint">Highlighted rows match colours visible on the map for that hour.</div>
                     </div>
@@ -1520,7 +1520,7 @@
                     </div>
                     <div id="adminFloodTools">
                         <div style="font-size:12px; margin-bottom:6px; color:rgba(255,255,255,0.9);">Zone editor (admin accounts only): pick a level, click grid cells, then Save. Use <strong>Exit admin</strong> for the normal map view; <strong>Edit zones</strong> in the toolbar brings this back.</div>
-                        <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Pale blue = 0.1 mm · Light blue = 0.5 mm · Dark blue = 1 mm · Light green = 0.5 m · Dark green = 1 m · Amber = pending</div>
+                        <div style="font-size:11px; margin-bottom:6px; color:rgba(255,255,255,0.7);">Pale blue = 0.1 mm · Light blue = 0.5 mm · Dark blue = 1 mm · Light red = 0.5 m · Dark red = 1 m · Amber = pending</div>
                         <div style="font-size:11px; margin-bottom:4px; color:rgba(255,255,255,0.6);">Show levels:</div>
                         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
                             <label style="font-size:12px;"><input type="checkbox" id="adminShowLevel30" checked> 0.1 mm</label>

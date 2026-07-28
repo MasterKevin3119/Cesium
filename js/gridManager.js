@@ -211,12 +211,12 @@
 
   function initCesiumMaterials() {
     if (MATERIAL_BASE || typeof Cesium === 'undefined') return;
-    // Rain zones: 0.1 / 0.5 / 1 mm thresholds (blue shades); flood depth: 0.5 m / 1 m (green).
+    // Rain zones: 0.1 / 0.5 / 1 mm thresholds (blue shades); flood depth: 0.5 m / 1 m (red).
     COLOR_30 = new Cesium.Color(0.39, 0.75, 1.0, 0.65);
     COLOR_60 = new Cesium.Color(0.1, 0.47, 0.92, 0.75);
     COLOR_100 = new Cesium.Color(0.0, 0.14, 0.71, 0.88);
-    COLOR_05 = new Cesium.Color(0.5, 0.95, 0.6, 0.55);
-    COLOR_1 = new Cesium.Color(0.0, 0.6, 0.25, 0.65);
+    COLOR_05 = new Cesium.Color(1.0, 0.45, 0.45, 0.55);
+    COLOR_1 = new Cesium.Color(0.75, 0.05, 0.05, 0.65);
     COLOR_TEMP = new Cesium.Color(0.96, 0.62, 0.04, 0.35);
     MATERIAL_30 = materialProp(COLOR_30);
     MATERIAL_60 = materialProp(COLOR_60);
