@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Background — Flood Quest</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+    <!-- Skip to main content — keyboard / screen-reader users -->
+    <a class="skip-link" href="#content">Skip to main content</a>
+
+    <header class="site-header" id="site-header">
+        <a href="index.html" class="logo">
+            <img src="logo.svg" alt="" class="logo-icon" aria-hidden="true">
+            Flood Quest
+        </a>
+        <div class="site-header__nav-wrap">
+            <nav>
+                <a href="index.html">Home</a>
+                <a href="index.html#mission">Missions</a>
+                <a href="index.html#simulation">Simulation</a>
+                <a href="background.html">Background</a>
+            </nav>
+            <div class="site-header__actions">
+                <button type="button" id="landingAuthBtn" class="site-header__auth site-header__auth--primary" title="Sign in as admin to edit the flood simulator">Admin</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="wrap wrap--no-hero" id="content">
+        <div class="section-divider"></div>
+
+        <!-- BACKGROUND READING -->
+        <section id="study-area">
+            <h2>Where We Are</h2>
+            <figure class="section-fig" aria-hidden="true">
+                <img src="assets/kampung-asahan.png" alt="Study area – Kampung Asahan" loading="lazy" onerror="this.style.display='none'">
+            </figure>
+            <p>
+                This simulation is based on <strong>Kampung Asahan</strong>, used as a case study to represent a flood-prone community environment. The area provides a realistic setting for exploring how flooding can affect surrounding buildings, roads, and public spaces.
+            </p>
+        </section>
+
+        <section id="flood-extent">
+            <h2>Flood Extent and Water Levels</h2>
+            <figure class="section-fig" aria-hidden="true">
+                <img src="assets/climate-central.png" alt="Flood extent and water levels" loading="lazy" onerror="this.style.display='none'">
+            </figure>
+            <p>
+                To identify areas affected by different flood water levels, <strong>Climate Central</strong>–style information is used. This helps illustrate how rising water levels can impact land areas under various flood conditions.
+            </p>
+            <h3>3D Environment and Visualisation</h3>
+            <figure class="section-fig" aria-hidden="true">
+                <img src="assets/3d.png" alt="3D environment and visualisation" loading="lazy" onerror="this.style.display='none'">
+            </figure>
+            <p>
+                An interactive 3D globe of the study area lets you visualise flood scenarios in an immersive way. Water levels and flood impacts are easier to observe and understand, making changes in conditions clearer.
+            </p>
+        </section>
+
+        <section id="purpose">
+            <h2>Why This Matters</h2>
+            <p>
+                This simulation is designed to help you better understand your surroundings during flood events. By exploring different flood scenarios, you can see how conditions change and how decisions influence outcomes.
+            </p>
+        </section>
+
+        <section id="supporting-decisions">
+            <h2>Make Better Decisions in a Real Crisis</h2>
+            <p>
+                By presenting flood scenarios visually and interactively, the simulation supports you in making more informed decisions before and during flood events.
+            </p>
+        </section>
+
+        <div class="section-divider"></div>
+
+        <footer>
+            <div class="cta-row">
+                <a class="btn btn-primary" href="viewer.html">Try now!</a>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Auth modal -->
+    <div id="authModal" class="auth-modal" hidden role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+        <div class="auth-modal__backdrop" id="authModalBackdrop"></div>
+        <div class="auth-modal__dialog">
+            <button type="button" class="auth-modal__close" id="authModalClose" aria-label="Close dialog">×</button>
+            <h2 id="authModalTitle" class="auth-modal__title">Admin Sign In</h2>
+            <p id="authModalContext" class="auth-modal__context" hidden></p>
+            <div id="authPanel" class="auth-panel">
+                <div class="auth-panel__title" id="authSharedTitle">Admin username + password</div>
+                <div id="authLoggedOut">
+                    <div class="auth-panel__row">
+                        <input type="text" id="authUsername" placeholder="Username" autocomplete="username" maxlength="32" />
+                        <input type="password" id="authPin" placeholder="Password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" />
+                    </div>
+                    <div class="auth-panel__row auth-panel__row--actions">
+                        <button type="button" id="authSignIn">Log in</button>
+                    </div>
+                </div>
+                <div id="authLoggedIn" hidden>
+                    <button type="button" id="authOpenProfile" class="auth-panel__profile-link">Profile settings</button>
+                    <p class="auth-panel__signed-in-as"><span id="authUserEmail" class="auth-panel__user"></span></p>
+                    <div class="auth-panel__row auth-panel__row--actions">
+                        <button type="button" id="authSignOut">Log out</button>
+                    </div>
+                </div>
+                <div id="authError" class="auth-panel__error" hidden></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile settings modal -->
+    <div id="profileSettingsModal" class="auth-modal profile-settings-modal" hidden role="dialog" aria-modal="true" aria-labelledby="profileSettingsModalTitle">
+        <div class="auth-modal__backdrop" id="profileSettingsModalBackdrop"></div>
+        <div class="auth-modal__dialog">
+            <button type="button" class="auth-modal__close" id="profileSettingsModalClose" aria-label="Close dialog">×</button>
+            <h2 id="profileSettingsModalTitle" class="auth-modal__title">Profile settings</h2>
+            <div class="auth-panel" style="margin-bottom: 0;">
+                <div class="profile-section">
+                    <div class="profile-section__title">Explorer avatar</div>
+                    <div class="avatar-picker" style="border-bottom: none; padding-bottom: 0; margin-bottom: 0;">
+                        <p class="avatar-picker__hint" style="margin-top: 0;">Style and shuffle apply to your account immediately.</p>
+                        <div class="avatar-picker__preview"><img id="profileAvatarPreview" width="72" height="72" alt="" /></div>
+                        <div class="avatar-picker__styles" id="profileAvatarStyleChips"></div>
+                        <button type="button" id="profileAvatarShuffle" class="avatar-picker__shuffle">Shuffle look</button>
+                    </div>
+                </div>
+                <div class="profile-section">
+                    <div class="profile-section__title">Account</div>
+                    <p class="profile-detail"><span class="profile-detail__label">Username</span><span id="profileAccountUsername">—</span></p>
+                    <p class="profile-detail"><span class="profile-detail__label">Sign-in email</span><span id="profileAccountEmail">—</span></p>
+                </div>
+                <div class="profile-section" id="profileUsernameChangeSection" hidden>
+                    <div class="profile-section__title">Change username</div>
+                    <p class="profile-settings__hint">Only accounts using the built-in username format can be renamed here.</p>
+                    <div class="auth-panel__row">
+                        <input type="text" id="profileNewUsername" placeholder="New username" autocomplete="username" maxlength="32" />
+                    </div>
+                    <button type="button" class="profile-settings__btn" id="profileSaveUsername">Update username</button>
+                </div>
+                <div class="profile-section">
+                    <div class="profile-section__title">Change PIN</div>
+                    <p class="profile-settings__hint">Your PIN is your password (4 digits). You stay signed in on this device after changing it.</p>
+                    <div class="auth-panel__row">
+                        <input type="password" id="profileNewPin" placeholder="New PIN (4 digits)" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password" />
+                        <input type="password" id="profileConfirmPin" placeholder="Confirm PIN" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password" />
+                    </div>
+                    <button type="button" class="profile-settings__btn" id="profileSavePin">Update PIN</button>
+                </div>
+                <div class="profile-section">
+                    <div class="profile-section__title">Session</div>
+                    <button type="button" class="profile-settings__btn profile-settings__btn--signout" id="profileSignOut">Sign out</button>
+                </div>
+                <div id="profileSettingsError" class="auth-panel__error" hidden></div>
+                <p id="profileSettingsOk" class="profile-settings__success" hidden></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js?v=20260624"></script>
+    <script src="js/supabaseConfig.js?v=20260624"></script>
+    <script src="js/supabaseAuth.js?v=20260624"></script>
+    <script src="js/userAvatar.js?v=20260624"></script>
+    <script src="js/authUi.js?v=20260624"></script>
+    <script src="js/profileSettings.js?v=20260624"></script>
+    <script>
+        (function () {
+            const header = document.getElementById('site-header');
+            if (header) {
+                function updateHeader() {
+                    header.classList.toggle('scrolled', window.scrollY > 80);
+                }
+                window.addEventListener('scroll', updateHeader, { passive: true });
+                updateHeader();
+            }
+
+            const wrap = document.getElementById('content');
+            if (!wrap) return;
+            const observer = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) return;
+                    const el = entry.target;
+                    if (el.classList.contains('section-divider')) {
+                        wrap.classList.add('ready');
+                        return;
+                    }
+                    if (el.classList.contains('card')) {
+                        const cardsInRow = el.parentElement.querySelectorAll('.card');
+                        const idx = Array.prototype.indexOf.call(cardsInRow, el);
+                        el.style.transitionDelay = (idx * 0.08) + 's';
+                    }
+                    el.classList.add('animate-in');
+                });
+            }, { rootMargin: '0px 0px -60px 0px', threshold: 0.1 });
+
+            wrap.querySelectorAll('.section-divider, section, .section-fig, .card').forEach(function (el) {
+                observer.observe(el);
+            });
+        })();
+
+        (function () {
+            function bootAuth() {
+                if (typeof window.initFloodAuthUi === 'function') window.initFloodAuthUi();
+            }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootAuth);
+            else bootAuth();
+        })();
+    </script>
+</body>
+</html>

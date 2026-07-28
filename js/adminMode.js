@@ -129,7 +129,7 @@
         return;
       }
       if (!isFloodEditorAccount()) {
-        alert('Only admin accounts can edit flood zones. Sign up with the admin code, or sign in with an admin account.');
+        alert('Only the admin account can edit flood zones. Sign in with the admin account.');
         return;
       }
       adminChromeAllowed = true;

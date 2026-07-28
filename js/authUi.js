@@ -1,15 +1,14 @@
 /**
- * Account UI (Sign in / Sign up) for pages without the Cesium viewer.
- * Viewer uses the same Supabase session; admins get the zone editor automatically.
+ * Admin Sign In UI for pages without the Cesium viewer.
+ * There is no public sign-up — the single admin account is created directly
+ * in the Supabase Dashboard (see docs/SUPABASE_SETUP.md). Signing in here
+ * only unlocks the flood-zone editor in the simulator.
  */
 (function () {
   'use strict';
 
-  var FLOOD_ADMIN_SIGNUP_CODE = '3119';
-
   function initFloodAuthUi(opts) {
     opts = opts || {};
-    var signUpBtnId = opts.signUpBtnId || 'landingSignUpBtn';
     var userAuthBtnId = opts.userAuthBtnId || 'landingAuthBtn';
 
     var landingProfileBtn = document.getElementById('landingProfileBtn');
@@ -17,54 +16,26 @@
     var panel = document.getElementById('authPanel');
     var modal = document.getElementById('authModal');
     var userAuthBtn = document.getElementById(userAuthBtnId);
-    var landingSignUpBtn = document.getElementById(signUpBtnId);
     var loggedOut = document.getElementById('authLoggedOut');
     var loggedIn = document.getElementById('authLoggedIn');
     var authUserEmail = document.getElementById('authUserEmail');
     var authError = document.getElementById('authError');
     var authUsername = document.getElementById('authUsername');
     var authPin = document.getElementById('authPin');
-    var authAdminCode = document.getElementById('authAdminCode');
-    var authModeLogin = document.getElementById('authModeLogin');
-    var authModeSignUp = document.getElementById('authModeSignUp');
     var authModalTitleEl = document.getElementById('authModalTitle');
     var authSharedTitle = document.getElementById('authSharedTitle');
 
     if (!panel || !window.supabaseAuth || !window.supabaseAuth.isReady()) {
       if (userAuthBtn) userAuthBtn.style.display = 'none';
-      if (landingSignUpBtn) landingSignUpBtn.style.display = 'none';
       if (landingProfileBtn) landingProfileBtn.hidden = true;
       return;
     }
 
     var authModalContext = document.getElementById('authModalContext');
 
-    /** Sign up is only for guests — hide whenever Supabase has an active session. */
-    function updateLandingSignUpVisible(show) {
-      if (!landingSignUpBtn) return;
-      if (!show) {
-        landingSignUpBtn.hidden = true;
-        landingSignUpBtn.style.display = 'none';
-        landingSignUpBtn.setAttribute('aria-hidden', 'true');
-      } else {
-        landingSignUpBtn.hidden = false;
-        landingSignUpBtn.style.removeProperty('display');
-        landingSignUpBtn.removeAttribute('aria-hidden');
-      }
-    }
-
-    function setAuthModeLogin() {
-      if (authModeLogin) authModeLogin.hidden = false;
-      if (authModeSignUp) authModeSignUp.hidden = true;
-      if (authModalTitleEl) authModalTitleEl.textContent = 'Account';
-      if (authSharedTitle) authSharedTitle.textContent = 'Username + 4-digit PIN (zones saved per account when logged in)';
-    }
-
-    function setAuthModeSignUp() {
-      if (authModeLogin) authModeLogin.hidden = true;
-      if (authModeSignUp) authModeSignUp.hidden = false;
-      if (authModalTitleEl) authModalTitleEl.textContent = 'Create account';
-      if (authSharedTitle) authSharedTitle.textContent = 'Choose avatar, then username + PIN';
+    function setAuthModalCopy() {
+      if (authModalTitleEl) authModalTitleEl.textContent = 'Admin Sign In';
+      if (authSharedTitle) authSharedTitle.textContent = 'Admin username + password';
     }
 
     function openAuthModal(contextText) {
@@ -78,7 +49,7 @@
           authModalContext.hidden = true;
         }
       }
-      setAuthModeLogin();
+      setAuthModalCopy();
       modal.hidden = false;
       modal.setAttribute('aria-hidden', 'false');
       document.body.style.overflow = 'hidden';
@@ -91,12 +62,10 @@
         authModalContext.textContent = '';
         authModalContext.hidden = true;
       }
-      setAuthModeLogin();
       modal.hidden = true;
       modal.setAttribute('aria-hidden', 'true');
       document.body.style.overflow = '';
       if (authError) { authError.textContent = ''; authError.style.display = 'none'; }
-      try { if (authAdminCode) authAdminCode.value = ''; } catch (e) { /* ignore */ }
     }
 
     window.openFloodAuthModal = function (contextText) {
@@ -112,19 +81,6 @@
         } else {
           openAuthModal('');
         }
-      });
-    }
-
-    if (landingSignUpBtn) {
-      landingSignUpBtn.addEventListener('click', function () {
-        try { window._floodAuthNext = null; } catch (e) { /* ignore */ }
-        openAuthModal('');
-        setAuthModeSignUp();
-        try {
-          var sh = document.getElementById('avatarShuffle');
-          if (sh) sh.focus();
-          else if (authUsername) authUsername.focus();
-        } catch (e2) { /* ignore */ }
       });
     }
 
@@ -154,15 +110,6 @@
         return 'Cannot reach the server. Your Supabase project may be paused — go to supabase.com, open your project, and click "Restore" if it shows as paused. Then try again.';
       }
       return null;
-    }
-    function formatAuthSignupError(err) {
-      var s = typeof err === 'string' ? err : ((err && err.message) ? String(err.message) : String(err || ''));
-      var net = formatNetworkError(s);
-      if (net) return net;
-      if (/signup.*disabled|signups.*disabled|email signups/i.test(s)) {
-        return 'Supabase has signups disabled. In the Supabase Dashboard: Authentication → Settings → allow new users to sign up.';
-      }
-      return s;
     }
     function formatAuthSignInError(err) {
       var s = typeof err === 'string' ? err : ((err && err.message) ? String(err.message) : String(err || ''));
@@ -214,9 +161,6 @@
     }
 
     function updateAuthUI(sessionAuth) {
-      var hasSession = !!sessionAuth;
-      updateLandingSignUpVisible(!hasSession);
-
       var user = window.supabaseAuth.getCurrentUser();
       if (user) {
         if (loggedOut) loggedOut.style.display = 'none';
@@ -254,11 +198,11 @@
         if (userAuthBtn) {
           try {
             if (window.userAvatar) window.userAvatar.refreshSignInButton(userAuthBtn);
-            else userAuthBtn.textContent = 'Sign in';
+            else userAuthBtn.textContent = 'Admin';
           } catch (e) {
-            userAuthBtn.textContent = 'Sign in';
+            userAuthBtn.textContent = 'Admin';
           }
-          userAuthBtn.title = 'Sign in or create an account';
+          userAuthBtn.title = 'Sign in as admin to edit the flood simulator';
           userAuthBtn.classList.remove('site-header__auth--admin');
         }
       }
@@ -276,29 +220,12 @@
     authRefreshUi();
     window.supabaseAuth.onAuthChange(authRefreshUi);
 
-    try {
-      if (modal && window.userAvatar) window.userAvatar.initPicker(modal);
-    } catch (e) { /* ignore */ }
-
-    var swUp = document.getElementById('authSwitchToSignUp');
-    var swIn = document.getElementById('authSwitchToLogin');
-    if (swUp) swUp.addEventListener('click', function () {
-      showError('');
-      setAuthModeSignUp();
-      try { document.getElementById('avatarShuffle').focus(); } catch (e) { try { if (authUsername) authUsername.focus(); } catch (e2) { /* ignore */ } }
-    });
-    if (swIn) swIn.addEventListener('click', function () {
-      showError('');
-      setAuthModeLogin();
-      try { if (authUsername) authUsername.focus(); } catch (e) { /* ignore */ }
-    });
-
     if (document.getElementById('authSignIn')) {
       document.getElementById('authSignIn').addEventListener('click', function () {
         var email = usernameToSupabaseEmail(authUsername && authUsername.value);
         var password = pinToSupabasePassword(authPin && authPin.value);
         if (!email) { showError('Username: letters, numbers, _ or - (min 2 chars)'); return; }
-        if (!password) { showError('Enter exactly 4 digits for PIN'); return; }
+        if (!password) { showError('Enter the 4-digit admin password'); return; }
         showError('');
         window.supabaseAuth.signIn(email, password, function (err) {
           if (err) { showError(formatAuthSignInError(err)); return; }
@@ -306,32 +233,6 @@
           if (maybeRedirectAfterAuth()) return;
           closeAuthModal();
         });
-      });
-    }
-    if (document.getElementById('authSignUp')) {
-      document.getElementById('authSignUp').addEventListener('click', function () {
-        var email = usernameToSupabaseEmail(authUsername && authUsername.value);
-        var password = pinToSupabasePassword(authPin && authPin.value);
-        if (!email) { showError('Username: letters, numbers, _ or - (min 2 chars)'); return; }
-        if (!password) { showError('Enter exactly 4 digits for PIN'); return; }
-        showError('');
-        var adminRaw = authAdminCode ? String(authAdminCode.value).trim() : '';
-        var signUpOpts = { userData: {} };
-        if (adminRaw === FLOOD_ADMIN_SIGNUP_CODE) {
-          signUpOpts.userData.flood_is_admin = true;
-        } else if (adminRaw.length > 0 && adminRaw !== FLOOD_ADMIN_SIGNUP_CODE) {
-          showError('Admin code is not valid. Leave the field empty or use the correct code when signing up.');
-          return;
-        }
-        if (window.userAvatar && typeof window.userAvatar.mergeSignupMetadataInto === 'function') {
-          signUpOpts.userData = window.userAvatar.mergeSignupMetadataInto(signUpOpts.userData);
-        }
-        window.supabaseAuth.signUp(email, password, function (err) {
-          if (err) { showError(formatAuthSignupError(err)); return; }
-          authRefreshUi();
-          if (maybeRedirectAfterAuth()) return;
-          closeAuthModal();
-        }, signUpOpts);
       });
     }
     if (document.getElementById('authSignOut')) {

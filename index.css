@@ -802,6 +802,10 @@ a.sim-featured-card:hover .sim-featured-card__cta { gap: 0.55rem; color: #7dd3fc
 .section-fig.animate-in { opacity: 1; transform: translateY(0); }
 .section-fig img { width: 100%; height: auto; display: block; transition: transform 0.5s ease; }
 .section-fig:hover img { transform: scale(1.02); }
+.section-fig video { width: 100%; height: auto; display: block; background: #000; }
+
+/* ── No-hero pages (e.g. background.html) ─────────────────────────────── */
+.wrap--no-hero { padding-top: 6rem; }
 
 /* ── Footer ────────────────────────────────────────────────────────────── */
 footer {

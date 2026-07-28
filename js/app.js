@@ -730,7 +730,7 @@
         }
         if (!window.supabaseAuth.isFloodAdmin || !window.supabaseAuth.isFloodAdmin()) {
           stripAdminParam();
-          alert("Only admin accounts can open the zone editor. Sign up with the admin code on the intro page, then sign in.");
+          alert("Only the admin account can open the zone editor. Sign in with the admin account on the intro page.");
           return;
         }
         if (window.adminMode && typeof window.adminMode.enableAfterAuth === "function") {

@@ -25,11 +25,10 @@
                 <a href="#">Home</a>
                 <a href="#mission">Missions</a>
                 <a href="#simulation">Simulation</a>
-                <a href="#study-area">Background</a>
+                <a href="background.html">Background</a>
             </nav>
             <div class="site-header__actions">
-                <button type="button" id="landingAuthBtn" class="site-header__auth site-header__auth--primary" title="Sign in to your account">Sign in</button>
-                <button type="button" id="landingSignUpBtn" class="site-header__auth" title="Create an account">Sign up</button>
+                <button type="button" id="landingAuthBtn" class="site-header__auth site-header__auth--primary" title="Sign in as admin to edit the flood simulator">Admin</button>
             </div>
         </div>
     </header>
@@ -46,8 +45,7 @@
                     Floods change everything — fast. Explore, practise, and learn what to do before one hits.
                 </p>
                 <div class="hero-buttons">
-                    <a class="btn-ghost" href="#mission">Start a mission</a>
-                    <a class="btn-ghost btn-scroll" href="#simulation">Try the simulator</a>
+                    <a class="btn-ghost" href="#intro-video">Let's Start</a>
                 </div>
             </div>
         </section>
@@ -56,12 +54,68 @@
     <div class="wrap" id="content">
         <div class="section-divider"></div>
 
-        <!-- MISSIONS — first because it's the primary action -->
+        <!-- INTRO VIDEO -->
+        <section id="intro-video">
+            <h2>Flood Quest Overview</h2>
+            <figure class="section-fig">
+                <video controls preload="metadata" playsinline>
+                    <source src="assets/flood-quest-overview.mp4" type="video/mp4">
+                    Your browser does not support embedded video.
+                </video>
+            </figure>
+            <a class="sim-featured-card" href="background.html">
+                <div class="sim-featured-card__icon" aria-hidden="true">
+                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="10" y="6" width="28" height="36" rx="3" fill="none" stroke="#38bdf8" stroke-width="2"/>
+                        <line x1="16" y1="16" x2="32" y2="16" stroke="#38bdf8" stroke-width="1.5"/>
+                        <line x1="16" y1="24" x2="32" y2="24" stroke="#38bdf8" stroke-width="1.5" opacity="0.6"/>
+                        <line x1="16" y1="32" x2="26" y2="32" stroke="#38bdf8" stroke-width="1.5" opacity="0.6"/>
+                    </svg>
+                </div>
+                <div class="sim-featured-card__body">
+                    <span class="sim-featured-card__badge">Background</span>
+                    <h3>Learn More About Flood Quest</h3>
+                    <p>Discover the real Kampung Asahan study area behind this simulation, how flood extent and water-level data is modelled, and why understanding flood risk before it happens helps you make better decisions in a real crisis.</p>
+                    <span class="sim-featured-card__cta">Read the background <span aria-hidden="true">→</span></span>
+                </div>
+            </a>
+        </section>
+
+        <div class="section-divider"></div>
+
+        <!-- SIMULATION -->
+        <section id="simulation">
+            <h2>Flood Simulator</h2>
+            <p style="margin-bottom: 1.5rem;">
+                Explore the real study area in an interactive 3D environment. See how floodwater spreads across the terrain at different depths, view live environmental data, and understand flood risk before it happens.
+            </p>
+            <a class="sim-featured-card" href="viewer.html">
+                <div class="sim-featured-card__icon" aria-hidden="true">
+                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="24" cy="24" r="20" fill="none" stroke="#38bdf8" stroke-width="2"/>
+                        <ellipse cx="24" cy="24" rx="10" ry="20" fill="none" stroke="#38bdf8" stroke-width="1.5"/>
+                        <line x1="4" y1="24" x2="44" y2="24" stroke="#38bdf8" stroke-width="1.5"/>
+                        <line x1="7" y1="15" x2="41" y2="15" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
+                        <line x1="7" y1="33" x2="41" y2="33" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
+                        <path d="M10 30 Q16 26 22 30 Q28 34 34 30 Q38 27 42 29" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="sim-featured-card__body">
+                    <span class="sim-featured-card__badge">3D Interactive</span>
+                    <h3>3D Flood Simulator</h3>
+                    <p>Rotate, zoom, and tilt around the Kampung Asahan study area rendered with real elevation data. Visualise flood extents at <strong>0.5 m</strong> and <strong>1.0 m</strong> depths, track live precipitation and temperature data, and explore the results in graph and table form.</p>
+                    <span class="sim-featured-card__cta">Open simulator <span aria-hidden="true">→</span></span>
+                </div>
+            </a>
+        </section>
+
+        <div class="section-divider"></div>
+
+        <!-- MISSIONS -->
         <section id="mission">
             <h2>Missions</h2>
             <p style="margin-bottom: 0.75rem;">
-                <strong>Sign in or create an account</strong> to open the flood map and play missions. Open a mission to read what you will do, then tap <strong>Play</strong> to start in the simulator. When you finish, you can continue to the next mission or return here.
-                When you <strong>create an account</strong>, you choose an <strong>explorer avatar</strong> — the same face follows you on mission pages and in the simulator.
+                Open a mission to read what you will do, then tap <strong>Play</strong> to start in the simulator. When you finish, you can continue to the next mission or return here.
             </p>
             <!-- Populated by JS when the user is signed in and has played missions -->
             <div class="mission-progress" id="missionProgressBar" aria-label="Mission progress" aria-live="polite"></div>
@@ -107,81 +161,11 @@
 
         <div class="section-divider"></div>
 
-        <!-- SIMULATION -->
-        <section id="simulation">
-            <h2>Flood Simulator</h2>
-            <p style="margin-bottom: 1.5rem;">
-                Explore the real study area in an interactive 3D environment. See how floodwater spreads across the terrain at different depths, view live environmental data, and understand flood risk before it happens.
-            </p>
-            <a class="sim-featured-card" href="viewer.html">
-                <div class="sim-featured-card__icon" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="24" cy="24" r="20" fill="none" stroke="#38bdf8" stroke-width="2"/>
-                        <ellipse cx="24" cy="24" rx="10" ry="20" fill="none" stroke="#38bdf8" stroke-width="1.5"/>
-                        <line x1="4" y1="24" x2="44" y2="24" stroke="#38bdf8" stroke-width="1.5"/>
-                        <line x1="7" y1="15" x2="41" y2="15" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
-                        <line x1="7" y1="33" x2="41" y2="33" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
-                        <path d="M10 30 Q16 26 22 30 Q28 34 34 30 Q38 27 42 29" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                </div>
-                <div class="sim-featured-card__body">
-                    <span class="sim-featured-card__badge">3D Interactive</span>
-                    <h3>3D Flood Simulator</h3>
-                    <p>Rotate, zoom, and tilt around the Kampung Asahan study area rendered with real elevation data. Visualise flood extents at <strong>0.5 m</strong> and <strong>1.0 m</strong> depths, track live precipitation and temperature data, and explore the results in graph and table form.</p>
-                    <span class="sim-featured-card__cta">Open simulator <span aria-hidden="true">→</span></span>
-                </div>
-            </a>
-        </section>
-
-        <div class="section-divider"></div>
-
-        <!-- BACKGROUND READING — moved after interactive content -->
-        <section id="study-area">
-            <h2>Where We Are</h2>
-            <figure class="section-fig" aria-hidden="true">
-                <img src="assets/kampung-asahan.png" alt="Study area – Kampung Asahan" loading="lazy" onerror="this.style.display='none'">
-            </figure>
-            <p>
-                This simulation is based on <strong>Kampung Asahan</strong>, used as a case study to represent a flood-prone community environment. The area provides a realistic setting for exploring how flooding can affect surrounding buildings, roads, and public spaces.
-            </p>
-        </section>
-
-        <section id="flood-extent">
-            <h2>Flood Extent and Water Levels</h2>
-            <figure class="section-fig" aria-hidden="true">
-                <img src="assets/climate-central.png" alt="Flood extent and water levels" loading="lazy" onerror="this.style.display='none'">
-            </figure>
-            <p>
-                To identify areas affected by different flood water levels, <strong>Climate Central</strong>–style information is used. This helps illustrate how rising water levels can impact land areas under various flood conditions.
-            </p>
-            <h3>3D Environment and Visualisation</h3>
-            <figure class="section-fig" aria-hidden="true">
-                <img src="assets/3d.png" alt="3D environment and visualisation" loading="lazy" onerror="this.style.display='none'">
-            </figure>
-            <p>
-                An interactive 3D globe of the study area lets you visualise flood scenarios in an immersive way. Water levels and flood impacts are easier to observe and understand, making changes in conditions clearer.
-            </p>
-        </section>
-
-        <section id="purpose">
-            <h2>Why This Matters</h2>
-            <p>
-                This simulation is designed to help you better understand your surroundings during flood events. By exploring different flood scenarios, you can see how conditions change and how decisions influence outcomes.
-            </p>
-        </section>
-
-        <section id="supporting-decisions">
-            <h2>Make Better Decisions in a Real Crisis</h2>
-            <p>
-                By presenting flood scenarios visually and interactively, the simulation supports you in making more informed decisions before and during flood events.
-            </p>
-        </section>
-
-        <div class="section-divider"></div>
-
         <footer>
+            <h2>Feedback</h2>
+            <p>Have thoughts on Flood Quest? Let us know what worked, what didn't, and what you'd like to see next.</p>
             <div class="cta-row">
-                <a class="btn btn-primary" href="viewer.html">Try now!</a>
+                <a class="btn btn-primary" href="https://docs.google.com/forms/d/e/1FAIpQLSekIOqfxXy-1ZgZgkrzcHwneNIP_McokMvM9ux90YXBPTa5Ew/viewform?usp=sharing&ouid=108190950421105587721" target="_blank" rel="noopener noreferrer">Tell us what you think</a>
             </div>
         </footer>
     </div>
@@ -191,34 +175,17 @@
         <div class="auth-modal__backdrop" id="authModalBackdrop"></div>
         <div class="auth-modal__dialog">
             <button type="button" class="auth-modal__close" id="authModalClose" aria-label="Close dialog">×</button>
-            <h2 id="authModalTitle" class="auth-modal__title">Account</h2>
+            <h2 id="authModalTitle" class="auth-modal__title">Admin Sign In</h2>
             <p id="authModalContext" class="auth-modal__context" hidden></p>
             <div id="authPanel" class="auth-panel">
-                <div class="auth-panel__title" id="authSharedTitle">Username + 4-digit PIN</div>
+                <div class="auth-panel__title" id="authSharedTitle">Admin username + password</div>
                 <div id="authLoggedOut">
                     <div class="auth-panel__row">
                         <input type="text" id="authUsername" placeholder="Username" autocomplete="username" maxlength="32" />
-                        <input type="password" id="authPin" placeholder="PIN (4 digits)" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" />
+                        <input type="password" id="authPin" placeholder="Password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" />
                     </div>
-                    <div id="authModeLogin">
-                        <p class="auth-panel__hint auth-panel__hint--tight">Use the same username and PIN you created at sign up.</p>
-                        <div class="auth-panel__row auth-panel__row--actions">
-                            <button type="button" id="authSignIn">Log in</button>
-                        </div>
-                        <p class="auth-panel__switch">Need an account? <button type="button" class="auth-panel__link-btn" id="authSwitchToSignUp">Create an account</button></p>
-                    </div>
-                    <div id="authModeSignUp" hidden>
-                        <div class="avatar-picker" id="avatarPickerRoot">
-                            <div class="avatar-picker__lead">Your explorer avatar</div>
-                            <p class="avatar-picker__hint">Choose your look once here — it is saved with your new account (not when logging in).</p>
-                            <div class="avatar-picker__preview"><img id="avatarPreview" width="72" height="72" alt="" /></div>
-                            <div class="avatar-picker__styles" id="avatarStyleChips"></div>
-                            <button type="button" id="avatarShuffle" class="avatar-picker__shuffle">Shuffle look</button>
-                        </div>
-                        <div class="auth-panel__row auth-panel__row--actions">
-                            <button type="button" id="authSignUp">Sign up</button>
-                        </div>
-                        <p class="auth-panel__switch"><button type="button" class="auth-panel__link-btn" id="authSwitchToLogin">Back to log in</button></p>
+                    <div class="auth-panel__row auth-panel__row--actions">
+                        <button type="button" id="authSignIn">Log in</button>
                     </div>
                 </div>
                 <div id="authLoggedIn" hidden>

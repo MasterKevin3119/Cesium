@@ -51,12 +51,17 @@ Reload the app.
 
 ### Accounts
 
-- **Normal users:** sign in so mission flows can store answers (e.g. **`mission_first_answers`**) — not a separate zone layout per user.
-- **Admins:** sign up with the **admin code** (`3119` in `js/authUi.js`) so `flood_is_admin` is set in user metadata. They get the zone editor in the simulator.
+- **There is no public sign-up.** The site has a single admin account, used only to unlock the flood-zone editor in the simulator. Everyone else browses missions and the simulator anonymously.
+- **Login in the app:** username (letters, numbers, `_`, `-`, min 2 chars) and a **4-digit password**. This maps to a Supabase email `name@flood-app.local` and password `00` + the 4 digits.
 
-**Login in the app:** username (letters, numbers, `_`, `-`, min 2 chars) and **4-digit PIN**. This maps to a Supabase email `name@flood-app.local` and password `00` + PIN.
+**Creating the admin account** (one-time, done directly in the Supabase Dashboard — there is no in-app sign-up):
 
-**Existing users** without the admin flag: add `flood_is_admin: true` in **User metadata** (Supabase Dashboard → Authentication → user), or create a new account with the admin code.
+1. **Authentication** → **Users** → **Add user** → **Create new user**.
+2. Email: `masterkevin@flood-app.local`
+3. Password: `003119`
+4. After creating the user, open it and add to **User metadata** (raw JSON): `{ "flood_is_admin": true }`
+
+With that in place, signing in on the site with username `Masterkevin` and password `3119` unlocks the zone editor.
 
 ## Security
 
