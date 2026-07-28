@@ -18,6 +18,8 @@
 
   var DEFAULT_STYLE = 'notionists';
 
+  var SIGN_IN_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 4-7 8-7s8 3 8 7"></path></svg>';
+
   function randomSeed() {
     var s = '';
     var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -122,7 +124,7 @@
     if (face) face.remove();
     var lab = btn.querySelector('.site-header__auth-label');
     if (lab) lab.remove();
-    btn.textContent = 'Sign in';
+    btn.innerHTML = SIGN_IN_ICON;
   }
 
   function ensureSignInButtonLayout(btn) {
@@ -143,13 +145,12 @@
     btn.appendChild(label);
   }
 
-  /** Avatar beside Sign in only when logged in; guests see plain text. */
+  /** Avatar beside Sign in only when logged in; guests see a plain person icon. */
   function refreshSignInButton(btn) {
     if (!btn) return;
     var loggedIn = !!(window.supabaseAuth && typeof window.supabaseAuth.getCurrentUser === 'function' && window.supabaseAuth.getCurrentUser());
     if (!loggedIn) {
       stripSignInButtonLayout(btn);
-      btn.textContent = 'Sign in';
       return;
     }
     ensureSignInButtonLayout(btn);
