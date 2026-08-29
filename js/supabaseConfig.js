@@ -7,7 +7,7 @@
  */
 (function () {
   'use strict';
-  window.FLOOD_SUPABASE_URL = 'https://pwfffmbddbgvtgkzdxwl.supabase.co'; // e.g. 'https://abcdefgh.supabase.co'
-  window.FLOOD_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3ZmZmbWJkZGJndnRna3pkeHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4MTA0NzksImV4cCI6MjA4OTM4NjQ3OX0.PD2DGOQx0-0kaD_PutKSRcDHwVK8t7rxm5RX7Rh-KwY';
+  window.FLOOD_SUPABASE_URL = 'https://adoqeqxicnqafepdvwli.supabase.co'; // e.g. 'https://abcdefgh.supabase.co'
+  window.FLOOD_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkb3FlcXhpY25xYWZlcGR2d2xpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMTgyNjgsImV4cCI6MjEwMDc5NDI2OH0.nt7p6YZXC05luN86-dYL0INA7PlheQ6Fk8ET4lMwZy4';
   window.FLOOD_MAP_ID = 'default';
 })();
