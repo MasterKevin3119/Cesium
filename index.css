@@ -506,7 +506,7 @@ section {
 section.animate-in { opacity: 1; transform: translateY(0); }
 h2 { font-size: 1.1rem; font-weight: 600; color: var(--accent); margin: 0 0 0.75rem; }
 h3 { font-size: 1rem; font-weight: 600; color: var(--text); margin: 0 0 0.5rem; }
-p { margin: 0 0 1rem; color: var(--muted); }
+p { margin: 0 0 1rem; color: var(--muted); text-align: justify; text-justify: inter-word; -webkit-hyphens: none; -ms-hyphens: none; hyphens: none; word-break: normal; overflow-wrap: normal; }
 
 /* ── General cards ─────────────────────────────────────────────────────── */
 .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top: 1.5rem; }
