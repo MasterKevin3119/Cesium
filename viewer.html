@@ -721,12 +721,12 @@
             width: 100%;
             height: auto;
             vertical-align: middle;
-            aspect-ratio: 4 / 3;
+            aspect-ratio: 725 / 403; /* native image ratio, so nothing is cropped */
             object-fit: cover;
         }
         /* Title block top-left, answer images directly below, sized to fit one screen */
         .read-the-water {
-            --rtw-width: min(820px, 100%, calc((100vh - 230px) * 1.33));
+            --rtw-width: min(1100px, 100%, calc((100vh - 230px) * 1.75));
         }
         .read-the-water__header,
         .read-the-water__grid {
