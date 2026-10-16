@@ -670,6 +670,22 @@
             color: #cbd5e1;
             max-width: 42em;
         }
+        .read-the-water__hint {
+            grid-column: 2;
+            margin: 0.5rem 0 0;
+            font-size: 0.875rem;
+            line-height: 1.45;
+            color: #94a3b8;
+            max-width: 42em;
+        }
+        .read-the-water__hint-line {
+            display: inline-block;
+            width: 1.6em;
+            height: 2px;
+            margin-right: 0.4em;
+            vertical-align: middle;
+            background: rgba(255, 40, 40, 0.85);
+        }
         .read-the-water__grid {
             flex: 1;
             display: grid;
@@ -707,6 +723,21 @@
             vertical-align: middle;
             aspect-ratio: 4 / 3;
             object-fit: cover;
+        }
+        /* Title block top-left, answer images directly below, sized to fit one screen */
+        .read-the-water {
+            --rtw-width: min(820px, 100%, calc((100vh - 230px) * 1.33));
+        }
+        .read-the-water__header,
+        .read-the-water__grid {
+            width: var(--rtw-width);
+            max-width: none;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .read-the-water__grid {
+            flex: 0 0 auto;
+            align-content: start;
         }
         .read-the-water__modal[hidden] { display: none !important; }
         .read-the-water__modal-backdrop {
@@ -1336,6 +1367,7 @@
         <header class="read-the-water__header">
             <h1 class="read-the-water__title">Read The Water</h1>
             <p class="read-the-water__question"></p>
+            <p class="read-the-water__hint"><span class="read-the-water__hint-line" aria-hidden="true"></span>The red line on each person marks where the water reaches their body. Use it to judge how deep the water is.</p>
         </header>
         <div class="read-the-water__grid"></div>
         <div class="read-the-water__modal" hidden role="dialog" aria-modal="true" aria-labelledby="readTheWaterModalTitle">
